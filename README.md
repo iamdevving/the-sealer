@@ -1,3 +1,12 @@
+# Agent Attestation Factory
+
+x402-powered service for ERC-8004 agents to receive verifiable EAS attestations + optional visuals.
+
+**Core project agreements & vision → see [PROJECT-CHARTER.md](./PROJECT-CHARTER.md)**
+
+---
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
