@@ -1,27 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createPublicClient, http } from 'viem';
+import { baseSepolia } from 'viem/chains';
 
-// Config (testnet for free testing)
+// Load from .env.local (Next.js auto-loads it in dev)
+const rpcUrl = process.env.ALCHEMY_RPC_URL;
+
+if (!rpcUrl) {
+  console.error('Missing ALCHEMY_RPC_URL in .env.local');
+}
+
+// Create viem client once (for RPC connection testing / future verification)
+const client = rpcUrl
+  ? createPublicClient({
+      chain: baseSepolia,
+      transport: http(rpcUrl),
+    })
+  : null;
+
+// Payment config (testnet values - adjust later)
 const PAYMENT_CONFIG = {
   chain: 'base-sepolia',
   token: 'USDC',
-  amount: '0.01', // ~$0.01
-  description: 'Test ping / attestation request',
+  amount: '0.01', // small test amount
+  description: 'Seal attestation request',
 };
 
 export async function withX402Payment(
   req: NextRequest,
   handler: () => Promise<NextResponse>
 ): Promise<NextResponse> {
-  // x402 clients send proof in headers like 'x-payment-proof' or 'authorization'
-  // Standard is often 'PAYMENT-SIGNATURE' or custom
-  const proof = req.headers.get('x-payment-proof') ||
-                req.headers.get('authorization') ||
-                req.headers.get('payment-signature');
+  // Extract payment proof from common x402 header locations
+  const proof =
+    req.headers.get('x-payment-proof') ||
+    req.headers.get('authorization') ||
+    req.headers.get('payment-signature') ||
+    req.headers.get('x402-payment');
 
   if (!proof || proof.trim() === '') {
-    // Demand payment
+    // No proof → send 402 challenge
     return new NextResponse(
-      'Payment Required\nUse x402 to pay USDC on Base Sepolia.',
+      'Payment Required\nPay USDC on Base Sepolia via x402.',
       {
         status: 402,
         headers: {
@@ -32,10 +50,26 @@ export async function withX402Payment(
     );
   }
 
-  // Placeholder verification (MVP: accept any non-empty proof)
-  // Later: use viem to check sig/tx on-chain or call facilitator /verify
-  console.log('Received x402 proof:', proof.substring(0, 50) + '...'); // log partial for debug
+  try {
+    // Optional: Test RPC connection (logs on first paid request)
+    if (client) {
+      const chainId = await client.getChainId();
+      console.log(`[Seal] Connected to chain ID: ${chainId} (Base Sepolia)`);
+    } else {
+      console.warn('[Seal] No RPC configured - skipping chain check');
+    }
 
-  // For now: fake success if header present
-  return await handler();
+    // MVP verification: accept if proof header exists (placeholder)
+    // TODO: Replace with real verification (facilitator call or viem sig/tx check)
+    console.log('[Seal] Received proof (partial):', proof.substring(0, 50) + (proof.length > 50 ? '...' : ''));
+
+    // Payment "accepted" → execute the handler (will return success JSON)
+    return await handler();
+  } catch (error) {
+    console.error('[Seal] Verification / RPC error:', error);
+    return NextResponse.json(
+      { error: 'Payment verification failed - internal error' },
+      { status: 500 }
+    );
+  }
 }
