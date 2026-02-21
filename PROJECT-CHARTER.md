@@ -59,3 +59,36 @@ Long-term: Expand to dynamic NFTs, reputation helpers, multi-chain (Solana later
 If this conversation breaks or you start a new one, paste the content of this PROJECT-CHARTER.md (or link to the raw file on GitHub) and say:  
 “Continue Seal project from PROJECT-CHARTER.md v1.1 – last step completed: x402 paywall with Alchemy RPC working on /api/ping”.  
 We will pick up instantly from there.
+
+
+# Seal – Project Charter
+
+**Created:** February 20, 2026  
+**Current Version:** 1.1 (Name locked + handoff)  
+**Last updated:** February 21, 2026
+
+## 1. Vision & Purpose
+Build a fully autonomous, internet-native micro-service called **Seal** that lets ERC-8004 AI agents (and any wallet-owning agent) pay a tiny fee via x402 and receive a verifiable on-chain EAS attestation (soulbound-style badge) + optional IPFS visual trophy.
+
+## 2. MVP Scope (Phase 1)
+- x402-protected HTTP endpoint  
+- Simple JSON payload (achievement data)  
+- Issues EAS attestation on Base Sepolia  
+- Return: attestation UID + explorer link  
+- Fully agent-autonomous (no human, no API keys)
+
+## 3. Revenue Model
+~$0.05–$0.25 USDC per attestation (service fee on top of near-zero gas)
+
+## 4. Tech Stack
+- Next.js 16 + TypeScript  
+- x402 paywall (Coinbase CDP facilitator)  
+- viem + Alchemy (Base Sepolia)  
+- EAS SDK  
+
+## 5. Changelog
+- **2026-02-21 v1.1** – Official name **Seal**. PROJECT-CHARTER.md is the single source of truth. Handoff: “Continue Seal from PROJECT-CHARTER.md v1.1 – last step: x402 paywall + Alchemy RPC working on /api/ping”.
+
+**Handoff note:** If chat breaks, paste this file (or raw GitHub link) and say: “Continue Seal from PROJECT-CHARTER.md v1.1 – last step completed: x402 paywall working”.
+
+(Leave blank lines below for future entries — always add new dated entries at the top.)
