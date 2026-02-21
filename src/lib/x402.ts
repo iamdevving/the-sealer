@@ -1,49 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
+import { SignJWT } from 'jose';  // new import
 
-// Load from .env.local (Next.js auto-loads it in dev)
 const rpcUrl = process.env.ALCHEMY_RPC_URL;
+const cdpKeyId = process.env.CDP_API_KEY_ID;
+const cdpSecret = process.env.CDP_API_KEY_SECRET;
 
-if (!rpcUrl) {
-  console.error('Missing ALCHEMY_RPC_URL in .env.local');
-}
+if (!rpcUrl) console.error('[Seal] Missing ALCHEMY_RPC_URL');
+if (!cdpKeyId || !cdpSecret) console.error('[Seal] Missing CDP_API_KEY_ID and/or CDP_API_KEY_SECRET - verification will fail');
 
-// Create viem client once (for RPC connection testing / future verification)
-const client = rpcUrl
-  ? createPublicClient({
-      chain: baseSepolia,
-      transport: http(rpcUrl),
-    })
-  : null;
+const client = rpcUrl ? createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) }) : null;
 
-// Payment config (testnet values - adjust later)
+// Payment config – CHANGE recipient to YOUR test wallet address!
 const PAYMENT_CONFIG = {
   chain: 'base-sepolia',
   token: 'USDC',
-  amount: '0.01', // small test amount
+  amount: '0.01', // 0.01 USDC (adjust decimals in real use)
   description: 'Seal attestation request',
+  recipient: '0xYourTestWalletAddressHere', // ← MUST CHANGE THIS (your Sepolia wallet)
 };
+
+async function generateCdpJwt() {
+  if (!cdpKeyId || !cdpSecret) throw new Error('CDP keys missing');
+
+  const secretKey = new TextEncoder().encode(cdpSecret);
+  const jwt = await new SignJWT({})
+    .setProtectedHeader({ alg: 'ES256' })  // ECDSA as required
+    .setIssuedAt()
+    .setExpirationTime('5m')  // short-lived
+    .setIssuer(cdpKeyId)      // key ID as issuer
+    .sign(secretKey);
+
+  return jwt;
+}
 
 export async function withX402Payment(
   req: NextRequest,
   handler: () => Promise<NextResponse>
 ): Promise<NextResponse> {
-  // Extract payment proof from common x402 header locations
-  const proof =
+  const proofHeader =
     req.headers.get('x-payment-proof') ||
     req.headers.get('authorization') ||
     req.headers.get('payment-signature') ||
-    req.headers.get('x402-payment');
+    req.headers.get('x402-payment') ||
+    req.headers.get('x-payment') ||
+    req.headers.get('PAYMENT-SIGNATURE');  // added common uppercase variant
 
-  if (!proof || proof.trim() === '') {
-    // No proof → send 402 challenge
+  if (!proofHeader || proofHeader.trim() === '') {
     return new NextResponse(
       'Payment Required\nPay USDC on Base Sepolia via x402.',
       {
         status: 402,
         headers: {
-          'WWW-Authenticate': `x402 payment="${PAYMENT_CONFIG.token}" chain="${PAYMENT_CONFIG.chain}" amount="${PAYMENT_CONFIG.amount}" description="${PAYMENT_CONFIG.description}"`,
+          'WWW-Authenticate': `x402 payment="${PAYMENT_CONFIG.token}" chain="${PAYMENT_CONFIG.chain}" amount="${PAYMENT_CONFIG.amount}" description="${PAYMENT_CONFIG.description}" recipient="${PAYMENT_CONFIG.recipient}"`,
           'Content-Type': 'text/plain',
         },
       }
@@ -51,25 +61,46 @@ export async function withX402Payment(
   }
 
   try {
-    // Optional: Test RPC connection (logs on first paid request)
     if (client) {
       const chainId = await client.getChainId();
-      console.log(`[Seal] Connected to chain ID: ${chainId} (Base Sepolia)`);
-    } else {
-      console.warn('[Seal] No RPC configured - skipping chain check');
+      console.log(`[Seal] Connected to Base Sepolia (chainId ${chainId})`);
     }
 
-    // MVP verification: accept if proof header exists (placeholder)
-    // TODO: Replace with real verification (facilitator call or viem sig/tx check)
-    console.log('[Seal] Received proof (partial):', proof.substring(0, 50) + (proof.length > 50 ? '...' : ''));
+    // Generate fresh JWT for this request
+    const bearerToken = await generateCdpJwt();
 
-    // Payment "accepted" → execute the handler (will return success JSON)
+    console.log('[Seal] Verifying proof via CDP Facilitator...');
+
+    const verifyResponse = await fetch('https://api.cdp.coinbase.com/platform/v2/x402/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        x402Version: 1,
+        paymentPayload: proofHeader,  // usually base64-encoded payload
+        paymentRequirements: {
+          chain: PAYMENT_CONFIG.chain,
+          token: PAYMENT_CONFIG.token,
+          amount: PAYMENT_CONFIG.amount,
+          recipient: PAYMENT_CONFIG.recipient,
+        },
+      }),
+    });
+
+    const verifyData = await verifyResponse.json();
+
+    if (!verifyResponse.ok || !verifyData.valid) {
+      console.error('[Seal] Facilitator reject:', verifyData);
+      return NextResponse.json({ error: 'Invalid payment proof' }, { status: 402 });
+    }
+
+    console.log('[Seal] Payment verified successfully');
+
     return await handler();
   } catch (error) {
-    console.error('[Seal] Verification / RPC error:', error);
-    return NextResponse.json(
-      { error: 'Payment verification failed - internal error' },
-      { status: 500 }
-    );
+    console.error('[Seal] Verification error:', error);
+    return NextResponse.json({ error: 'Payment verification failed - internal' }, { status: 500 });
   }
 }
