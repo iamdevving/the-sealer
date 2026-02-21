@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.44.1",
     "@x402/core": "^2.4.0",
     "@x402/evm": "^2.4.0",
     "@x402/paywall": "^2.4.0",
