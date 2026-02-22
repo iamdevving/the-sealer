@@ -53,9 +53,10 @@ Long-term: Expand to dynamic NFTs, reputation helpers, multi-chain (Solana later
 
 ## 7. Changelog
 
-- **2026-02-22 v1.5** – /api/attest POST now fully dynamic: accepts JSON {"achievement": "..."} and writes the exact text on-chain. Tested with emoji ❤️. Ready for real agents.
+## 7. Changelog
+- **2026-02-22 v1.6** – Visual official badge (SVG) now generated on-demand when "generateImage": true. First beautiful, wallet-ready trophy live.
+- **2026-02-22 v1.5** – Dynamic achievement text from agent JSON now on-chain.
 - **2026-02-22 v1.4** – /api/attest endpoint created.
-- **2026-02-22 v1.4** – /api/attest POST working with real JSON payload from agents + live EAS attestation. Custom achievement text tested (#3).
 - **2026-02-22 v1.3** – First live EAS attestation issued on /api/ping (test mode). Tx 0x5b06a2e6... + UID 0x5E3E367E... on Base Sepolia. Paywall + real EAS fully working.
 - **2026-02-21 v1.2** – Real EAS schema created. 
 - **2026-02-21 v1.1** – Official name changed to **Seal**. All future references use “Seal”. PROJECT-CHARTER.md is the single source of truth for any new chat.  
