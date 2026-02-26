@@ -143,11 +143,33 @@ function truncate(s: string, n: number) {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const themeKey    = searchParams.get('theme') || 'circuit-anim';
-  const achievement = truncate(esc(searchParams.get('achievement') || 'Verified Achievement'), 38);
-  const chain       = esc(searchParams.get('chain') || 'Base');
-  const txHash      = searchParams.get('txHash') || '';
-  const agentId     = esc(searchParams.get('agentId') || '????');
+
+  // Permanent link support: ?uid=0x... fetches from EAS
+  let themeKey: string;
+  let achievement: string;
+  let chain: string;
+  let txHash: string;
+  let agentId: string;
+
+  const uid_param = searchParams.get('uid');
+  if (uid_param) {
+    const { fetchAttestation } = await import('@/lib/eas');
+    const data = await fetchAttestation(uid_param);
+    if (!data) {
+      return new NextResponse('Attestation not found', { status: 404 });
+    }
+    themeKey    = searchParams.get('theme') || 'circuit-anim';
+    achievement = truncate(esc(data.achievement), 38);
+    chain       = searchParams.get('chain') || 'Base';
+    txHash      = data.txHash;
+    agentId     = data.recipient.slice(0,6);
+  } else {
+    themeKey    = searchParams.get('theme') || 'circuit-anim';
+    achievement = truncate(esc(searchParams.get('achievement') || 'Verified Statement'), 38);
+    chain       = esc(searchParams.get('chain') || 'Base');
+    txHash      = searchParams.get('txHash') || '';
+    agentId     = esc(searchParams.get('agentId') || '????');
+  }
   const uid         = txHash ? '0x' + txHash.slice(2,6) + '\u2026' + txHash.slice(-4) : '0x????\u2026????';
 
   const t    = THEMES[themeKey] ?? THEMES['circuit-anim'];
@@ -236,7 +258,7 @@ export async function GET(req: NextRequest) {
   <image href="${mark}" x="20" y="10" width="20" height="20"
     preserveAspectRatio="xMidYMid meet" opacity="0.9"/>
   <text x="126" y="22" font-family="monospace" font-size="7.5" font-weight="bold"
-    fill="${t.headerText}" text-anchor="middle" letter-spacing="1.5">SEAL-PROTOCOL.XYZ · OFFICIAL</text>
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="1.5">THESEALER.XYZ · OFFICIAL</text>
 
   <!-- Seal -->
   <circle cx="120" cy="95" r="44" fill="${t.accent}" opacity="${t.dark ? '0.04' : '0'}"/>
