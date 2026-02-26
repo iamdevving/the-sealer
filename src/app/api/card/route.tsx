@@ -426,8 +426,9 @@ export async function GET(req: NextRequest) {
 
   const uid_param = searchParams.get('uid');
   if (uid_param) {
-    const { fetchAttestation } = await import('@/lib/eas');
-    const data = await fetchAttestation(uid_param);
+    const { fetchAttestation, fetchAttestationByTx } = await import('@/lib/eas');
+    // Try as attestation UID first, fall back to TX hash lookup
+    const data = await fetchAttestation(uid_param) || await fetchAttestationByTx(uid_param);
     if (!data) {
       return new NextResponse('Attestation not found', { status: 404 });
     }
