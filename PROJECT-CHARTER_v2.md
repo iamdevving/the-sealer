@@ -116,3 +116,14 @@ Statement (self-declared) → Achievement (platform-verified: ERC-8004 registry 
 8. Solana integration (Grok)
 9. Register string statement schema on Base mainnet
 10. Deploy to Vercel
+
+## Changelog (Priority Order)
+- **2026-02-27 v2.1** – Self-hosted x402 facilitator live on Base Sepolia (no Coinbase CDP dependency). Paywall is now 100% sovereign. New attestation TX 0x46f65a84... confirmed. Ready for Solana + ERC-8004 agent check.
+
+
+
+
+
+
+
+
