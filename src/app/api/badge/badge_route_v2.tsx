@@ -266,7 +266,7 @@ export async function GET(req: NextRequest) {
   <image href="${BADGE_SEAL}" x="78" y="53" width="84" height="84"
     preserveAspectRatio="xMidYMid meet"/>
 
-  <!-- Achievement -->
+  <!-- Statement -->
   <text x="120" y="152" font-family="Georgia,serif" font-size="9.5" font-style="italic"
     fill="${t.bodyText}" text-anchor="middle" opacity="0.85">${achievement}</text>
 

@@ -448,11 +448,23 @@ export async function GET(req: NextRequest) {
   const t       = THEMES[themeKey] ?? THEMES['circuit-anim'];
   const uid     = txHash ? '0x' + txHash.slice(2,6) + '...' + txHash.slice(-4) : '0x????...????';
   const dateStr = formatDate(new Date());
-  const lines   = wrapText(esc(achievement), 52, 3);
+  // Adaptive text scaling — short statements get bigger font, long ones scale down
+  const charCount = achievement.length;
+  const fontSize  = charCount <= 60  ? 17.5
+                  : charCount <= 100 ? 15.5
+                  : charCount <= 150 ? 13.5
+                  : 12;
+  const lineH     = fontSize + 11;
+  const maxChars  = charCount <= 60  ? 42
+                  : charCount <= 100 ? 48
+                  : 54;
+  const maxLines  = charCount <= 60  ? 3 : 4;
+
+  const lines   = wrapText(esc(achievement), maxChars, maxLines);
   const mark    = t.dark ? MARK_WHITE : MARK_BLACK;
 
-  const totalTextH = lines.length * 28;
-  const textStartY = Math.round(262 + (110 - totalTextH) / 2);
+  const totalTextH = lines.length * lineH;
+  const textStartY = Math.round(262 + (120 - totalTextH) / 2);
 
   const dashes = Array.from({length:46},(_,i) =>
     '<rect x="'+(i*12+1)+'" y="40" width="7" height="1.5" fill="'+t.accent+'" opacity="0.55"/>').join('');
@@ -460,7 +472,7 @@ export async function GET(req: NextRequest) {
   const decoration = getDecoration(themeKey, t.accent);
 
   const achievementLines = lines.map((line,i) =>
-    '<text x="280" y="'+(textStartY+i*28)+'" font-family="Georgia,serif" font-size="16.5" fill="'+t.bodyTextDim+'" font-style="italic" text-anchor="middle">'+line+'</text>'
+    '<text x="280" y="'+(textStartY+i*lineH)+'" font-family="Georgia,serif" font-size="'+fontSize+'" fill="'+t.bodyTextDim+'" font-style="italic" text-anchor="middle">'+line+'</text>'
   ).join('');
 
   const parts = [
@@ -485,7 +497,7 @@ export async function GET(req: NextRequest) {
     '<text x="344" y="128" font-family="monospace" font-size="9" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.5">NO ATTACHMENT</text>',
     '<text x="344" y="148" font-family="monospace" font-size="7" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.28">PNL CARD &#183; SCREENSHOT &#183; CHART</text>',
     ...((['parchment','base'].includes(themeKey)) ? [] : ['<rect x="22" y="228" width="516" height="1" fill="url(#dg)"/>']),
-    '<text x="280" y="248" font-family="monospace" font-size="12" font-weight="bold" fill="'+t.accent+'" text-anchor="middle" letter-spacing="5">ACHIEVEMENT</text>',
+    '<text x="280" y="248" font-family="monospace" font-size="12" font-weight="bold" fill="'+t.accent+'" text-anchor="middle" letter-spacing="5">STATEMENT</text>',
     achievementLines,
     '<rect x="22" y="392" width="516" height="60" rx="4" fill="'+t.statBg+'" stroke="'+t.statBorder+'" stroke-width="1"/>',
     '<rect x="196" y="392" width="1" height="60" fill="'+t.statBorder+'"/>',
