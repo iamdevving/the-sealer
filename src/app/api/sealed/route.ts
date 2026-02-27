@@ -172,13 +172,16 @@ export async function GET(req: NextRequest) {
       font-family="monospace" font-size="7" fill="#6a80b0"
       letter-spacing="0.5">${uid}</text>
 
-    <!-- Footer: date center -->
-    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 17}"
-      font-family="monospace" font-size="7" fill="#5a70a0"
+    <!-- Footer: date center - two lines like TX block -->
+    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 11}"
+      font-family="monospace" font-size="5.5" fill="#4a6090"
+      text-anchor="middle" letter-spacing="1">ISSUE DATE</text>
+    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 22}"
+      font-family="monospace" font-size="7" fill="#6a80b0"
       text-anchor="middle" letter-spacing="0.5">${dateStr}</text>
 
     <!-- Footer: seal mark right (minimal) -->
-    <g transform="translate(${W - SLEEVE_PAD - 20}, ${SLEEVE_PAD + INNER_H + 14})">
+    <g transform="translate(${W - SLEEVE_PAD - 28}, ${SLEEVE_PAD + INNER_H + 14})">
       ${SEAL_MARK_SVG}
     </g>
 
