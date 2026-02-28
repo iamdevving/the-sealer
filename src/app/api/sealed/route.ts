@@ -74,10 +74,10 @@ export async function GET(req: NextRequest) {
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- Footer gradient — light frosted -->
+    <!-- Footer gradient — frosted, more opaque -->
     <linearGradient id="footerGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
-      <stop offset="100%" stop-color="#f5f7fa" stop-opacity="0.98"/>
+      <stop offset="0%"   stop-color="#f8f9fc" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#eef0f5" stop-opacity="1"/>
     </linearGradient>
 
     <!-- Clip image to inner bounds -->
@@ -157,12 +157,30 @@ export async function GET(req: NextRequest) {
       width="${INNER_W}" height="1"
       fill="#000" opacity="0.08"/>
 
-    <!-- Footer: TX left -->
-    <text x="${SLEEVE_PAD + 8}" y="${SLEEVE_PAD + INNER_H + 11}"
-      font-family="monospace" font-size="6" fill="#999"
-      letter-spacing="0.5">TX HASH</text>
-    <text x="${SLEEVE_PAD + 8}" y="${SLEEVE_PAD + INNER_H + 22}"
-      font-family="monospace" font-size="7" fill="#555"
+    <!-- Footer: chain logo + name top-left, tx hash below -->
+    <g transform="translate(${SLEEVE_PAD + 6}, ${SLEEVE_PAD + INNER_H + 3})">
+      ${chain === 'Solana' ? `
+        <!-- Solana logo — three diagonal bars -->
+        <g transform="scale(0.058)">
+          <path d="M22.4 141.9c1-1 2.4-1.6 3.9-1.6h152.6c2.5 0 3.7 3 1.9 4.8l-31.7 31.7c-1 1-2.4 1.6-3.9 1.6H12.6c-2.5 0-3.7-3-1.9-4.8l11.7-31.7z" fill="url(#solGrad1)"/>
+          <path d="M22.4 4.8C23.4 1.8 25.8.2 28.3.2h152.6c2.5 0 3.7 3 1.9 4.8L151.1 36.7c-1 1-2.4 1.6-3.9 1.6H12.6c-2.5 0-3.7-3-1.9-4.8L22.4 4.8z" fill="url(#solGrad2)"/>
+          <path d="M151.1 72.8c-1 1-2.4 1.6-3.9 1.6H12.6c-2.5 0-3.7-3-1.9-4.8L22.4 38c1-1 2.4-1.6 3.9-1.6h152.6c2.5 0 3.7 3 1.9 4.8l-29.7 31.6z" fill="url(#solGrad3)"/>
+          <defs>
+            <linearGradient id="solGrad1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#9945FF"/><stop offset="100%" stop-color="#14F195"/></linearGradient>
+            <linearGradient id="solGrad2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#9945FF"/><stop offset="100%" stop-color="#14F195"/></linearGradient>
+            <linearGradient id="solGrad3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#9945FF"/><stop offset="100%" stop-color="#14F195"/></linearGradient>
+          </defs>
+        </g>
+        <text x="16" y="10" font-family="monospace" font-size="6" fill="#666" letter-spacing="0.5">SOLANA</text>
+      ` : `
+        <!-- Base logo — blue circle with white b -->
+        <circle cx="7" cy="7" r="7" fill="#0052FF"/>
+        <path d="M7 2.5C9.9 2.5 12 4.4 12 7s-2.1 4.5-5 4.5H4V7h3c1.4 0 2.5-.9 2.5-2S8.4 3 7 3H4V2.5h3z M4 8.5h3.2c1.6 0 2.8 1 2.8 2.3S8.8 13 7.2 13H4V8.5z" fill="white"/>
+        <text x="16" y="10" font-family="monospace" font-size="6" fill="#666" letter-spacing="0.5">BASE</text>
+      `}
+    </g>
+    <text x="${SLEEVE_PAD + 8}" y="${SLEEVE_PAD + INNER_H + 23}"
+      font-family="monospace" font-size="6.5" fill="#555"
       letter-spacing="0.5">${uid}</text>
 
     <!-- Footer: date — starts at ~50% so logo sits just after -->
