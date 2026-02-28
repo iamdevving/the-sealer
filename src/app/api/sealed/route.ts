@@ -74,10 +74,10 @@ export async function GET(req: NextRequest) {
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
 
-    <!-- Footer gradient -->
+    <!-- Footer gradient — light frosted -->
     <linearGradient id="footerGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#0a0e1a"/>
-      <stop offset="100%" stop-color="#060810"/>
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#f5f7fa" stop-opacity="0.98"/>
     </linearGradient>
 
     <!-- Clip image to inner bounds -->
@@ -109,13 +109,9 @@ export async function GET(req: NextRequest) {
 
   <g clip-path="url(#cardClip)">
 
-    <!-- ── Sleeve background ── -->
+    <!-- ── Sleeve background — transparent, border adapts to page ── -->
     <rect x="0" y="0" width="${W}" height="${H}" rx="10"
-      fill="#111827" stroke="#2a3550" stroke-width="1"/>
-
-    <!-- Sleeve border inner highlight -->
-    <rect x="1" y="1" width="${W-2}" height="${H-2}" rx="9"
-      fill="none" stroke="#3a4870" stroke-width="0.5" opacity="0.6"/>
+      fill="white" fill-opacity="0.01" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
 
     <!-- ── Image area ── -->
     ${imgData ? `
@@ -132,12 +128,12 @@ export async function GET(req: NextRequest) {
     <!-- No image placeholder -->
     <rect x="${SLEEVE_PAD}" y="${SLEEVE_PAD}"
       width="${INNER_W}" height="${INNER_H}" rx="3"
-      fill="#0d1220"/>
+      fill="#f0f2f5"/>
     <text x="${W/2}" y="${SLEEVE_PAD + INNER_H/2 - 10}"
-      font-family="monospace" font-size="10" fill="#2a3550"
+      font-family="monospace" font-size="10" fill="#aaa"
       text-anchor="middle" letter-spacing="2">NO IMAGE</text>
     <text x="${W/2}" y="${SLEEVE_PAD + INNER_H/2 + 10}"
-      font-family="monospace" font-size="8" fill="#1a2540"
+      font-family="monospace" font-size="8" fill="#bbb"
       text-anchor="middle" letter-spacing="1">?imageUrl=https://...</text>
     `}
 
@@ -147,7 +143,7 @@ export async function GET(req: NextRequest) {
 
     <!-- Left edge refraction -->
     <rect x="${SLEEVE_PAD - 4}" y="${SLEEVE_PAD}" width="6" height="${INNER_H}"
-      fill="url(#edgeLeft)" opacity="0.7"/>
+      fill="url(#edgeLeft)" opacity="0.4"/>
 
     <!-- Top edge refraction -->
     <rect x="${SLEEVE_PAD}" y="${SLEEVE_PAD - 4}" width="${INNER_W}" height="6"
@@ -159,22 +155,22 @@ export async function GET(req: NextRequest) {
       fill="url(#footerGrad)" rx="0"/>
     <rect x="${SLEEVE_PAD}" y="${SLEEVE_PAD + INNER_H}"
       width="${INNER_W}" height="1"
-      fill="#2a3a6a" opacity="0.8"/>
+      fill="#000" opacity="0.08"/>
 
     <!-- Footer: TX left -->
     <text x="${SLEEVE_PAD + 8}" y="${SLEEVE_PAD + INNER_H + 11}"
-      font-family="monospace" font-size="6" fill="#4a6090"
-      letter-spacing="0.5">TX</text>
+      font-family="monospace" font-size="6" fill="#999"
+      letter-spacing="0.5">TX HASH</text>
     <text x="${SLEEVE_PAD + 8}" y="${SLEEVE_PAD + INNER_H + 22}"
-      font-family="monospace" font-size="7" fill="#6a80b0"
+      font-family="monospace" font-size="7" fill="#555"
       letter-spacing="0.5">${uid}</text>
 
     <!-- Footer: date center - two lines like TX block -->
     <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 11}"
-      font-family="monospace" font-size="5.5" fill="#4a6090"
+      font-family="monospace" font-size="5.5" fill="#999"
       text-anchor="middle" letter-spacing="1">ISSUE DATE</text>
     <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 22}"
-      font-family="monospace" font-size="7" fill="#6a80b0"
+      font-family="monospace" font-size="7" fill="#555"
       text-anchor="middle" letter-spacing="0.5">${dateStr}</text>
 
     <!-- Footer: seal mark right (minimal) -->
@@ -182,19 +178,14 @@ export async function GET(req: NextRequest) {
       ${SEAL_MARK_SVG}
     </g>
 
-    <!-- ── Watermark: THESEALER.XYZ diagonal ── -->
-    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H - 16}"
-      font-family="monospace" font-size="7" fill="white"
-      text-anchor="middle" letter-spacing="2" opacity="0.12">THESEALER.XYZ</text>
-
     <!-- ── Top sleeve opening edge ── -->
     <rect x="${SLEEVE_PAD - 1}" y="${SLEEVE_PAD - 1}"
       width="${INNER_W + 2}" height="2"
       fill="#ffffff" opacity="0.06"/>
 
-    <!-- Outer border glow -->
+    <!-- Outer border subtle shadow -->
     <rect x="0" y="0" width="${W}" height="${H}" rx="10"
-      fill="none" stroke="#1e2d4a" stroke-width="2"/>
+      fill="none" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
 
   </g>
 </svg>`;
