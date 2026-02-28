@@ -25,7 +25,8 @@ Everything in src/ is committed and working. End-to-end test passed — live att
 | /api/sealed | Trading card sleeve, imageUrl + txHash + chain, ISSUE DATE footer |
 | /api/infoproducts | NOT YET BUILT — first task |
 | src/lib/eas.ts | EAS GraphQL: fetchAttestation(uid) + fetchAttestationByTx(txHash) |
-| src/lib/x402.ts | withX402Payment + issueSealAttestation, currently uses CDP facilitator |
+| src/lib/x402.ts | Self-hosted facilitator, Base + Solana verified, CDP gone |
+| src/lib/agentRegistry.ts | ERC-8004 registry check, returns AI_AGENT / HUMAN / UNKNOWN |
 
 Branding: THESEALER.XYZ throughout. STATEMENT replaces ACHIEVEMENT in all display labels. Onchain schema field still named 'achievement' (do not change until mainnet launch).
 
@@ -226,14 +227,22 @@ This is likely a separate Next.js page at /agent or a chat widget. Lower priorit
 - EAS GraphQL uid param is the attestation UID (from EAS), not the TX hash. fetchAttestationByTx handles the TX hash case
 - The onchain schema field is named 'achievement' — do NOT change this until mainnet schema registration. Display labels say STATEMENT, internal field stays achievement.
 - base64 images in SVGs make files large — this is expected and fine
+- Solana integration: SOLANA_RPC_URL is set in .env.local (Alchemy endpoint) and a hardcoded signature exists in x402.ts for testing. This has not been fully tested end-to-end with a real Solana payment. Treat Solana as partially implemented — Base is the reliable chain for now.
+- attest/route.ts: body is parsed ONCE before withX402Payment (not inside the handler) so the correct price can be passed to the paywall. Do not move req.json() back inside the handler.
 
 ---
 
 ## Session Start Checklist
 
-1. Read this file
-2. Read PROJECT-CHARTER.md
-3. Ask user: do you have the new logo and wax seal PNGs ready?
-4. If yes: start with logo integration (Task 2), then infoproducts (Task 1)
-5. If no: start with infoproducts (Task 1), skip logo tasks, note placeholders
-6. Then: import box on cards (Task 3), SEAL ID (Task 4)
+1. Read this file and PROJECT-CHARTER.md
+2. Ask user to upload all 3 PNG assets (wax seal, seal logo, third variant — they have them locally)
+3. Start with logo integration (Task 2) — assets are ready, no new logo creation needed
+4. Then /api/infoproducts (Task 1)
+5. Then import box on cards (Task 3)
+6. Then SEAL ID (Task 4)
+7. The Sealer agent (Task 5) if time allows
+
+Note: Grok has completed the self-hosted facilitator (Base + Solana), ERC-8004 registry check,
+and per-route pricing is his next task. Do not touch x402.ts or agentRegistry.ts.
+The attest route response now includes entityType — you can use this in SVGs if desired (optional, not required).
+Assets existed in Codespaces but were never committed to git — user has them locally.
