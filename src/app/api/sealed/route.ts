@@ -165,16 +165,16 @@ export async function GET(req: NextRequest) {
       font-family="monospace" font-size="7" fill="#555"
       letter-spacing="0.5">${uid}</text>
 
-    <!-- Footer: date center - two lines like TX block -->
-    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 11}"
+    <!-- Footer: date — starts at ~50% so logo sits just after -->
+    <text x="${INNER_W * 0.52 + SLEEVE_PAD}" y="${SLEEVE_PAD + INNER_H + 11}"
       font-family="monospace" font-size="5.5" fill="#999"
-      text-anchor="middle" letter-spacing="1">ISSUE DATE</text>
-    <text x="${W/2}" y="${SLEEVE_PAD + INNER_H + 22}"
+      letter-spacing="1">ISSUE DATE</text>
+    <text x="${INNER_W * 0.52 + SLEEVE_PAD}" y="${SLEEVE_PAD + INNER_H + 22}"
       font-family="monospace" font-size="7" fill="#555"
-      text-anchor="middle" letter-spacing="0.5">${dateStr}</text>
+      letter-spacing="0.5">${dateStr}</text>
 
-    <!-- Footer: seal mark right (minimal) -->
-    <g transform="translate(${W - SLEEVE_PAD - 28}, ${SLEEVE_PAD + INNER_H + 14})">
+    <!-- Footer: seal mark flush right -->
+    <g transform="translate(${W - SLEEVE_PAD - 8}, ${SLEEVE_PAD + INNER_H + 14})">
       ${SEAL_MARK_SVG}
     </g>
 
