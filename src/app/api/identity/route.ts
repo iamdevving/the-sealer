@@ -21,7 +21,7 @@ function esc(s: string) {
 }
 function trunc(s: string, n: number) { return s.length > n ? s.slice(0,n)+'\u2026' : s; }
 function truncAddr(a: string) {
-  if (!a || a === '????') return '&mdash;';
+  if (!a || a === '????') return '&#x2014;';
   return a.slice(0,6)+'\u00b7\u00b7\u00b7'+a.slice(-4);
 }
 function padMRZ(s: string, len: number) {
@@ -208,13 +208,13 @@ export async function GET(req: NextRequest) {
     <rect x="0" y="0" width="${W}" height="${HDR_H}" fill="url(#guil)" opacity="0.12"/>
     <!-- Line 1: logo (nudged to y=10 for vertical centering) + protocol + issued -->
     <image href="data:image/png;base64,${LOGO_B64}" x="${PAD}" y="13" width="14" height="14" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>
-    <text x="${PAD+20}" y="21" font-family="monospace" font-size="7" fill="#fff" opacity="0.6" letter-spacing="1.2">THE SEALER PROTOCOL &middot; ONCHAIN IDENTITY REGISTRY</text>
+    <text x="${PAD+20}" y="21" font-family="monospace" font-size="7" fill="#fff" opacity="0.6" letter-spacing="1.2">THE SEALER PROTOCOL &#xB7; ONCHAIN IDENTITY REGISTRY</text>
     <text x="${W-PAD}" y="21" font-family="monospace" font-size="6" fill="#fff" opacity="0.35" text-anchor="end" letter-spacing="1">ISSUED ${issueDate}</text>
     <!-- Line 2: SEALER ID large | chain logo right -->
     <text x="${PAD}" y="54" font-family="Georgia, serif" font-size="24" fill="#fff" letter-spacing="3">SEALER ID</text>
     <g transform="translate(${W-PAD-10}, 43)">${chainLogo}</g>
     <!-- Line 3: doc type -->
-    <text x="${PAD}" y="70" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.3" letter-spacing="2">AGENT IDENTITY DOCUMENT &middot; ERC-8004</text>
+    <text x="${PAD}" y="70" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.3" letter-spacing="2">AGENT IDENTITY DOCUMENT &#xB7; ERC-8004</text>
     <!-- Accent line -->
     <rect x="0" y="${HDR_H}" width="${W}" height="2.5" fill="${T.ACCENT}" opacity="0.9"/>
 
@@ -231,7 +231,7 @@ export async function GET(req: NextRequest) {
     ${fl("AGENT ID", PHOTO_Y+47)}
     ${fv(truncAddr(agentId), PHOTO_Y+60)}
     ${fl("OWNER", PHOTO_Y+78)}
-    ${fv(owner ? truncAddr(owner) : "&mdash;", PHOTO_Y+91)}
+    ${fv(owner ? truncAddr(owner) : "&#x2014;", PHOTO_Y+91)}
     ${fl("PRIMARY CHAIN", PHOTO_Y+109)}
     ${fv(chain.toUpperCase(), PHOTO_Y+121)}
     ${fl("FIRST SEEN", PHOTO_Y+139)}
