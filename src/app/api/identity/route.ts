@@ -50,8 +50,8 @@ function buildStamp(serial: string): string {
     <text x="0" y="${r - 7}" font-family="monospace" font-size="7" fill="currentColor" text-anchor="middle" letter-spacing="2">SEAL ID</text>
     <image href="data:image/png;base64,${LOGO_B64}"
       x="-20" y="-26" width="40" height="40"
-      preserveAspectRatio="xMidYMid meet" opacity="0.85"
-      style="filter: grayscale(1) brightness(0)"/>
+      preserveAspectRatio="xMidYMid meet" opacity="0.7"
+      filter="url(#inkify)"/>
     <text x="0" y="${r + 13}" font-family="monospace" font-size="6.5" fill="currentColor" text-anchor="middle" letter-spacing="1.5">${serial}</text>
   `;
 }
@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
 
   // Layout
   const PAD     = 20;
-  const HDR_H   = 72;
+  const HDR_H   = 80;
   const PHOTO_W = 110;
   const PHOTO_H = 132;
   const PHOTO_X = PAD;
@@ -135,6 +135,15 @@ export async function GET(req: NextRequest) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
   width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
+    <!-- Ink filter for stamp seal face -->
+    <filter id="inkify" color-interpolation-filters="sRGB">
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="0" intercept="0"/>
+        <feFuncG type="linear" slope="0" intercept="0"/>
+        <feFuncB type="linear" slope="0" intercept="0"/>
+      </feComponentTransfer>
+    </filter>
     <pattern id="guil" x="0" y="0" width="40" height="20" patternUnits="userSpaceOnUse">
       <path d="M0 10 Q10 0 20 10 Q30 20 40 10" fill="none" stroke="${INK_FAINT}" stroke-width="0.5"/>
       <path d="M0 16 Q10 6 20 16 Q30 26 40 16" fill="none" stroke="${INK_FAINT}" stroke-width="0.25" opacity="0.5"/>
@@ -156,11 +165,20 @@ export async function GET(req: NextRequest) {
     <!-- Header -->
     <rect x="0" y="0" width="${W}" height="${HDR_H}" fill="${HEADER_BG}"/>
     <rect x="0" y="0" width="${W}" height="${HDR_H}" fill="url(#guil)" opacity="0.12"/>
-    <text x="${PAD}" y="24" font-family="monospace" font-size="7.5" fill="#fff" opacity="0.45" letter-spacing="3">ONCHAIN AGENT REGISTRY</text>
-    <text x="${PAD}" y="48" font-family="Georgia, 'Times New Roman', serif" font-size="18" fill="#fff" letter-spacing="2">THE SEALER PROTOCOL</text>
-    <text x="${PAD}" y="63" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.35" letter-spacing="2">AGENT IDENTITY DOCUMENT · ERC-8004</text>
-    <text x="${W - PAD}" y="14" font-family="monospace" font-size="6" fill="#fff" opacity="0.4" text-anchor="end" letter-spacing="1">ISSUED ${issueDate}</text>
-    <g transform="translate(${W - PAD - 10}, ${HDR_H / 2})">${chainLogo}</g>
+
+    <!-- Line 1: logo + protocol name + registry | issued date right -->
+    <image href="data:image/png;base64,${LOGO_B64}"
+      x="${PAD}" y="8" width="16" height="16"
+      preserveAspectRatio="xMidYMid meet" opacity="0.9"/>
+    <text x="${PAD + 20}" y="21" font-family="monospace" font-size="7.5" fill="#fff" opacity="0.7" letter-spacing="1.5">THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</text>
+    <text x="${W - PAD}" y="21" font-family="monospace" font-size="6" fill="#fff" opacity="0.4" text-anchor="end" letter-spacing="1">ISSUED ${issueDate}</text>
+
+    <!-- Line 2: SEAL ID large | chain logo right -->
+    <text x="${PAD}" y="52" font-family="Georgia, 'Times New Roman', serif" font-size="24" fill="#fff" letter-spacing="3">SEAL ID</text>
+    <g transform="translate(${W - PAD - 10}, 42)">${chainLogo}</g>
+
+    <!-- Line 3: document type -->
+    <text x="${PAD}" y="68" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.35" letter-spacing="2">AGENT IDENTITY DOCUMENT · ERC-8004</text>
 
     <!-- Accent line -->
     <rect x="0" y="${HDR_H}" width="${W}" height="2" fill="${ACCENT}" opacity="0.9"/>
@@ -185,16 +203,14 @@ export async function GET(req: NextRequest) {
     <text x="${FX}" y="${PHOTO_Y + 50}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">AGENT ID</text>
     <text x="${FX}" y="${PHOTO_Y + 63}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${truncateAddr(agentId)}</text>
 
-    ${owner ? `
-    <text x="${FX}" y="${PHOTO_Y + 82}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">OWNER</text>
-    <text x="${FX}" y="${PHOTO_Y + 95}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${truncateAddr(owner)}</text>
-    ` : ''}
+    <text x="${FX}" y="${PHOTO_Y + 112}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">OWNER</text>
+    <text x="${FX}" y="${PHOTO_Y + 125}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${owner ? truncateAddr(owner) : '—'}</text>
 
-    <text x="${FX}" y="${PHOTO_Y + 114}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">CHAIN</text>
-    <text x="${FX}" y="${PHOTO_Y + 127}" font-family="monospace" font-size="10" fill="${INK}" letter-spacing="1">${chain.toUpperCase()}</text>
+    <text x="${FX}" y="${PHOTO_Y + 80}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">CHAIN</text>
+    <text x="${FX}" y="${PHOTO_Y + 93}" font-family="monospace" font-size="10" fill="${INK}" letter-spacing="1">${chain.toUpperCase()}</text>
 
-    <!-- Divider -->
-    <line x1="${PAD}" y1="${SEC_Y}" x2="${W - PAD}" y2="${SEC_Y}" stroke="${INK_FAINT}" stroke-width="0.8"/>
+    <!-- Divider — below entity badge -->
+    <line x1="${PAD}" y1="${SEC_Y + 4}" x2="${W - PAD}" y2="${SEC_Y + 4}" stroke="${INK_FAINT}" stroke-width="0.8"/>
 
     <!-- Secondary fields -->
     <text x="${PAD}" y="${SEC_Y + 16}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">FIRST SEEN</text>
@@ -204,8 +220,12 @@ export async function GET(req: NextRequest) {
     <text x="${PAD + 130}" y="${SEC_Y + 29}" font-family="monospace" font-size="9" fill="${INK}">${statementCount}</text>
 
     ${social ? `
-    <text x="${PAD + 260}" y="${SEC_Y + 16}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">SOCIAL</text>
-    <text x="${PAD + 260}" y="${SEC_Y + 29}" font-family="monospace" font-size="9" fill="${INK}">${truncate(social, 12)}</text>
+    <rect x="${PAD + 250}" y="${SEC_Y + 6}" width="80" height="16" rx="8"
+      fill="${ACCENT}" opacity="0.15"/>
+    <rect x="${PAD + 250}" y="${SEC_Y + 6}" width="80" height="16" rx="8"
+      fill="none" stroke="${ACCENT}" stroke-width="0.8" opacity="0.5"/>
+    <text x="${PAD + 290}" y="${SEC_Y + 18}" font-family="monospace" font-size="7.5" fill="${ACCENT}"
+      text-anchor="middle" letter-spacing="0.5">${truncate(social, 10)}</text>
     ` : ''}
 
     <!-- Serial -->
