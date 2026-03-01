@@ -21,7 +21,7 @@ function esc(s: string) {
 }
 function trunc(s: string, n: number) { return s.length > n ? s.slice(0,n)+'\u2026' : s; }
 function truncAddr(a: string) {
-  if (!a || a === '????') return '\u2014';
+  if (!a || a === '????') return '&mdash;';
   return a.slice(0,6)+'\u00b7\u00b7\u00b7'+a.slice(-4);
 }
 function padMRZ(s: string, len: number) {
@@ -50,7 +50,7 @@ function buildStamp(stampColor: string): string {
       <textPath href="#topRim" startOffset="6%">THESEALER.XYZ</textPath>
     </text>
     <text font-family="monospace" font-size="7.5" letter-spacing="2" fill="${stampColor}">
-      <textPath href="#botRim" startOffset="14%">SEALER  ID</textPath>
+      <textPath href="#botRim" startOffset="14%">SEALER ID</textPath>
     </text>
     <text x="${-r+13}" y="4" font-family="monospace" font-size="15" fill="${stampColor}" text-anchor="middle">{</text>
     <text x="${r-13}" y="4" font-family="monospace" font-size="15" fill="${stampColor}" text-anchor="middle">}</text>
@@ -80,6 +80,16 @@ const THEMES: Record<string, Theme> = {
     INK_FAINT: '#2a1a00', MRZ_BG: '#0a0700', ACCENT: '#f7931a',
     STAMP: '#c07010', ACCENT2: '#fbb040',
   },
+  light: {
+    BG: '#f5f0e8', HDR: '#1a1f3a', INK: '#1a1f3a', INK_DIM: '#6b7280',
+    INK_FAINT: '#d4c9a8', MRZ_BG: '#e8e0cc', ACCENT: '#2563eb',
+    STAMP: '#1a2a6a', ACCENT2: '#374151',
+  },
+  light: {
+    BG: '#f5f0e8', HDR: '#1a1f3a', INK: '#1a1f3a', INK_DIM: '#6b7280',
+    INK_FAINT: '#d4c9a8', MRZ_BG: '#e8e0cc', ACCENT: '#1a1f3a',
+    STAMP: '#1a2a6a', ACCENT2: '#374151',
+  },
 };
 
 export async function GET(req: NextRequest) {
@@ -94,7 +104,7 @@ export async function GET(req: NextRequest) {
   const llm        = esc(p.get('llm') || '');
   const socials    = (p.get('social') || '').split(',').map((s:string)=>s.trim()).filter(Boolean).slice(0,4);
   const tags       = (p.get('tags')   || '').split(',').map((s:string)=>s.trim()).filter(Boolean).slice(0,6);
-  const themeName  = p.get('theme') === 'bitcoin' ? 'bitcoin' : 'dark';
+  const themeName  = ['bitcoin','light'].includes(p.get('theme')||'') ? p.get('theme')! : 'dark';
   const year       = new Date().getFullYear().toString();
   const issueDate  = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}).toUpperCase();
   const ser        = makeSerial(agentId, year);
@@ -197,14 +207,14 @@ export async function GET(req: NextRequest) {
     <rect x="0" y="0" width="${W}" height="${HDR_H}" fill="${T.HDR}"/>
     <rect x="0" y="0" width="${W}" height="${HDR_H}" fill="url(#guil)" opacity="0.12"/>
     <!-- Line 1: logo (nudged to y=10 for vertical centering) + protocol + issued -->
-    <image href="data:image/png;base64,${LOGO_B64}" x="${PAD}" y="10" width="14" height="14" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>
-    <text x="${PAD+20}" y="21" font-family="monospace" font-size="7" fill="#fff" opacity="0.6" letter-spacing="1.2">THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</text>
+    <image href="data:image/png;base64,${LOGO_B64}" x="${PAD}" y="13" width="14" height="14" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>
+    <text x="${PAD+20}" y="21" font-family="monospace" font-size="7" fill="#fff" opacity="0.6" letter-spacing="1.2">THE SEALER PROTOCOL &middot; ONCHAIN IDENTITY REGISTRY</text>
     <text x="${W-PAD}" y="21" font-family="monospace" font-size="6" fill="#fff" opacity="0.35" text-anchor="end" letter-spacing="1">ISSUED ${issueDate}</text>
     <!-- Line 2: SEALER ID large | chain logo right -->
     <text x="${PAD}" y="54" font-family="Georgia, serif" font-size="24" fill="#fff" letter-spacing="3">SEALER ID</text>
     <g transform="translate(${W-PAD-10}, 43)">${chainLogo}</g>
     <!-- Line 3: doc type -->
-    <text x="${PAD}" y="70" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.3" letter-spacing="2">AGENT IDENTITY DOCUMENT · ERC-8004</text>
+    <text x="${PAD}" y="70" font-family="monospace" font-size="6.5" fill="#fff" opacity="0.3" letter-spacing="2">AGENT IDENTITY DOCUMENT &middot; ERC-8004</text>
     <!-- Accent line -->
     <rect x="0" y="${HDR_H}" width="${W}" height="2.5" fill="${T.ACCENT}" opacity="0.9"/>
 
@@ -215,26 +225,25 @@ export async function GET(req: NextRequest) {
     <rect x="${PHOTO_X}" y="${PHOTO_Y+PHOTO_H+6}" width="${PHOTO_W}" height="18" rx="3" fill="${eAccent}" opacity="0.12"/>
     <rect x="${PHOTO_X}" y="${PHOTO_Y+PHOTO_H+6}" width="${PHOTO_W}" height="18" rx="3" fill="none" stroke="${eAccent}" stroke-width="0.8" opacity="0.5"/>
     <text x="${PHOTO_X+PHOTO_W/2}" y="${PHOTO_Y+PHOTO_H+19}" font-family="monospace" font-size="7.5" fill="${eAccent}" text-anchor="middle" letter-spacing="2">${ENTITY_LBL}</text>
-    <!-- Credential fields — shifted right from photo -->
+    <!-- Credential fields - shifted right from photo -->
     ${fl("NAME", PHOTO_Y+14)}
     <text x="${FX}" y="${PHOTO_Y+27}" font-family="Georgia, serif" font-size="13" fill="${T.INK}">${trunc(name,18)}</text>
     ${fl("AGENT ID", PHOTO_Y+47)}
     ${fv(truncAddr(agentId), PHOTO_Y+60)}
     ${fl("OWNER", PHOTO_Y+78)}
-    ${fv(owner ? truncAddr(owner) : "—", PHOTO_Y+91)}
+    ${fv(owner ? truncAddr(owner) : "&mdash;", PHOTO_Y+91)}
     ${fl("PRIMARY CHAIN", PHOTO_Y+109)}
     ${fv(chain.toUpperCase(), PHOTO_Y+121)}
     ${fl("FIRST SEEN", PHOTO_Y+139)}
     ${fv(firstSeen, PHOTO_Y+152)}
 
-    <!-- Divider 1 — tight below credentials -->
+    <!-- Divider 1 - tight below credentials -->
     <rect x="0" y="${DIV1_Y}" width="${W}" height="1" fill="${T.INK_FAINT}" opacity="0.6"/>
 
     <!-- SECTION 2: Profile pills -->
     ${sec2}
 
-    <!-- Divider 2 -->
-    <rect x="0" y="${DIV2_Y}" width="${W}" height="1" fill="${T.INK_FAINT}" opacity="0.4"/>
+    <!-- No divider 2 - stamp zone flows from profile -->
 
     <!-- SECTION 3: Stamp zone -->
     <!-- Serial number top-right -->
