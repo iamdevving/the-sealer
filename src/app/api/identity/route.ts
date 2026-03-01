@@ -132,6 +132,22 @@ export async function GET(req: NextRequest) {
   const SEC_Y   = PHOTO_Y + PHOTO_H + 14;
   const MRZ_Y   = H - 72;
 
+  // Pre-compute SVG fragments to avoid ternaries inside template literal
+  const placeholderBg = isDark ? '#1a2540' : '#ddd8cc';
+  const photoSVG = photoData
+    ? `<image href="${photoData}" x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice"/>`
+    : `<rect x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" rx="4" fill="${placeholderBg}"/><image href="data:image/png;base64,${LOGO_B64}" x="${PHOTO_X + 25}" y="${PHOTO_Y + 28}" width="60" height="60" opacity="0.15" preserveAspectRatio="xMidYMid meet"/>`;
+
+  const ownerDisplay = owner ? truncateAddr(owner) : '—';
+
+  const socialSVG = social
+    ? `<rect x="${PAD + 250}" y="274" width="80" height="16" rx="8" fill="${ACCENT}" opacity="0.15"/><rect x="${PAD + 250}" y="274" width="80" height="16" rx="8" fill="none" stroke="${ACCENT}" stroke-width="0.8" opacity="0.5"/><text x="${PAD + 290}" y="286" font-family="monospace" font-size="7.5" fill="${ACCENT}" text-anchor="middle" letter-spacing="0.5">${truncate(social, 10)}</text>`
+    : '';
+
+  const ownerSVG = owner
+    ? `<text x="${FX}" y="${PHOTO_Y + 112}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">OWNER</text><text x="${FX}" y="${PHOTO_Y + 125}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${ownerDisplay}</text>`
+    : '';
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
   width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
@@ -174,7 +190,7 @@ export async function GET(req: NextRequest) {
     <text x="${W - PAD}" y="21" font-family="monospace" font-size="6" fill="#fff" opacity="0.4" text-anchor="end" letter-spacing="1">ISSUED ${issueDate}</text>
 
     <!-- Line 2: SEAL ID large | chain logo right -->
-    <text x="${PAD}" y="52" font-family="Georgia, 'Times New Roman', serif" font-size="24" fill="#fff" letter-spacing="3">SEAL ID</text>
+    <text x="${PAD}" y="52" font-family="Georgia, serif" font-size="24" fill="#fff" letter-spacing="3">SEAL ID</text>
     <g transform="translate(${W - PAD - 10}, 42)">${chainLogo}</g>
 
     <!-- Line 3: document type -->
@@ -184,11 +200,7 @@ export async function GET(req: NextRequest) {
     <rect x="0" y="${HDR_H}" width="${W}" height="2" fill="${ACCENT}" opacity="0.9"/>
 
     <!-- Photo -->
-    ${photoData
-      ? `<image href="${photoData}" x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" clip-path="url(#photoClip)" preserveAspectRatio="xMidYMid slice"/>`
-      : `<rect x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" rx="4" fill="${isDark ? '#1a2540' : '#ddd8cc'}"/>
-         <image href="data:image/png;base64,${LOGO_B64}" x="${PHOTO_X + 25}" y="${PHOTO_Y + 28}" width="60" height="60" opacity="0.15" preserveAspectRatio="xMidYMid meet"/>`
-    }
+    ${photoSVG}
     <rect x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" rx="4" fill="none" stroke="${INK_FAINT}" stroke-width="0.8"/>
 
     <!-- Entity badge below photo -->
@@ -196,43 +208,36 @@ export async function GET(req: NextRequest) {
     <rect x="${PHOTO_X}" y="${PHOTO_Y + PHOTO_H + 6}" width="${PHOTO_W}" height="18" rx="3" fill="none" stroke="${ACCENT}" stroke-width="0.8" opacity="0.5"/>
     <text x="${PHOTO_X + PHOTO_W / 2}" y="${PHOTO_Y + PHOTO_H + 19}" font-family="monospace" font-size="7.5" fill="${ACCENT}" text-anchor="middle" letter-spacing="2">${ENTITY_LABEL}</text>
 
-    <!-- Fields right of photo -->
+    <!-- Fields right of photo — NAME, AGENT ID, OWNER stacked neatly -->
     <text x="${FX}" y="${PHOTO_Y + 14}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">NAME</text>
-    <text x="${FX}" y="${PHOTO_Y + 28}" font-family="Georgia, serif" font-size="13" fill="${INK}">${truncate(name, 20)}</text>
+    <text x="${FX}" y="${PHOTO_Y + 27}" font-family="Georgia, serif" font-size="13" fill="${INK}">${truncate(name, 20)}</text>
 
-    <text x="${FX}" y="${PHOTO_Y + 50}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">AGENT ID</text>
-    <text x="${FX}" y="${PHOTO_Y + 63}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${truncateAddr(agentId)}</text>
+    <text x="${FX}" y="${PHOTO_Y + 47}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">AGENT ID</text>
+    <text x="${FX}" y="${PHOTO_Y + 60}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${truncateAddr(agentId)}</text>
 
-    <text x="${FX}" y="${PHOTO_Y + 112}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">OWNER</text>
-    <text x="${FX}" y="${PHOTO_Y + 125}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${owner ? truncateAddr(owner) : '—'}</text>
+    <text x="${FX}" y="${PHOTO_Y + 78}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">OWNER</text>
+    <text x="${FX}" y="${PHOTO_Y + 91}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="0.5">${ownerDisplay}</text>
 
-    <text x="${FX}" y="${PHOTO_Y + 80}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">CHAIN</text>
-    <text x="${FX}" y="${PHOTO_Y + 93}" font-family="monospace" font-size="10" fill="${INK}" letter-spacing="1">${chain.toUpperCase()}</text>
+    <text x="${FX}" y="${PHOTO_Y + 109}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">CHAIN</text>
+    <text x="${FX}" y="${PHOTO_Y + 122}" font-family="monospace" font-size="9" fill="${INK}" letter-spacing="1">${chain.toUpperCase()}</text>
 
-    <!-- Divider — below entity badge -->
-    <line x1="${PAD}" y1="${SEC_Y + 4}" x2="${W - PAD}" y2="${SEC_Y + 4}" stroke="${INK_FAINT}" stroke-width="0.8"/>
+    <!-- Divider — sits below entity badge (badge bottom = PHOTO_Y+PHOTO_H+24 = 256) -->
+    <line x1="${PAD}" y1="264" x2="${W - PAD}" y2="264" stroke="${INK_FAINT}" stroke-width="0.8"/>
 
-    <!-- Secondary fields -->
-    <text x="${PAD}" y="${SEC_Y + 16}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">FIRST SEEN</text>
-    <text x="${PAD}" y="${SEC_Y + 29}" font-family="monospace" font-size="9" fill="${INK}">${firstSeen}</text>
+    <!-- Secondary fields row — FIRST SEEN | STATEMENTS | SOCIAL pill -->
+    <text x="${PAD}" y="280" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">FIRST SEEN</text>
+    <text x="${PAD}" y="293" font-family="monospace" font-size="9" fill="${INK}">${firstSeen}</text>
 
-    <text x="${PAD + 130}" y="${SEC_Y + 16}" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">STATEMENTS</text>
-    <text x="${PAD + 130}" y="${SEC_Y + 29}" font-family="monospace" font-size="9" fill="${INK}">${statementCount}</text>
+    <text x="${PAD + 130}" y="280" font-family="monospace" font-size="6" fill="${INK_DIM}" letter-spacing="1.5">STATEMENTS</text>
+    <text x="${PAD + 130}" y="293" font-family="monospace" font-size="9" fill="${INK}">${statementCount}</text>
 
-    ${social ? `
-    <rect x="${PAD + 250}" y="${SEC_Y + 6}" width="80" height="16" rx="8"
-      fill="${ACCENT}" opacity="0.15"/>
-    <rect x="${PAD + 250}" y="${SEC_Y + 6}" width="80" height="16" rx="8"
-      fill="none" stroke="${ACCENT}" stroke-width="0.8" opacity="0.5"/>
-    <text x="${PAD + 290}" y="${SEC_Y + 18}" font-family="monospace" font-size="7.5" fill="${ACCENT}"
-      text-anchor="middle" letter-spacing="0.5">${truncate(social, 10)}</text>
-    ` : ''}
+    ${socialSVG}
 
-    <!-- Serial -->
-    <text x="${W - PAD}" y="${SEC_Y + 29}" font-family="monospace" font-size="8" fill="${ACCENT}" text-anchor="end" letter-spacing="1.5">${serial}</text>
+    <!-- Serial number — bottom right of secondary row -->
+    <text x="${W - PAD}" y="293" font-family="monospace" font-size="8" fill="${ACCENT}" text-anchor="end" letter-spacing="1.5">${serial}</text>
 
-    <!-- Stamp — rotated, semi-transparent, bottom-right of photo -->
-    <g transform="translate(${PHOTO_X + PHOTO_W + 10}, ${SEC_Y - 20}) rotate(-15)" color="${STAMP_COL}" opacity="0.55">
+    <!-- Stamp — rotated, placed between secondary fields and MRZ -->
+    <g transform="translate(${W - PAD - 60}, 420) rotate(-15)" color="${STAMP_COL}" opacity="0.55">
       ${stamp}
     </g>
 
@@ -240,8 +245,8 @@ export async function GET(req: NextRequest) {
     <rect x="0" y="${MRZ_Y}" width="${W}" height="72" fill="${MRZ_BG}"/>
     <line x1="0" y1="${MRZ_Y}" x2="${W}" y2="${MRZ_Y}" stroke="${INK_FAINT}" stroke-width="0.8"/>
     <text x="${PAD}" y="${MRZ_Y + 13}" font-family="monospace" font-size="5.5" fill="${INK_DIM}" letter-spacing="1">MACHINE READABLE ZONE</text>
-    <text x="${PAD}" y="${MRZ_Y + 34}" font-family="'Courier New', monospace" font-size="9.5" fill="${INK}" letter-spacing="1.8">${mrzLine1}</text>
-    <text x="${PAD}" y="${MRZ_Y + 52}" font-family="'Courier New', monospace" font-size="9.5" fill="${INK}" letter-spacing="1.8">${mrzLine2}</text>
+    <text x="${PAD}" y="${MRZ_Y + 34}" font-family="monospace" font-size="9.5" fill="${INK}" letter-spacing="1.8">${mrzLine1}</text>
+    <text x="${PAD}" y="${MRZ_Y + 52}" font-family="monospace" font-size="9.5" fill="${INK}" letter-spacing="1.8">${mrzLine2}</text>
 
     <!-- Card border -->
     <rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="none" stroke="${INK_FAINT}" stroke-width="1"/>
