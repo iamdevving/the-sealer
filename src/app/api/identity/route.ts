@@ -12,7 +12,7 @@ const PHOTO_X = PAD, PHOTO_Y = HDR_H + PAD;
 // FX: credentials start further right for clear separation from photo
 const FX_BASE = PHOTO_X + PHOTO_W + 28;
 // Section dividers
-const DIV1_Y = 300;  // tight — just below credentials
+const DIV1_Y = 300;  // tight - just below credentials
 const DIV2_Y = 420;  // between profile and stamp zone
 const MRZ_Y  = 548;
 
