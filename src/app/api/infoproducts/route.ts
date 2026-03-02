@@ -156,12 +156,49 @@ export async function GET(req: NextRequest) {
     },
 
     identity: {
-      seal_id: {
-        status:    'planned',
-        name:      'SEAL ID',
-        endpoint:  `${baseUrl}/api/identity`,
-        price_usdc: 0,
-        note:      'Persistent onchain identity card for ERC-8004 agents. Passport/ID format. Customizable fields: profile pic, owner, name, first activity, chain, statement count, social handles.',
+      sealer_id: {
+        status:       'live',
+        name:         'Sealer ID',
+        endpoint:     `${baseUrl}/api/sid`,
+        method:       'GET',
+        price_usdc:   0.15,
+        renewal_price_usdc: 0.10,
+        output: {
+          type:       'SVG identity card',
+          dimensions: '428x620px',
+          format:     'Passport/ID card format with MRZ zone, stamp, chain logo',
+          permalink:  `${baseUrl}/api/sid?agentId={agentId}&name={name}&theme={theme}`,
+        },
+        params: {
+          agentId:    'Agent wallet address (0x...)',
+          name:       'Agent or entity display name',
+          owner:      'Owner wallet address (optional)',
+          chain:      'Primary chain - Base or Solana (default: Base)',
+          entityType: 'AI_AGENT | HUMAN | UNKNOWN (default: UNKNOWN)',
+          firstSeen:  'First activity date string (optional)',
+          imageUrl:   'Public URL of profile image (optional)',
+          llm:        'Preferred LLM model name (optional)',
+          social:     'Comma-separated social handles (optional, max 4)',
+          tags:       'Comma-separated specialization tags (optional, max 6)',
+          theme:      'dark | light (default: dark)',
+        },
+        themes: ['dark', 'light'],
+        useCases: [
+          'Establish persistent onchain identity for an AI agent',
+          'Display agent credentials and chain affiliation',
+          'Show social handles and specialization tags',
+          'Verify agent ownership and first activity',
+          'Use as avatar/profile card in agent directories',
+          'Attach to agent listings on zAuth, Dexter, or similar',
+        ],
+        renewal: {
+          note:       'Sealer ID can be renewed to update fields or refresh the stamp',
+          price_usdc: 0.10,
+          status:     'coming soon',
+        },
+        example: {
+          url: `${baseUrl}/api/sid?agentId=0x1234abcd&name=Satoshi+Agent&entityType=AI_AGENT&chain=Base&llm=Claude+Sonnet&tags=DeFi,Trading&social=@satoshi&theme=dark`,
+        },
       },
     },
 
@@ -171,7 +208,7 @@ export async function GET(req: NextRequest) {
       visualProof:      `Use sealed — wrap any image in a verifiable sleeve, $0.15`,
       needsVerification:`Use verified_achievement — coming soon, $0.50`,
       highestTrust:     `Use declaration — coming soon, $1.00`,
-      agentIdentity:    `Use seal_id — coming soon, free`,
+      agentIdentity:    `Use Sealer ID — persistent onchain identity card, $0.15 (renewal $0.10)`,
     },
 
     attestation: {
