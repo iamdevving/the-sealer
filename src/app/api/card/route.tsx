@@ -424,7 +424,8 @@ export async function GET(req: NextRequest) {
   let txHash: string;
   let chain: string;
 
-  const uid_param = searchParams.get('uid');
+  const uid_param  = searchParams.get('uid');
+  const imageUrl   = searchParams.get('imageUrl') ?? '';
   if (uid_param) {
     const { fetchAttestation, fetchAttestationByTx } = await import('@/lib/eas');
     // Try as attestation UID first, fall back to TX hash lookup
@@ -475,6 +476,20 @@ export async function GET(req: NextRequest) {
     '<text x="280" y="'+(textStartY+i*lineH)+'" font-family="Georgia,serif" font-size="'+fontSize+'" fill="'+t.bodyTextDim+'" font-style="italic" text-anchor="middle">'+line+'</text>'
   ).join('');
 
+  // Fetch imageUrl if provided
+  let photoData = '';
+  if (imageUrl) {
+    try {
+      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        const b64i = Buffer.from(buf).toString('base64');
+        const mime = (res.headers.get('content-type') || 'image/png').split(';')[0];
+        photoData = 'data:' + mime + ';base64,' + b64i;
+      }
+    } catch { /* no photo */ }
+  }
+
   const parts = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<svg width="560" height="530" viewBox="0 0 560 530" xmlns="http://www.w3.org/2000/svg">',
@@ -493,9 +508,14 @@ export async function GET(req: NextRequest) {
     '<text x="'+(['gold','silver','bronze'].includes(themeKey)?'76':'71')+'" y="180" font-family="monospace" font-size="8" font-weight="bold" fill="'+t.accent+'" text-anchor="middle" letter-spacing="3">SEAL OF APPROVAL</text>',
     '<rect x="'+(['gold','silver','bronze'].includes(themeKey)?'33':'28')+'" y="192" width="86" height="17" rx="8" fill="'+t.statBg+'" stroke="'+t.accent+'" stroke-width="0.8"/>',
     '<text x="'+(['gold','silver','bronze'].includes(themeKey)?'76':'71')+'" y="204" font-family="monospace" font-size="7" font-weight="bold" fill="'+t.accent+'" text-anchor="middle">'+chain+' &#183; EAS</text>',
-    '<rect x="148" y="52" width="392" height="164" rx="8" fill="'+t.uploadBg+'" stroke="'+t.accentDim+'" stroke-width="1.2" stroke-dasharray="7,4"/>',
-    '<text x="344" y="128" font-family="monospace" font-size="9" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.5">NO ATTACHMENT</text>',
-    '<text x="344" y="148" font-family="monospace" font-size="7" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.28">PNL CARD &#183; SCREENSHOT &#183; CHART</text>',
+    ...(photoData ? [
+      '<defs><clipPath id="imgClip"><rect x="148" y="52" width="392" height="164" rx="8"/></clipPath></defs>',
+      '<image href="'+photoData+'" x="148" y="52" width="392" height="164" clip-path="url(#imgClip)" preserveAspectRatio="xMidYMid slice"/>',
+    ] : [
+      '<rect x="148" y="52" width="392" height="164" rx="8" fill="'+t.uploadBg+'" stroke="'+t.accentDim+'" stroke-width="1.2" stroke-dasharray="7,4"/>',
+      '<text x="344" y="128" font-family="monospace" font-size="9" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.5">NO ATTACHMENT</text>',
+      '<text x="344" y="148" font-family="monospace" font-size="7" fill="'+t.accentDim+'" text-anchor="middle" opacity="0.28">PNL CARD &#183; SCREENSHOT &#183; CHART</text>',
+    ]),
     ...((['parchment','base'].includes(themeKey)) ? [] : ['<rect x="22" y="228" width="516" height="1" fill="url(#dg)"/>']),
     '<text x="280" y="248" font-family="monospace" font-size="12" font-weight="bold" fill="'+t.accent+'" text-anchor="middle" letter-spacing="5">STATEMENT</text>',
     achievementLines,
