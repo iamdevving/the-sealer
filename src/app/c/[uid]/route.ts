@@ -1,16 +1,6 @@
 /**
  * /c/[uid]
- *
  * Permalink for any minted credential.
- * Serves a minimal HTML page embedding the static SVG + attestation metadata.
- *
- * This URL is:
- *   - Permanent (never changes post-mint)
- *   - Shareable (works in any browser, social card preview)
- *   - Verifiable (links to EAS scan)
- *   - Embeddable (og:image points to the static SVG)
- *
- * Example: https://thesealer.xyz/c/abc123xyz
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +8,6 @@ import { getSnapshot } from '@/lib/snapshot'
 
 export const runtime = 'nodejs'
 
-// Dimensions per product for embed sizing
 const DIMS: Record<string, { w: number; h: number }> = {
   badge:  { w: 240,  h: 80  },
   card:   { w: 560,  h: 530 },
@@ -28,9 +17,9 @@ const DIMS: Record<string, { w: number; h: number }> = {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { uid: string } }
+  { params }: { params: Promise<{ uid: string }> }
 ) {
-  const { uid } = params
+  const { uid } = await params
   const snapshot = await getSnapshot(uid)
 
   if (!snapshot) {
@@ -50,8 +39,6 @@ export async function GET(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sealed Credential · ${uid}</title>
-
-  <!-- Open Graph / Social card -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="${permalink}">
   <meta property="og:title" content="Sealed Credential · The Sealer">
@@ -59,123 +46,53 @@ export async function GET(
   <meta property="og:image" content="${snapshot.url}">
   <meta property="og:image:width" content="${dims.w}">
   <meta property="og:image:height" content="${dims.h}">
-
-  <!-- Twitter card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@thesealerxyz">
   <meta name="twitter:title" content="Sealed Credential">
   <meta name="twitter:description" content="Verifiable onchain credential · EAS attested on Base">
   <meta name="twitter:image" content="${snapshot.url}">
-
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0a0a0f;
-      --surface: #12121a;
-      --border: rgba(255,255,255,0.08);
-      --text: #e2e8f0;
-      --muted: #64748b;
-      --accent: #3b82f6;
-      --green: #10b981;
+      --bg: #0a0a0f; --surface: #12121a; --border: rgba(255,255,255,0.08);
+      --text: #e2e8f0; --muted: #64748b; --accent: #3b82f6; --green: #10b981;
     }
     body {
-      background: var(--bg);
-      color: var(--text);
+      background: var(--bg); color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      gap: 32px;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 40px 20px; gap: 32px;
     }
-
     .credential-frame {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      max-width: 100%;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 32px;
+      display: flex; align-items: center; justify-content: center; max-width: 100%;
     }
-    .credential-frame img {
-      max-width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    .meta {
-      width: 100%;
-      max-width: ${Math.max(dims.w, 400)}px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+    .credential-frame img { max-width: 100%; height: auto; display: block; }
+    .meta { width: 100%; max-width: ${Math.max(dims.w, 400)}px; display: flex; flex-direction: column; gap: 12px; }
     .meta-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 13px;
-      gap: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; font-size: 13px; gap: 12px;
     }
     .meta-label { color: var(--muted); white-space: nowrap; }
-    .meta-value {
-      color: var(--text);
-      font-family: monospace;
-      font-size: 12px;
-      word-break: break-all;
-      text-align: right;
-    }
-    .meta-value a {
-      color: var(--accent);
-      text-decoration: none;
-    }
+    .meta-value { color: var(--text); font-family: monospace; font-size: 12px; word-break: break-all; text-align: right; }
+    .meta-value a { color: var(--accent); text-decoration: none; }
     .meta-value a:hover { text-decoration: underline; }
-
     .badge-verified {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--green);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--green); font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
     }
-    .badge-verified::before {
-      content: '';
-      width: 8px; height: 8px;
-      background: var(--green);
-      border-radius: 50%;
-    }
-
-    .wordmark {
-      font-size: 13px;
-      color: var(--muted);
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
+    .badge-verified::before { content: ''; width: 8px; height: 8px; background: var(--green); border-radius: 50%; }
+    .wordmark { font-size: 13px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
     .wordmark a { color: var(--muted); text-decoration: none; }
     .wordmark a:hover { color: var(--text); }
   </style>
 </head>
 <body>
-
   <div class="credential-frame">
-    <img
-      src="${snapshot.url}"
-      alt="Sealed credential ${uid}"
-      width="${dims.w}"
-      height="${dims.h}"
-    >
+    <img src="${snapshot.url}" alt="Sealed credential ${uid}" width="${dims.w}" height="${dims.h}">
   </div>
-
   <div class="meta">
     <div class="meta-row">
       <span class="meta-label">Status</span>
@@ -208,16 +125,10 @@ export async function GET(
     </div>` : ''}
     <div class="meta-row">
       <span class="meta-label">Static SVG</span>
-      <span class="meta-value">
-        <a href="${snapshot.url}" target="_blank" rel="noopener">View raw SVG ↗</a>
-      </span>
+      <span class="meta-value"><a href="${snapshot.url}" target="_blank" rel="noopener">View raw SVG ↗</a></span>
     </div>
   </div>
-
-  <div class="wordmark">
-    <a href="https://thesealer.xyz">The Sealer Protocol</a>
-  </div>
-
+  <div class="wordmark"><a href="https://thesealer.xyz">The Sealer Protocol</a></div>
 </body>
 </html>`
 
@@ -225,7 +136,6 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': 'text/html',
-      // Permalinks are immutable — cache aggressively
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
   })
