@@ -1,4 +1,4 @@
-// src/app/api/identity/route.ts
+// src/app/api/sid/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
