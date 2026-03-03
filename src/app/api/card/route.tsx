@@ -410,7 +410,7 @@ export async function GET(req: NextRequest) {
     dashes,
     '<text x="22" y="26" font-family="monospace" font-size="10.5" font-weight="bold" fill="'+t.headerText+'" letter-spacing="2.5">THE SEALER &#183; OFFICIAL CREDENTIAL</text>',
     '<text x="538" y="26" font-family="monospace" font-size="9" fill="'+t.accentDim+'" text-anchor="end">UID: '+uid+'</text>',
-    '<circle cx="'+(['gold','silver','bronze'].includes(themeKey)?'76':'71')+'" cy="113" r="43" fill="'+t.accent+'" opacity="'+(t.dark ? '0.05' : '0')+'"/>',
+    '<circle cx="'+(['gold','silver','bronze'].includes(themeKey)?'76':'71')+'" cy="113" r="43" fill="'+t.accent+'" opacity="0"/>',
     '<image href="'+SEAL+'" x="'+(['gold','silver','bronze'].includes(themeKey)?'34':'29')+'" y="71" width="84" height="84" preserveAspectRatio="xMidYMid meet"/>',
 
     '<text x="'+(['gold','silver','bronze'].includes(themeKey)?'76':'71')+'" y="180" font-family="monospace" font-size="8" font-weight="bold" fill="'+t.accent+'" text-anchor="middle" letter-spacing="3">SEAL OF APPROVAL</text>',
