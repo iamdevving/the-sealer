@@ -68,13 +68,13 @@ export async function GET(req: NextRequest) {
       return new NextResponse('Attestation not found', { status: 404 });
     }
     themeKey    = searchParams.get('theme') || 'circuit-anim';
-    achievement = truncate(esc(data.achievement), 38);
+    achievement = truncate(esc(data.statement), 38);
     chain       = searchParams.get('chain') || 'Base';
     txHash      = data.txHash;
     agentId     = data.recipient.slice(0,6);
   } else {
     themeKey    = searchParams.get('theme') || 'circuit-anim';
-    achievement = truncate(esc(searchParams.get('achievement') || 'Verified Statement'), 38);
+    achievement = truncate(esc(searchParams.get('statement') || searchParams.get('achievement') || 'Verified Statement'), 38);
     chain       = esc(searchParams.get('chain') || 'Base');
     txHash      = searchParams.get('txHash') || '';
     agentId     = esc(searchParams.get('agentId') || '????');

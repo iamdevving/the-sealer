@@ -14,27 +14,27 @@ export async function POST(req: NextRequest) {
 
   return withX402Payment(req, async (paymentChain) => {
     try {
-      const achievement  = body.achievement?.trim() || 'Agent achievement (no description provided)';
-      const theme        = body.theme || 'circuit-anim';
-      const agentId      = body.agentId || req.headers.get('X-WALLET') || '????';
-      const uploadedImg  = body.uploadedImg || null;
+      const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
+      const theme            = body.theme || 'circuit-anim';
+      const agentId          = body.agentId || req.headers.get('X-WALLET') || '????';
+      const uploadedImg      = body.uploadedImg || null;
 
       const attestationChain = 'Base';
-      const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
+      const paymentSource    = paymentChain === 'solana' ? 'Solana' : 'Base';
 
       const walletAddress = agentId.startsWith('0x')
         ? agentId
         : '0x0000000000000000000000000000000000000000';
       const entityType = await checkEntityType(walletAddress);
 
-      const receipt = await issueSealAttestation(achievement);
+      const receipt = await issueSealAttestation(statement);
       const txHash  = receipt.transactionHash;
 
       const baseUrl = new URL(req.url).origin;
       const uid = nanoid(12);
 
       const attestParams = new URLSearchParams({
-        achievement,
+        statement,
         theme,
         agentId,
         txHash,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       });
 
       const sealedParams = new URLSearchParams({
-        achievement,
+        statement,
         theme,
         agentId,
         txHash,
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
                        : format === 'sid' ? 'sid'
                        : 'card';
 
-        const svgParams = format === 'sealed' ? sealedParams : attestParams;
+        const svgParams   = format === 'sealed' ? sealedParams : attestParams;
         const svgFetchUrl = `${baseUrl}/api/${svgRoute}?${svgParams}`;
 
         const svgRes = await fetch(svgFetchUrl);
@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
           const svgContent = await svgRes.text();
           await snapshotSVG({
             uid,
-            product: svgRoute as 'badge' | 'card' | 'sealed' | 'sid',
+            product:        svgRoute as 'badge' | 'card' | 'sealed' | 'sid',
             svgContent,
             attestationUID: txHash,
-            paymentChain: paymentSource,
+            paymentChain:   paymentSource,
           });
         } else {
           console.warn('[attest] SVG fetch failed:', svgRes.status);
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         status:           'success',
         message:          'Statement sealed onchain.',
-        achievement,
+        statement,
         theme,
         agentId,
         entityType,
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
         txHash,
         attestationChain,
         paymentChain:     paymentSource,
-        easExplorer:      `https://base-sepolia.easscan.org/attestation/view/${txHash}`,
+        easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
         permalink,
         cardUrl,
         badgeUrl,

@@ -1,30 +1,31 @@
 // src/lib/x402.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, createWalletClient, type Hash } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { base } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
 import { Connection, PublicKey } from '@solana/web3.js';
 
 const rpcUrl        = process.env.ALCHEMY_RPC_URL!;
-const solanaRpcUrl  = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+const solanaRpcUrl  = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const rawPrivateKey = (process.env.TEST_PRIVATE_KEY || '').trim();
 const privateKey    = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
 
-const client           = createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) });
+const client           = createPublicClient({ chain: base, transport: http(rpcUrl) });
 const solanaConnection = new Connection(solanaRpcUrl);
 
 const PAYMENT_CONFIG = {
-  chain:            'base-sepolia',
+  chain:            'base',
   token:            'USDC',
   description:      'The Sealer attestation',
-  recipient:        '0x9B35682F33264057E8fB2D4FebA7c76E74816A52', // Base wallet
+  recipient:        '0x4386606286eEA12150386f0CFc55959F30de00D1', // Base wallet
   solanaRecipient:  '6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj', // Solana wallet
 };
 
-const EAS_ADDRESS = '0x4200000000000000000000000000000000000021';
-const SCHEMA_UID  = '0xf4b3daae205c3fc3c3b8a7d3fb31bcd497911895677ab1db5f431b68a29bb286';
-const eas         = new EAS(EAS_ADDRESS);
+const EAS_ADDRESS        = '0x4200000000000000000000000000000000000021';
+const SCHEMA_UID         = process.env.EAS_SCHEMA_UID!;
+const IDENTITY_SCHEMA_UID = process.env.EAS_IDENTITY_SCHEMA_UID!;
+const eas                = new EAS(EAS_ADDRESS);
 
 function isSolanaSignature(str: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{85,90}$/.test(str.trim());
@@ -65,7 +66,6 @@ async function verifyPaymentProof(proof: string): Promise<{ valid: boolean; txHa
       }).catch(() => null);
 
       if (tx) {
-        // Verify one of the account keys is our Solana recipient
         const recipientKey = new PublicKey(PAYMENT_CONFIG.solanaRecipient);
         const accountKeys  = tx.transaction.message.getAccountKeys
           ? tx.transaction.message.getAccountKeys().staticAccountKeys
@@ -92,23 +92,23 @@ async function verifyPaymentProof(proof: string): Promise<{ valid: boolean; txHa
   }
 }
 
-export async function issueSealAttestation(achievement: string) {
-  console.log(`[The Sealer] Issuing attestation for: "${achievement}"`);
+export async function issueSealAttestation(statement: string) {
+  console.log(`[The Sealer] Issuing statement attestation: "${statement}"`);
 
   const account      = privateKeyToAccount(privateKey as `0x${string}`);
-  const walletClient = createWalletClient({ account, chain: baseSepolia, transport: http(rpcUrl) });
+  const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
 
   (eas as any).connect(walletClient);
 
-  const schemaEncoder = new SchemaEncoder('string achievement');
-  const encodedData   = schemaEncoder.encodeData([{ name: 'achievement', value: achievement, type: 'string' }]);
+  const schemaEncoder = new SchemaEncoder('string statement');
+  const encodedData   = schemaEncoder.encodeData([{ name: 'statement', value: statement, type: 'string' }]);
 
   const txResponse = await eas.attest({
     schema: SCHEMA_UID,
     data: {
       recipient:      PAYMENT_CONFIG.recipient,
       expirationTime: BigInt(0),
-      revocable:      true,
+      revocable:      false,
       refUID:         '0x0000000000000000000000000000000000000000000000000000000000000000',
       data:           encodedData,
     },
@@ -123,7 +123,52 @@ export async function issueSealAttestation(achievement: string) {
     timeout:         90000,
   });
 
-  console.log('[The Sealer] ✅ Attestation mined! TX:', receipt.transactionHash);
+  console.log('[The Sealer] ✅ Statement attestation mined! TX:', receipt.transactionHash);
+  return receipt;
+}
+
+export async function issueIdentityAttestation(
+  name: string,
+  entityType: string,
+  chain: string,
+  imageUrl: string,
+) {
+  console.log(`[The Sealer] Issuing identity attestation for: "${name}"`);
+
+  const account      = privateKeyToAccount(privateKey as `0x${string}`);
+  const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
+
+  (eas as any).connect(walletClient);
+
+  const schemaEncoder = new SchemaEncoder('string name,string entityType,string chain,string imageUrl');
+  const encodedData   = schemaEncoder.encodeData([
+    { name: 'name',       value: name,       type: 'string' },
+    { name: 'entityType', value: entityType, type: 'string' },
+    { name: 'chain',      value: chain,      type: 'string' },
+    { name: 'imageUrl',   value: imageUrl,   type: 'string' },
+  ]);
+
+  const txResponse = await eas.attest({
+    schema: IDENTITY_SCHEMA_UID,
+    data: {
+      recipient:      PAYMENT_CONFIG.recipient,
+      expirationTime: BigInt(0),
+      revocable:      false,
+      refUID:         '0x0000000000000000000000000000000000000000000000000000000000000000',
+      data:           encodedData,
+    },
+  });
+
+  const preparedTx = (txResponse as any).data || txResponse;
+  const txHash     = await walletClient.sendTransaction(preparedTx as any);
+
+  const receipt = await client.waitForTransactionReceipt({
+    hash:            txHash as Hash,
+    pollingInterval: 1000,
+    timeout:         90000,
+  });
+
+  console.log('[The Sealer] ✅ Identity attestation mined! TX:', receipt.transactionHash);
   return receipt;
 }
 
@@ -148,13 +193,13 @@ export async function withX402Payment(
         description: PAYMENT_CONFIG.description,
         paymentOptions: [
           {
-            chain:     'base-sepolia',
+            chain:     'base',
             token:     'USDC',
             recipient: PAYMENT_CONFIG.recipient,
             amount:    price,
           },
           {
-            chain:     'solana-devnet',
+            chain:     'solana',
             token:     'USDC',
             recipient: PAYMENT_CONFIG.solanaRecipient,
             amount:    price,
@@ -163,13 +208,13 @@ export async function withX402Payment(
         x402: {
           version: 1,
           schemes: ['exact'],
-          network: ['base-sepolia', 'solana-devnet'],
+          network: ['base', 'solana'],
         },
       }),
       {
         status:  402,
         headers: {
-          'WWW-Authenticate': `x402 payment="USDC" chain="base-sepolia|solana-devnet" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
+          'WWW-Authenticate': `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
           'Content-Type':     'application/json',
         },
       }
@@ -191,7 +236,6 @@ export async function withX402Payment(
       console.log('[The Sealer] 🧪 Test mode — bypassing verification');
     }
 
-    // Pass paymentChain to handler so SVGs can reflect the correct chain
     return await handler(paymentChain);
   } catch (error: any) {
     console.error('[The Sealer] Error:', error);

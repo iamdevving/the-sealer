@@ -341,13 +341,13 @@ export async function GET(req: NextRequest) {
     if (!data) {
       return new NextResponse('Attestation not found', { status: 404 });
     }
-    achievement = truncate(data.achievement, 160);
+    achievement = truncate(data.statement, 160);
     themeKey    = searchParams.get('theme') || 'circuit-anim';
     agentId     = esc(data.recipient.slice(0,6));
     txHash      = data.txHash;
     chain       = searchParams.get('chain') || 'Base';
   } else {
-    achievement = truncate(searchParams.get('achievement') || 'Verified Statement', 160);
+    achievement = truncate(searchParams.get('statement') || searchParams.get('achievement') || 'Verified Statement', 160);
     themeKey    = searchParams.get('theme') || 'circuit-anim';
     agentId     = esc(searchParams.get('agentId') || '????');
     txHash      = searchParams.get('txHash') || '';

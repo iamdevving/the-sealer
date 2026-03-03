@@ -1,10 +1,10 @@
 // src/lib/eas.ts
-const EAS_GRAPHQL = 'https://base-sepolia.easscan.org/graphql';
+const EAS_GRAPHQL = 'https://base.easscan.org/graphql';
 
 export interface AttestationData {
   uid: string;
   txHash: string;
-  achievement: string;
+  statement: string;
   attester: string;
   recipient: string;
   time: number;
@@ -22,16 +22,16 @@ async function queryEAS(query: string, variables: Record<string, string>) {
 
 function parseAttestation(a: any): AttestationData | null {
   if (!a) return null;
-  let achievement = 'Verified Statement';
+  let statement = 'Verified Statement';
   try {
     const decoded = JSON.parse(a.decodedDataJson);
-    const field = decoded.find((f: any) => f.name === 'achievement');
-    if (field?.value?.value) achievement = field.value.value;
+    const field = decoded.find((f: any) => f.name === 'statement');
+    if (field?.value?.value) statement = field.value.value;
   } catch {}
   return {
     uid:       a.id,
     txHash:    a.txid,
-    achievement,
+    statement,
     attester:  a.attester,
     recipient: a.recipient,
     time:      Number(a.time),
