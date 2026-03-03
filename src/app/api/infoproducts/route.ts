@@ -19,6 +19,17 @@ export async function GET(req: NextRequest) {
       note:     'Include payment proof in X-PAYMENT header. Set format param to receive correct 402 pricing.',
     },
 
+    upload: {
+      endpoint:   `${baseUrl}/api/upload`,
+      method:     'POST',
+      price_usdc: 0.01,
+      maxSize:    '5MB',
+      formats:    ['png', 'jpg', 'webp', 'gif'],
+      note:       'Upload an image and receive a permanent public URL to use in imageUrl params across all products. Required for local or private images.',
+      returns:    '{ uid, url, type, bytes, usage: { card, sealed, sid } }',
+      example:    `POST ${baseUrl}/api/upload with multipart/form-data file field`,
+    },
+
     products: {
 
       statement_badge: {
@@ -70,12 +81,23 @@ export async function GET(req: NextRequest) {
           type:        'SVG card',
           dimensions:  '560×530px',
           permalink:   `${baseUrl}/api/card?uid={attestationUid}&theme={theme}`,
-          directUrl:   `${baseUrl}/api/card?achievement={text}&theme={theme}`,
+          directUrl:   `${baseUrl}/api/card?achievement={text}&theme={theme}&imageUrl={url}`,
         },
         constraints: {
           maxChars:  220,
           lines:     'up to 4 (font auto-scales 17.5px → 12px)',
           overflow:  'text clipped after 4 lines',
+        },
+        image: {
+          param:      'imageUrl',
+          upload:     `${baseUrl}/api/upload`,
+          dimensions: '392×164px landscape (2.4:1 ratio)',
+          behavior:   'Center-cropped to fill frame. No distortion. Closer to 2.4:1 = better result.',
+          bestFor:    ['PNL charts', 'X/Twitter screenshots', 'trading dashboards', 'wide banners', 'horizontal infographics'],
+          avoid:      'Portrait images — will be center-cropped, top/bottom cut off',
+          tip:        'Upload via /api/upload first to get a permanent public URL, then pass it as imageUrl',
+          maxSize:    '5MB',
+          formats:    ['png', 'jpg', 'webp', 'gif'],
         },
         themes: [
           'circuit-anim', 'circuit', 'parchment', 'aurora',
@@ -95,6 +117,7 @@ export async function GET(req: NextRequest) {
             theme:       'circuit-anim',
             format:      'card',
             agentId:     '0xYourWalletAddress',
+            imageUrl:    'https://thesealer.xyz/uploads/your-pnl-chart.png',
           },
         },
       },
@@ -112,13 +135,19 @@ export async function GET(req: NextRequest) {
           note:       'Wraps any public image URL in a verifiable sleeve with chain + date footer.',
         },
         constraints: {
-          input:        'Any publicly accessible image URL',
+          input:        'Any publicly accessible image URL or pre-uploaded via /api/upload',
           imageFormats: ['png', 'jpg', 'gif', 'webp', 'svg'],
           fetchTimeout: '5 seconds',
           textInput:    'none — the image is the content',
+          dimensions:   '291×400px portrait (0.73:1 ratio)',
+          behavior:     'Center-cropped to fill frame. No distortion. Closer to 0.73:1 = better result.',
+          bestFor:      ['portrait artwork', 'character images', 'tall infographics', 'posters', 'vertical screenshots'],
+          avoid:        'Wide landscape images — will be center-cropped, left/right cut off',
+          tip:          'Upload via /api/upload first to get a permanent public URL, then pass it as imageUrl',
+          maxSize:      '5MB via /api/upload',
         },
         params: {
-          imageUrl: 'Required. Public URL of image to wrap.',
+          imageUrl: 'Required. Public URL of image to wrap. Use /api/upload for local images.',
           txHash:   'Optional. Onchain TX hash shown in footer.',
           chain:    'Optional. Chain name shown in footer (default: Base).',
         },
@@ -135,7 +164,7 @@ export async function GET(req: NextRequest) {
           'Archive a Basescan or Solscan page view',
         ],
         example: {
-          url: `${baseUrl}/api/sealed?imageUrl=https://example.com/screenshot.png&txHash=0xabc123&chain=Base`,
+          url: `${baseUrl}/api/sealed?imageUrl=https://thesealer.xyz/uploads/your-image.png&txHash=0xabc123&chain=Base`,
         },
       },
 
@@ -165,7 +194,7 @@ export async function GET(req: NextRequest) {
         renewal_price_usdc: 0.10,
         output: {
           type:       'SVG identity card',
-          dimensions: '428x620px',
+          dimensions: '428×620px',
           format:     'Passport/ID card format with MRZ zone, stamp, chain logo',
           permalink:  `${baseUrl}/api/sid?agentId={agentId}&name={name}&theme={theme}`,
         },
@@ -176,11 +205,22 @@ export async function GET(req: NextRequest) {
           chain:      'Primary chain - Base or Solana (default: Base)',
           entityType: 'AI_AGENT | HUMAN | UNKNOWN (default: UNKNOWN)',
           firstSeen:  'First activity date string (optional)',
-          imageUrl:   'Public URL of profile image (optional)',
+          imageUrl:   'Optional. Profile photo URL. Best results: headshots, avatars, square or portrait images. Cropped to fill 110×134px (0.82:1 portrait ratio). Upload via /api/upload (max 5MB).',
           llm:        'Preferred LLM model name (optional)',
           social:     'Comma-separated social handles (optional, max 4)',
           tags:       'Comma-separated specialization tags (optional, max 6)',
           theme:      'dark | light (default: dark)',
+        },
+        image: {
+          param:      'imageUrl',
+          upload:     `${baseUrl}/api/upload`,
+          dimensions: '110×134px portrait (0.82:1 ratio)',
+          behavior:   'Center-cropped to fill frame. No distortion. Closer to 0.82:1 = better result.',
+          bestFor:    ['headshots', 'profile pictures', 'avatars', 'square images'],
+          avoid:      'Wide landscape images — will be heavily cropped top/bottom',
+          tip:        'Upload via /api/upload first to get a permanent public URL, then pass it as imageUrl',
+          maxSize:    '5MB',
+          formats:    ['png', 'jpg', 'webp', 'gif'],
         },
         themes: ['dark', 'light'],
         useCases: [
@@ -197,18 +237,19 @@ export async function GET(req: NextRequest) {
           status:     'coming soon',
         },
         example: {
-          url: `${baseUrl}/api/sid?agentId=0x1234abcd&name=Satoshi+Agent&entityType=AI_AGENT&chain=Base&llm=Claude+Sonnet&tags=DeFi,Trading&social=@satoshi&theme=dark`,
+          url: `${baseUrl}/api/sid?agentId=0x1234abcd&name=Satoshi+Agent&entityType=AI_AGENT&chain=Base&llm=Claude+Sonnet&tags=DeFi,Trading&social=@satoshi&theme=dark&imageUrl=https://thesealer.xyz/uploads/your-avatar.png`,
         },
       },
     },
 
     choosingAProduct: {
-      shortStatement:   `Use statement_badge — 38 chars max, $0.05`,
-      longStatement:    `Use statement_card — up to 220 chars, 4 lines, $0.10`,
-      visualProof:      `Use sealed — wrap any image in a verifiable sleeve, $0.15`,
-      needsVerification:`Use verified_achievement — coming soon, $0.50`,
-      highestTrust:     `Use declaration — coming soon, $1.00`,
-      agentIdentity:    `Use Sealer ID — persistent onchain identity card, $0.15 (renewal $0.10)`,
+      shortStatement:    `Use statement_badge — 38 chars max, $0.05`,
+      longStatement:     `Use statement_card — up to 220 chars, 4 lines, optional landscape image, $0.10`,
+      visualProof:       `Use sealed — wrap any portrait image in a verifiable sleeve, $0.15`,
+      needsVerification: `Use verified_achievement — coming soon, $0.50`,
+      highestTrust:      `Use declaration — coming soon, $1.00`,
+      agentIdentity:     `Use Sealer ID — persistent onchain identity card with profile photo, $0.15 (renewal $0.10)`,
+      uploadImage:       `Use /api/upload — get a permanent public URL for any image, $0.01`,
     },
 
     attestation: {
