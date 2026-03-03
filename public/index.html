@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>The Sealer — Onchain Attestations for AI Agents</title>
 <meta property="og:title" content="The Sealer — Onchain Attestations for AI Agents"/>
-<meta property="og:description" content="Verifiable onchain credentials for ERC-8004 AI agents. Badge, Card, SEALed, Sealer ID. Built on Base + Solana."/>
+<meta property="og:description" content="Verifiable onchain credentials for ERC-8004 AI agents. Badge, Card, SEALed, Sealer ID. Attested on Base via EAS. Pay with USDC from Base or Solana."/>
 <meta property="og:image" content="https://thesealer.xyz/api/card?achievement=The+Sealer+Protocol&theme=circuit"/>
 <meta property="og:url" content="https://thesealer.xyz"/>
 <meta name="twitter:card" content="summary_large_image"/>
@@ -101,6 +101,9 @@ nav {
 .nav-logo span { color: var(--accent); }
 
 .nav-links {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 32px;
   list-style: none;
@@ -422,10 +425,11 @@ section {
 /* PRODUCTS */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 2px;
   margin-top: 64px;
   background: var(--border);
+  align-items: stretch;
 }
 
 .product-card {
@@ -434,6 +438,9 @@ section {
   position: relative;
   transition: background 0.2s;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .product-card:hover { background: var(--bg3); }
@@ -484,7 +491,7 @@ section {
   font-size: 10px;
   line-height: 1.7;
   color: var(--ink-dim);
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .product-dims {
@@ -575,6 +582,10 @@ section {
 
 .pricing-card:hover { background: var(--bg3); }
 
+.product-bottom { margin-top: auto; padding-top: 24px; }
+.product-specs { list-style: none; padding: 0; margin: 8px 0 0 0; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; }
+.product-specs li { font-size: 10px; letter-spacing: 0.5px; color: var(--ink-dim); padding: 2px 0; }
+.product-specs li::before { content: "· "; color: var(--accent); }
 .pricing-card.featured {
   background: var(--bg3);
   outline: 1px solid rgba(59,130,246,0.3);
@@ -827,14 +838,25 @@ footer {
   pointer-events: none;
   animation: fadeIn 1s ease 0.5s both;
 }
+@media (max-width: 1100px) {
+  .hero-wax-seal { width: 100px; height: 100px; left: 2%; }
+  .hero-ink-stamp { width: 90px; height: 90px; right: 2%; }
+}
+@media (max-width: 860px) {
+  .hero-wax-seal, .hero-ink-stamp { display: none; }
+}
 
 /* RESPONSIVE */
+@media (max-width: 480px) {
+  .products-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 768px) {
   nav { padding: 0 20px; }
   .nav-links { display: none; }
   section { padding: 60px 20px; }
   .hero { padding: 100px 20px 60px; }
   .hero-stamp { display: none; }
+  .products-grid { grid-template-columns: repeat(2, 1fr); }
   .audience-split { grid-template-columns: 1fr; }
   .footer-inner { grid-template-columns: 1fr 1fr; }
   .footer-bottom { flex-direction: column; gap: 16px; text-align: center; }
@@ -850,7 +872,6 @@ footer {
   <ul class="nav-links">
     <li><a href="#how-it-works">Protocol</a></li>
     <li><a href="#products">Products</a></li>
-    <li><a href="#pricing">Pricing</a></li>
     <li><a href="#for-who">For Who</a></li>
   </ul>
   <a href="/api/infoproducts" class="nav-cta">View API →</a>
@@ -859,7 +880,7 @@ footer {
 <!-- HERO -->
 <div class="hero">
   <div class="hero-badge">
-    <span>Live on Base · Solana</span>
+    <span>Attested on Base · Pay from Base or Solana</span>
   </div>
   <h1 class="hero-title">
     <span class="line1">ONCHAIN</span>
@@ -907,7 +928,7 @@ footer {
 <section id="how-it-works">
   <div class="section-label reveal">Protocol</div>
   <h2 class="section-title reveal">How It Works</h2>
-  <p class="section-desc reveal">The Sealer is an x402 microservice. Agents pay, attest, and receive cryptographically verifiable onchain credentials — no manual signing, no UX friction, just an HTTP call.</p>
+  <p class="section-desc reveal">The Sealer is an x402 microservice. Agents pay in USDC from Base or Solana, receive a cryptographically verifiable EAS attestation on Base — no manual signing, no UX friction, just an HTTP call.</p>
 
   <div class="steps reveal">
     <div class="step">
@@ -918,12 +939,12 @@ footer {
     <div class="step">
       <span class="step-num">02</span>
       <div class="step-title">x402 Payment</div>
-      <p class="step-desc">The agent pays in USDC via the <span class="step-accent">x402 protocol</span>. Micropayments from $0.05. No gas, no wallet pop-ups.</p>
+      <p class="step-desc">The agent pays in USDC via the <span class="step-accent">x402 protocol</span>. Pay from Base or Solana. Micropayments from $0.05. No gas overhead, no wallet pop-ups.</p>
     </div>
     <div class="step">
       <span class="step-num">03</span>
       <div class="step-title">EAS Attestation</div>
-      <p class="step-desc">The Sealer submits an <span class="step-accent">EAS attestation</span> onchain. Immutable, verifiable, permanent. ERC-8004 compliant.</p>
+      <p class="step-desc">The Sealer submits an <span class="step-accent">EAS attestation on Base</span>. Immutable, verifiable, permanent. ERC-8004 compliant. Your payment chain doesn't matter — attestations always live on Base.</p>
     </div>
     <div class="step">
       <span class="step-num">04</span>
@@ -934,7 +955,7 @@ footer {
 
   <div class="code-snippet reveal" style="margin-top:48px">
     <span class="cm"># Agent makes one HTTP call</span><br>
-    GET <span class="str">https://thesealer.xyz/api/card</span><span class="kw">?achievement=</span><span class="str">"Closed 500k USDC liquidity deal"</span><span class="kw">&theme=</span><span class="str">circuit-anim</span><span class="kw">&agentId=</span><span class="str">0xYourAddress</span><br><br>
+    GET <span class="str">https://thesealer.xyz/api/card</span><span class="kw">?statement=</span><span class="str">"Closed 500k USDC liquidity deal"</span><span class="kw">&theme=</span><span class="str">circuit-anim</span><span class="kw">&agentId=</span><span class="str">0xYourAddress</span><br><br>
     <span class="cm"># Returns: SVG credential card · Permanent permalink · Onchain attestation</span>
   </div>
 </section>
@@ -952,29 +973,41 @@ footer {
       <span class="product-tag live">Live</span>
       <div class="product-name" style="display:flex;justify-content:space-between;align-items:center;">Statement Badge<button onclick="previewProduct('https://thesealer.xyz/api/badge?uid=demo&theme=circuit')" style="font-family:monospace;font-size:8px;letter-spacing:1px;color:var(--accent);background:transparent;border:1px solid rgba(59,130,246,0.3);padding:4px 10px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(59,130,246,0.1)'" onmouseout="this.style.background='transparent'">PREVIEW</button></div>
       <div class="product-price">$0.05 · USDC</div>
-      <p class="product-desc">Compact credential for short onchain statements. 38 characters max. Perfect for quick agent-to-agent declarations.</p>
-      <div class="product-dims">SVG · <span>240×80px</span> · 9 themes</div>
+      <p class="product-desc">Compact credential for short onchain statements. 38 characters max. Perfect for sharing accomplishments onchain.</p>
+      <div class="product-bottom">
+        <div class="product-dims">SVG · <span>240×80px</span> · 9 themes</div>
+        <ul class="product-specs"><li>38 char max statement</li><li>9 visual themes</li><li>EAS attested on Base</li><li>Permanent permalink</li></ul>
+      </div>
     </div>
     <div class="product-card">
       <span class="product-tag live">Live</span>
       <div class="product-name" style="display:flex;justify-content:space-between;align-items:center;">Statement Card<button onclick="previewProduct('https://thesealer.xyz/api/card?achievement=Successfully+negotiated+a+cross-protocol+deal&theme=circuit-anim')" style="font-family:monospace;font-size:8px;letter-spacing:1px;color:var(--accent);background:transparent;border:1px solid rgba(59,130,246,0.3);padding:4px 10px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(59,130,246,0.1)'" onmouseout="this.style.background='transparent'">PREVIEW</button></div>
       <div class="product-price">$0.10 · USDC</div>
       <p class="product-desc">Full-format credential for detailed statements. Up to 220 characters, 4 lines, auto-scaling font. Attach images, PNL charts, screenshots.</p>
-      <div class="product-dims">SVG · <span>560×530px</span> · 9 themes</div>
+      <div class="product-bottom">
+        <div class="product-dims">SVG · <span>560×530px</span> · 9 themes</div>
+        <ul class="product-specs"><li>220 char, 4 lines, auto-font</li><li>Image via public URL</li><li>EAS attested on Base</li><li>Permanent permalink</li></ul>
+      </div>
     </div>
     <div class="product-card">
       <span class="product-tag live">Live</span>
       <div class="product-name" style="display:flex;justify-content:space-between;align-items:center;">SEALed<button onclick="previewProduct('https://thesealer.xyz/api/sealed?imageUrl=https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png&chain=Base')" style="font-family:monospace;font-size:8px;letter-spacing:1px;color:var(--accent);background:transparent;border:1px solid rgba(59,130,246,0.3);padding:4px 10px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(59,130,246,0.1)'" onmouseout="this.style.background='transparent'">PREVIEW</button></div>
       <div class="product-price">$0.15 · USDC</div>
-      <p class="product-desc">Wrap any public image in a verifiable onchain sleeve. Frame PNL screenshots, trade confirmations, performance charts. The image is the content.</p>
-      <div class="product-dims">SVG · <span>315×440px</span> · Base + Solana</div>
+      <p class="product-desc">Wrap any image URL in a verifiable onchain sleeve. Displays directly in your agent's wallet. Frame PNL screenshots, trade confirmations, performance charts.</p>
+      <div class="product-bottom">
+        <div class="product-dims">SVG · <span>315×440px</span> · 2 chain variants</div>
+        <ul class="product-specs"><li>Image via public URL</li><li>Renders in wallet view</li><li>Onchain timestamp</li><li>Permanent permalink</li></ul>
+      </div>
     </div>
     <div class="product-card">
       <span class="product-tag live">Live</span>
       <div class="product-name" style="display:flex;justify-content:space-between;align-items:center;">Sealer ID<button onclick="previewProduct('https://thesealer.xyz/api/sid?name=Satoshi+Agent&entityType=AI_AGENT&chain=Base&theme=dark')" style="font-family:monospace;font-size:8px;letter-spacing:1px;color:var(--accent);background:transparent;border:1px solid rgba(59,130,246,0.3);padding:4px 10px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(59,130,246,0.1)'" onmouseout="this.style.background='transparent'">PREVIEW</button></div>
       <div class="product-price">$0.15 · USDC</div>
       <p class="product-desc">Persistent onchain identity card for ERC-8004 agents. Passport format with MRZ zone, stamp, chain affiliation, social handles and specialization tags.</p>
-      <div class="product-dims">SVG · <span>428×620px</span> · Dark + Light</div>
+      <div class="product-bottom">
+        <div class="product-dims">SVG · <span>428×620px</span> · Dark + Light</div>
+        <ul class="product-specs"><li>Passport format + MRZ zone</li><li>Specialization tags</li><li>EAS attested on Base</li><li>Permanent permalink</li></ul>
+      </div>
     </div>
   </div>
 </section>
@@ -997,7 +1030,6 @@ footer {
         <li>Announce milestones and performance</li>
         <li>Build a verifiable reputation over time</li>
         <li>Pay autonomously via x402 — no human needed</li>
-        <li style="font-size:9px;color:var(--ink-faint);margin-top:4px;">Currently requires x402 — agent-native by design</li>
       </ul>
     </div>
     <div class="audience-panel" style="background:var(--bg3)">
@@ -1009,67 +1041,6 @@ footer {
         <li>SVG output — embed anywhere, display everywhere</li>
         <li>EAS standard — interoperable with the ecosystem</li>
         <li>x402 payments — agent-native micropayment flow</li>
-        <li>Listed on zAuth and Dexter agent directories</li>
-      </ul>
-    </div>
-  </div>
-</section>
-
-<div class="divider"></div>
-
-<!-- PRICING -->
-<section id="pricing">
-  <div class="section-label reveal">Pricing</div>
-  <h2 class="section-title reveal">Transparent.<br>Micropayments.</h2>
-  <p class="section-desc reveal">All prices in USDC. Paid via x402 protocol per request. No subscriptions, no commitments.</p>
-
-  <div class="pricing-grid reveal">
-    <div class="pricing-card">
-      <div class="pricing-name">Badge</div>
-      <div class="pricing-type">Statement Badge</div>
-      <div class="pricing-amount">$0.05</div>
-      <span class="pricing-unit">per attestation · USDC</span>
-      <ul class="pricing-features">
-        <li>38 char statement</li>
-        <li>9 themes</li>
-        <li>240×80px SVG</li>
-        <li>Permanent permalink</li>
-      </ul>
-    </div>
-    <div class="pricing-card featured">
-      <div class="pricing-name">Card</div>
-      <div class="pricing-type">Statement Card</div>
-      <div class="pricing-amount">$0.10</div>
-      <span class="pricing-unit">per attestation · USDC</span>
-      <ul class="pricing-features">
-        <li>220 char statement</li>
-        <li>Image attachment</li>
-        <li>9 themes</li>
-        <li>560×530px SVG</li>
-      </ul>
-    </div>
-    <div class="pricing-card featured">
-      <div class="pricing-name">SEALed</div>
-      <div class="pricing-type">Image Sleeve</div>
-      <div class="pricing-amount">$0.15</div>
-      <span class="pricing-unit">per attestation · USDC</span>
-      <ul class="pricing-features">
-        <li>Any public image URL</li>
-        <li>Chain + date footer</li>
-        <li>315×440px SVG</li>
-        <li>Base + Solana</li>
-      </ul>
-    </div>
-    <div class="pricing-card featured">
-      <div class="pricing-name">Sealer ID</div>
-      <div class="pricing-type">Identity Card</div>
-      <div class="pricing-amount">$0.15</div>
-      <span class="pricing-unit">mint · $0.10 renewal</span>
-      <ul class="pricing-features">
-        <li>Passport format</li>
-        <li>Full identity fields</li>
-        <li>428×620px SVG</li>
-        <li>Dark + Light themes</li>
       </ul>
     </div>
   </div>
@@ -1086,8 +1057,8 @@ footer {
   <div class="coming-grid reveal">
     <div class="coming-card">
       <span class="coming-tag">In Development</span>
-      <div class="coming-name">Agent Route</div>
-      <p class="coming-desc">Dedicated endpoint for autonomous agents. Streamlined x402 flow, agent-to-agent attestations, and batch credential issuance.</p>
+      <div class="coming-name">Platform Agent</div>
+      <p class="coming-desc">The Sealer's own onchain agent — first registered user of the protocol. Operates on social platforms, helps other agents discover and use credentials.</p>
     </div>
     <div class="coming-card">
       <span class="coming-tag">Planned</span>
@@ -1119,28 +1090,28 @@ footer {
     <div>
       <div class="footer-col-title">Products</div>
       <ul class="footer-links">
-        <li><a href="#">Statement Badge</a></li>
-        <li><a href="#">Statement Card</a></li>
-        <li><a href="#">SEALed</a></li>
-        <li><a href="#">Sealer ID</a></li>
+        <li><a href="#products">Statement Badge</a></li>
+        <li><a href="#products">Statement Card</a></li>
+        <li><a href="#products">SEALed</a></li>
+        <li><a href="#products">Sealer ID</a></li>
       </ul>
     </div>
     <div>
       <div class="footer-col-title">Developers</div>
       <ul class="footer-links">
-        <li><a href="#">API Reference</a></li>
-        <li><a href="#">Infoproducts</a></li>
-        <li><a href="#">EAS Schema</a></li>
-        <li><a href="#">x402 Docs</a></li>
+        <li><a href="/api/infoproducts">API Reference</a></li>
+        <li><a href="/api/infoproducts">Infoproducts</a></li>
+        <li><a href="https://base.easscan.org" target="_blank">EAS Schema</a></li>
+        <li><a href="https://www.x402.org" target="_blank">x402 Docs</a></li>
       </ul>
     </div>
     <div>
       <div class="footer-col-title">Links</div>
       <ul class="footer-links">
-        <li><a href="#">X (Twitter)</a></li>
-        <li><a href="#">Farcaster</a></li>
-        <li><a href="#">GitHub</a></li>
-        <li><a href="#">thesealer.xyz</a></li>
+        <li><a href="https://x.com/thesealerxyz" target="_blank">X (Twitter)</a></li>
+        <li><a href="https://warpcast.com/thesealer" target="_blank">Farcaster</a></li>
+        <li><a href="https://github.com/thesealerxyz" target="_blank">GitHub</a></li>
+        <li><a href="https://thesealer.xyz">thesealer.xyz</a></li>
       </ul>
     </div>
   </div>
