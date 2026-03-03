@@ -1,9 +1,13 @@
 // src/lib/agentRegistry.ts
+// ERC-8004 Identity Registry — deployed on Base mainnet
+// Source: https://github.com/erc-8004/erc-8004-contracts
+// IdentityRegistry: 0x8004A818BFB912233c491871b3d84c89A494BD9e
+
 import { createPublicClient, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { base } from 'viem/chains';
 
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: base,
   transport: http(process.env.ALCHEMY_RPC_URL!)
 });
 

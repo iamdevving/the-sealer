@@ -1,6 +1,6 @@
 // src/app/api/attest/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { withX402Payment, issueSealAttestation } from '@/lib/x402';
+import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
 import { nanoid } from 'nanoid';
@@ -10,28 +10,101 @@ export async function POST(req: NextRequest) {
   const format = body.format || 'card';
   const price  = format === 'badge'  ? '0.05'
                : format === 'sealed' ? '0.15'
+               : format === 'sid'    ? '0.15'
                : '0.10';
 
   return withX402Payment(req, async (paymentChain) => {
     try {
-      const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
-      const theme            = body.theme || 'circuit-anim';
-      const agentId          = body.agentId || req.headers.get('X-WALLET') || '????';
-      const uploadedImg      = body.uploadedImg || null;
-
-      const attestationChain = 'Base';
-      const paymentSource    = paymentChain === 'solana' ? 'Solana' : 'Base';
+      const theme         = body.theme || 'dark';
+      const agentId       = body.agentId || req.headers.get('X-WALLET') || '????';
+      const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
 
       const walletAddress = agentId.startsWith('0x')
         ? agentId
         : '0x0000000000000000000000000000000000000000';
-      const entityType = await checkEntityType(walletAddress);
+
+      const baseUrl = new URL(req.url).origin;
+      const uid     = nanoid(12);
+
+      // ── SID flow ────────────────────────────────────────────────────────
+      if (format === 'sid') {
+        const name       = body.name?.trim()       || 'UNNAMED AGENT';
+        const entityType = body.entityType?.trim() || 'UNKNOWN';
+        const chain      = body.chain?.trim()      || 'Base';
+        const imageUrl   = body.imageUrl?.trim()   || '';
+        const owner      = body.owner?.trim()      || '';
+        const llm        = body.llm?.trim()        || '';
+        const social     = body.social?.trim()     || '';
+        const tags       = body.tags?.trim()       || '';
+        const firstSeen  = body.firstSeen?.trim()  || '';
+
+        const receipt = await issueIdentityAttestation(name, entityType, chain, imageUrl);
+        const txHash  = receipt.transactionHash;
+
+        const sidParams = new URLSearchParams({
+          agentId,
+          name,
+          entityType,
+          chain,
+          theme,
+          txHash,
+          ...(imageUrl   ? { imageUrl }   : {}),
+          ...(owner      ? { owner }      : {}),
+          ...(llm        ? { llm }        : {}),
+          ...(social     ? { social }     : {}),
+          ...(tags       ? { tags }       : {}),
+          ...(firstSeen  ? { firstSeen }  : {}),
+        });
+
+        // ── Snapshot (non-fatal) ─────────────────────────────────────────
+        try {
+          const svgRes = await fetch(`${baseUrl}/api/sid?${sidParams}`);
+          if (svgRes.ok) {
+            const svgContent = await svgRes.text();
+            await snapshotSVG({
+              uid,
+              product:        'sid',
+              svgContent,
+              attestationUID: txHash,
+              paymentChain:   paymentSource,
+            });
+          }
+        } catch (err) {
+          console.warn('[attest] SID snapshot failed (non-fatal):', err);
+        }
+
+        const permalink = `${baseUrl}/c/${uid}`;
+        const sidUrl    = `${baseUrl}/api/sid?${sidParams}`;
+
+        return NextResponse.json({
+          status:           'success',
+          message:          'Sealer ID sealed onchain.',
+          name,
+          entityType,
+          chain,
+          agentId,
+          format,
+          uid,
+          txHash,
+          attestationChain: 'Base',
+          paymentChain:     paymentSource,
+          easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
+          permalink,
+          sidUrl,
+          date: new Date().toLocaleDateString('en-US', {
+            month: 'long', day: 'numeric', year: 'numeric',
+          }),
+        });
+      }
+
+      // ── Statement flow (badge / card / sealed) ──────────────────────────
+      const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
+      const uploadedImg      = body.uploadedImg || null;
+      const attestationChain = 'Base';
+      const entityType       = await checkEntityType(walletAddress);
 
       const receipt = await issueSealAttestation(statement);
       const txHash  = receipt.transactionHash;
-
-      const baseUrl = new URL(req.url).origin;
-      const uid = nanoid(12);
 
       const attestParams = new URLSearchParams({
         statement,
@@ -53,13 +126,9 @@ export async function POST(req: NextRequest) {
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
-      // ── Snapshot SVG to Blob + Redis (non-fatal) ──────────────────────
+      // ── Snapshot (non-fatal) ─────────────────────────────────────────
       try {
-        const svgRoute = format === 'badge' ? 'badge'
-                       : format === 'sealed' ? 'sealed'
-                       : format === 'sid' ? 'sid'
-                       : 'card';
-
+        const svgRoute    = format === 'badge' ? 'badge' : format === 'sealed' ? 'sealed' : 'card';
         const svgParams   = format === 'sealed' ? sealedParams : attestParams;
         const svgFetchUrl = `${baseUrl}/api/${svgRoute}?${svgParams}`;
 
@@ -77,10 +146,8 @@ export async function POST(req: NextRequest) {
           console.warn('[attest] SVG fetch failed:', svgRes.status);
         }
       } catch (err) {
-        // Snapshot failure is non-fatal — mint still succeeds
         console.warn('[attest] Snapshot failed (non-fatal):', err);
       }
-      // ─────────────────────────────────────────────────────────────────
 
       const cardUrl        = `${baseUrl}/api/card?${attestParams}`;
       const badgeUrl       = `${baseUrl}/api/badge?${attestParams}`;
