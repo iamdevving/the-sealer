@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
+import { mintBadge, mintCard, mintOrRenewSealerID, mintSealed } from '@/lib/nft';
 import { nanoid } from 'nanoid';
 
 export async function POST(req: NextRequest) {
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest) {
       const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
 
       const walletAddress = agentId.startsWith('0x')
-        ? agentId
-        : '0x0000000000000000000000000000000000000000';
+        ? agentId as `0x${string}`
+        : '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
       const baseUrl = new URL(req.url).origin;
       const uid     = nanoid(12);
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
         const tags       = body.tags?.trim()       || '';
         const firstSeen  = body.firstSeen?.trim()  || '';
 
+        // EAS attestation
         const receipt = await issueIdentityAttestation(name, entityType, chain, imageUrl);
         const txHash  = receipt.transactionHash;
 
@@ -48,17 +50,34 @@ export async function POST(req: NextRequest) {
           chain,
           theme,
           txHash,
-          ...(imageUrl   ? { imageUrl }   : {}),
-          ...(owner      ? { owner }      : {}),
-          ...(llm        ? { llm }        : {}),
-          ...(social     ? { social }     : {}),
-          ...(tags       ? { tags }       : {}),
-          ...(firstSeen  ? { firstSeen }  : {}),
+          ...(imageUrl  ? { imageUrl }  : {}),
+          ...(owner     ? { owner }     : {}),
+          ...(llm       ? { llm }       : {}),
+          ...(social    ? { social }    : {}),
+          ...(tags      ? { tags }      : {}),
+          ...(firstSeen ? { firstSeen } : {}),
         });
 
-        // ── Snapshot (non-fatal) ─────────────────────────────────────────
+        const sidUrl   = `${baseUrl}/api/sid?${sidParams}`;
+        const permalink = `${baseUrl}/c/${uid}`;
+
+        // NFT mint (non-fatal)
+        let nftTxHash: string | null = null;
+        let tokenId: bigint | null = null;
+        let nftRenewed = false;
         try {
-          const svgRes = await fetch(`${baseUrl}/api/sid?${sidParams}`);
+          const nft = await mintOrRenewSealerID(walletAddress, sidUrl, txHash);
+          nftTxHash  = nft.txHash;
+          tokenId    = nft.tokenId;
+          nftRenewed = nft.renewed;
+          console.log(`[attest] SID NFT ${nftRenewed ? 'renewed' : 'minted'}: ${nftTxHash}`);
+        } catch (err) {
+          console.warn('[attest] SID NFT mint failed (non-fatal):', err);
+        }
+
+        // Snapshot (non-fatal)
+        try {
+          const svgRes = await fetch(sidUrl);
           if (svgRes.ok) {
             const svgContent = await svgRes.text();
             await snapshotSVG({
@@ -73,12 +92,9 @@ export async function POST(req: NextRequest) {
           console.warn('[attest] SID snapshot failed (non-fatal):', err);
         }
 
-        const permalink = `${baseUrl}/c/${uid}`;
-        const sidUrl    = `${baseUrl}/api/sid?${sidParams}`;
-
         return NextResponse.json({
           status:           'success',
-          message:          'Sealer ID sealed onchain.',
+          message:          nftRenewed ? 'Sealer ID renewed onchain.' : 'Sealer ID sealed onchain.',
           name,
           entityType,
           chain,
@@ -86,6 +102,10 @@ export async function POST(req: NextRequest) {
           format,
           uid,
           txHash,
+          nftTxHash,
+          tokenId:          tokenId?.toString() ?? null,
+          nftRenewed,
+          nftContract:      process.env.SEALER_ID_CONTRACT_ADDRESS,
           attestationChain: 'Base',
           paymentChain:     paymentSource,
           easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
@@ -103,6 +123,7 @@ export async function POST(req: NextRequest) {
       const attestationChain = 'Base';
       const entityType       = await checkEntityType(walletAddress);
 
+      // EAS attestation
       const receipt = await issueSealAttestation(statement);
       const txHash  = receipt.transactionHash;
 
@@ -126,7 +147,37 @@ export async function POST(req: NextRequest) {
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
-      // ── Snapshot (non-fatal) ─────────────────────────────────────────
+      const cardUrl        = `${baseUrl}/api/card?${attestParams}`;
+      const badgeUrl       = `${baseUrl}/api/badge?${attestParams}`;
+      const sealedUrl      = `${baseUrl}/api/sealed?${sealedParams}`;
+      const cardPermalink  = `${baseUrl}/api/card?uid=${txHash}&theme=${theme}`;
+      const badgePermalink = `${baseUrl}/api/badge?uid=${txHash}&theme=${theme}`;
+      const permalink      = `${baseUrl}/c/${uid}`;
+
+      // NFT mint (non-fatal)
+      let nftTxHash: string | null = null;
+      let tokenId: bigint | null = null;
+      try {
+        if (format === 'badge') {
+          const nft = await mintBadge(walletAddress, badgeUrl, txHash);
+          nftTxHash = nft.txHash;
+          tokenId   = nft.tokenId;
+        } else if (format === 'sealed') {
+          const nft = await mintSealed(walletAddress, sealedUrl, txHash, paymentSource);
+          nftTxHash = nft.txHash;
+          tokenId   = nft.tokenId;
+        } else {
+          // card (default)
+          const nft = await mintCard(walletAddress, cardUrl, txHash);
+          nftTxHash = nft.txHash;
+          tokenId   = nft.tokenId;
+        }
+        console.log(`[attest] ${format} NFT minted: ${nftTxHash}`);
+      } catch (err) {
+        console.warn(`[attest] ${format} NFT mint failed (non-fatal):`, err);
+      }
+
+      // Snapshot (non-fatal)
       try {
         const svgRoute    = format === 'badge' ? 'badge' : format === 'sealed' ? 'sealed' : 'card';
         const svgParams   = format === 'sealed' ? sealedParams : attestParams;
@@ -149,13 +200,6 @@ export async function POST(req: NextRequest) {
         console.warn('[attest] Snapshot failed (non-fatal):', err);
       }
 
-      const cardUrl        = `${baseUrl}/api/card?${attestParams}`;
-      const badgeUrl       = `${baseUrl}/api/badge?${attestParams}`;
-      const sealedUrl      = `${baseUrl}/api/sealed?${sealedParams}`;
-      const cardPermalink  = `${baseUrl}/api/card?uid=${txHash}&theme=${theme}`;
-      const badgePermalink = `${baseUrl}/api/badge?uid=${txHash}&theme=${theme}`;
-      const permalink      = `${baseUrl}/c/${uid}`;
-
       return NextResponse.json({
         status:           'success',
         message:          'Statement sealed onchain.',
@@ -166,6 +210,11 @@ export async function POST(req: NextRequest) {
         format,
         uid,
         txHash,
+        nftTxHash,
+        tokenId:          tokenId?.toString() ?? null,
+        nftContract:      format === 'sealed'
+                            ? process.env.SEALED_CONTRACT_ADDRESS
+                            : process.env.STATEMENT_CONTRACT_ADDRESS,
         attestationChain,
         paymentChain:     paymentSource,
         easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
