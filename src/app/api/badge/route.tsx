@@ -77,7 +77,8 @@ export async function GET(req: NextRequest) {
     achievement = truncate(esc(searchParams.get('statement') || searchParams.get('achievement') || 'Verified Statement'), 38);
     chain       = esc(searchParams.get('chain') || 'Base');
     txHash      = searchParams.get('txHash') || '';
-    agentId     = esc(searchParams.get('agentId') || '????');
+    const rawAgentId = searchParams.get('agentId') || '????';
+    agentId = esc(rawAgentId.startsWith('0x') ? rawAgentId.slice(0, 8) : rawAgentId);
   }
   const uid         = txHash ? '0x' + txHash.slice(2,6) + '\u2026' + txHash.slice(-4) : '0x????\u2026????';
 

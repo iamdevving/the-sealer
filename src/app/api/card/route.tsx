@@ -349,7 +349,8 @@ export async function GET(req: NextRequest) {
   } else {
     achievement = truncate(searchParams.get('statement') || searchParams.get('achievement') || 'Verified Statement', 160);
     themeKey    = searchParams.get('theme') || 'circuit-anim';
-    agentId     = esc(searchParams.get('agentId') || '????');
+    const rawAgentId = searchParams.get('agentId') || '????';
+    agentId = esc(rawAgentId.startsWith('0x') ? rawAgentId.slice(0, 8) : rawAgentId);
     txHash      = searchParams.get('txHash') || '';
     chain       = esc(searchParams.get('chain') || 'Base');
   }
