@@ -8,15 +8,15 @@ const ALCHEMY_RPC = process.env.ALCHEMY_RPC_URL || "";
 
 const config: HardhatUserConfig = {
   solidity: {
-  version: "0.8.28",
-  settings: {
-    optimizer: {
-      enabled: true,
-      runs: 200,
+    version: "0.8.28",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      evmVersion: "cancun",
     },
-    evmVersion: "cancun",
   },
-},
   networks: {
     base: {
       url: ALCHEMY_RPC,
@@ -31,17 +31,6 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: process.env.BASESCAN_API_KEY || "",
-    },
-    customChains: [
-      {
-        network: "base",
-        chainId: 8453,
-        urls: {
-          apiURL: "https://api.basescan.org/api",
-          browserURL: "https://basescan.org",
-        },
-      },
-    ],
   },
 };
 

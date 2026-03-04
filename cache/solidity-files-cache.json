@@ -841,8 +841,8 @@
       ]
     },
     "C:\\Users\\Ale\\agent-attestation-factory\\contracts\\SealerSealed.sol": {
-      "lastModificationDate": 1772583800562,
-      "contentHash": "4c0f44025cd95b675a9c9d3a3db0fcfc",
+      "lastModificationDate": 1772661992730,
+      "contentHash": "dbb96de15f21006a2dd2c438ae937918",
       "sourceName": "contracts/SealerSealed.sol",
       "solcConfig": {
         "version": "0.8.28",

@@ -6,10 +6,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title SealerSealed
- * @notice Transferable NFT for the SEALed product.
- *         The only tradeable credential in The Sealer ecosystem.
- *         tokenURI points to IPFS metadata (permanent, static).
- *         Original minter is recorded even after transfer.
+ * @notice Soulbound NFT for the SEALed product.
+ *         tokenURI points to metadata URI.
+ *         Original minter is recorded permanently.
  */
 contract SealerSealed is ERC721URIStorage, Ownable {
     uint256 private _nextTokenId;
@@ -31,13 +30,6 @@ contract SealerSealed is ERC721URIStorage, Ownable {
         Ownable(initialOwner)
     {}
 
-    /**
-     * @notice Mint a SEALed NFT.
-     * @param recipient      Wallet receiving the NFT
-     * @param uri            IPFS or permalink URI for metadata
-     * @param _attestationTx EAS attestation TX hash
-     * @param _paymentChain  "Base" or "Solana"
-     */
     function mint(
         address recipient,
         string calldata uri,
@@ -54,6 +46,19 @@ contract SealerSealed is ERC721URIStorage, Ownable {
 
         emit SealedMinted(tokenId, recipient, _attestationTx, _paymentChain, uri);
         return tokenId;
+    }
+
+    // ── Soulbound: block all transfers after mint ──────────────────────
+    function _update(
+        address to,
+        uint256 tokenId,
+        address auth
+    ) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        if (from != address(0)) {
+            revert("SealerSealed: soulbound - non-transferable");
+        }
+        return super._update(to, tokenId, auth);
     }
 
     function totalSupply() external view returns (uint256) {
