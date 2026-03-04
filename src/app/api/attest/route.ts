@@ -7,7 +7,7 @@ import { mintBadge, mintCard, mintOrRenewSealerID, mintSealed } from '@/lib/nft'
 import { nanoid } from 'nanoid';
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const body   = await req.json();
   const format = body.format || 'card';
   const price  = format === 'badge'  ? '0.05'
                : format === 'sealed' ? '0.15'
@@ -44,12 +44,7 @@ export async function POST(req: NextRequest) {
         const txHash  = receipt.transactionHash;
 
         const sidParams = new URLSearchParams({
-          agentId,
-          name,
-          entityType,
-          chain,
-          theme,
-          txHash,
+          agentId, name, entityType, chain, theme, txHash,
           ...(imageUrl  ? { imageUrl }  : {}),
           ...(owner     ? { owner }     : {}),
           ...(llm       ? { llm }       : {}),
@@ -58,15 +53,15 @@ export async function POST(req: NextRequest) {
           ...(firstSeen ? { firstSeen } : {}),
         });
 
-        const sidUrl   = `${baseUrl}/api/sid?${sidParams}`;
+        const sidUrl    = `${baseUrl}/api/sid?${sidParams}`;
         const permalink = `${baseUrl}/c/${uid}`;
 
         // NFT mint (non-fatal)
         let nftTxHash: string | null = null;
-        let tokenId: bigint | null = null;
+        let tokenId:   bigint | null = null;
         let nftRenewed = false;
         try {
-          const nft = await mintOrRenewSealerID(walletAddress, sidUrl, txHash);
+          const nft  = await mintOrRenewSealerID(walletAddress, sidUrl, txHash, name, entityType, chain);
           nftTxHash  = nft.txHash;
           tokenId    = nft.tokenId;
           nftRenewed = nft.renewed;
@@ -80,13 +75,7 @@ export async function POST(req: NextRequest) {
           const svgRes = await fetch(sidUrl);
           if (svgRes.ok) {
             const svgContent = await svgRes.text();
-            await snapshotSVG({
-              uid,
-              product:        'sid',
-              svgContent,
-              attestationUID: txHash,
-              paymentChain:   paymentSource,
-            });
+            await snapshotSVG({ uid, product: 'sid', svgContent, attestationUID: txHash, paymentChain: paymentSource });
           }
         } catch (err) {
           console.warn('[attest] SID snapshot failed (non-fatal):', err);
@@ -95,13 +84,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           status:           'success',
           message:          nftRenewed ? 'Sealer ID renewed onchain.' : 'Sealer ID sealed onchain.',
-          name,
-          entityType,
-          chain,
-          agentId,
-          format,
-          uid,
-          txHash,
+          name, entityType, chain, agentId, format, uid, txHash,
           nftTxHash,
           tokenId:          tokenId?.toString() ?? null,
           nftRenewed,
@@ -111,9 +94,7 @@ export async function POST(req: NextRequest) {
           easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
           permalink,
           sidUrl,
-          date: new Date().toLocaleDateString('en-US', {
-            month: 'long', day: 'numeric', year: 'numeric',
-          }),
+          date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
         });
       }
 
@@ -128,22 +109,14 @@ export async function POST(req: NextRequest) {
       const txHash  = receipt.transactionHash;
 
       const attestParams = new URLSearchParams({
-        statement,
-        theme,
-        agentId,
-        txHash,
-        chain: attestationChain,
-        entityType,
+        statement, theme, agentId, txHash,
+        chain: attestationChain, entityType,
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
       const sealedParams = new URLSearchParams({
-        statement,
-        theme,
-        agentId,
-        txHash,
-        chain: paymentSource,
-        entityType,
+        statement, theme, agentId, txHash,
+        chain: paymentSource, entityType,
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
@@ -156,21 +129,17 @@ export async function POST(req: NextRequest) {
 
       // NFT mint (non-fatal)
       let nftTxHash: string | null = null;
-      let tokenId: bigint | null = null;
+      let tokenId:   bigint | null = null;
       try {
         if (format === 'badge') {
-          const nft = await mintBadge(walletAddress, badgeUrl, txHash);
-          nftTxHash = nft.txHash;
-          tokenId   = nft.tokenId;
+          const nft = await mintBadge(walletAddress, badgeUrl, txHash, statement);
+          nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else if (format === 'sealed') {
-          const nft = await mintSealed(walletAddress, sealedUrl, txHash, paymentSource);
-          nftTxHash = nft.txHash;
-          tokenId   = nft.tokenId;
+          const nft = await mintSealed(walletAddress, sealedUrl, txHash, paymentSource, statement);
+          nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else {
-          // card (default)
-          const nft = await mintCard(walletAddress, cardUrl, txHash);
-          nftTxHash = nft.txHash;
-          tokenId   = nft.tokenId;
+          const nft = await mintCard(walletAddress, cardUrl, txHash, statement);
+          nftTxHash = nft.txHash; tokenId = nft.tokenId;
         }
         console.log(`[attest] ${format} NFT minted: ${nftTxHash}`);
       } catch (err) {
@@ -182,19 +151,10 @@ export async function POST(req: NextRequest) {
         const svgRoute    = format === 'badge' ? 'badge' : format === 'sealed' ? 'sealed' : 'card';
         const svgParams   = format === 'sealed' ? sealedParams : attestParams;
         const svgFetchUrl = `${baseUrl}/api/${svgRoute}?${svgParams}`;
-
-        const svgRes = await fetch(svgFetchUrl);
+        const svgRes      = await fetch(svgFetchUrl);
         if (svgRes.ok) {
           const svgContent = await svgRes.text();
-          await snapshotSVG({
-            uid,
-            product:        svgRoute as 'badge' | 'card' | 'sealed' | 'sid',
-            svgContent,
-            attestationUID: txHash,
-            paymentChain:   paymentSource,
-          });
-        } else {
-          console.warn('[attest] SVG fetch failed:', svgRes.status);
+          await snapshotSVG({ uid, product: svgRoute as any, svgContent, attestationUID: txHash, paymentChain: paymentSource });
         }
       } catch (err) {
         console.warn('[attest] Snapshot failed (non-fatal):', err);
@@ -203,13 +163,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         status:           'success',
         message:          'Statement sealed onchain.',
-        statement,
-        theme,
-        agentId,
-        entityType,
-        format,
-        uid,
-        txHash,
+        statement, theme, agentId, entityType, format, uid, txHash,
         nftTxHash,
         tokenId:          tokenId?.toString() ?? null,
         nftContract:      format === 'sealed'
@@ -219,22 +173,13 @@ export async function POST(req: NextRequest) {
         paymentChain:     paymentSource,
         easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
         permalink,
-        cardUrl,
-        badgeUrl,
-        sealedUrl,
-        cardPermalink,
-        badgePermalink,
-        date: new Date().toLocaleDateString('en-US', {
-          month: 'long', day: 'numeric', year: 'numeric',
-        }),
+        cardUrl, badgeUrl, sealedUrl, cardPermalink, badgePermalink,
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       });
 
     } catch (error: any) {
       console.error('[The Sealer] Attestation error:', error);
-      return NextResponse.json(
-        { error: 'Failed to issue attestation' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to issue attestation' }, { status: 500 });
     }
   }, price);
 }
