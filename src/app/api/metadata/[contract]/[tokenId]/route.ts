@@ -9,9 +9,9 @@ const redis = new Redis({
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { contract: string; tokenId: string } }
+  { params }: { params: Promise<{ contract: string; tokenId: string }> }
 ) {
-  const { contract, tokenId } = params;
+  const { contract, tokenId } = await params;
 
   // Fetch metadata from Redis
   const key  = `nft:metadata:${contract}:${tokenId}`;
