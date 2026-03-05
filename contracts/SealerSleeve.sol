@@ -5,19 +5,20 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title SealerSealed
- * @notice Soulbound NFT for the SEALed product.
+ * @title SealerSleeve
+ * @notice Soulbound NFT for the Sleeve product.
+ *         Wraps any image as a soulbound onchain keepsake.
  *         tokenURI points to metadata URI.
  *         Original minter is recorded permanently.
  */
-contract SealerSealed is ERC721URIStorage, Ownable {
+contract SealerSleeve is ERC721URIStorage, Ownable {
     uint256 private _nextTokenId;
 
     mapping(uint256 => string) public attestationTxHash;
     mapping(uint256 => address) public originalMinter;
     mapping(uint256 => string) public paymentChain;
 
-    event SealedMinted(
+    event SleeveMinted(
         uint256 indexed tokenId,
         address indexed recipient,
         string attestationTxHash,
@@ -26,7 +27,7 @@ contract SealerSealed is ERC721URIStorage, Ownable {
     );
 
     constructor(address initialOwner)
-        ERC721("Sealer Sealed", "SEALED")
+        ERC721("Sealer Sleeve", "SLEEVE")
         Ownable(initialOwner)
     {}
 
@@ -44,7 +45,7 @@ contract SealerSealed is ERC721URIStorage, Ownable {
         originalMinter[tokenId] = recipient;
         paymentChain[tokenId] = _paymentChain;
 
-        emit SealedMinted(tokenId, recipient, _attestationTx, _paymentChain, uri);
+        emit SleeveMinted(tokenId, recipient, _attestationTx, _paymentChain, uri);
         return tokenId;
     }
 
@@ -56,7 +57,7 @@ contract SealerSealed is ERC721URIStorage, Ownable {
     ) internal override returns (address) {
         address from = _ownerOf(tokenId);
         if (from != address(0)) {
-            revert("SealerSealed: soulbound - non-transferable");
+            revert("SealerSleeve: soulbound - non-transferable");
         }
         return super._update(to, tokenId, auth);
     }

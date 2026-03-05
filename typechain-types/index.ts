@@ -38,5 +38,7 @@ export type { SealerID } from "./contracts/SealerID";
 export { SealerID__factory } from "./factories/contracts/SealerID__factory";
 export type { SealerSealed } from "./contracts/SealerSealed";
 export { SealerSealed__factory } from "./factories/contracts/SealerSealed__factory";
+export type { SealerSleeve } from "./contracts/SealerSleeve";
+export { SealerSleeve__factory } from "./factories/contracts/SealerSleeve__factory";
 export type { SealerStatement } from "./contracts/SealerStatement";
 export { SealerStatement__factory } from "./factories/contracts/SealerStatement__factory";

@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 const DIMS: Record<string, { w: number; h: number }> = {
   badge:  { w: 240,  h: 80  },
   card:   { w: 560,  h: 530 },
-  sealed: { w: 315, h: 300 }, // approximate, actual height is dynamic
+  sleeve: { w: 315, h: 300 }, // approximate, actual height is dynamic
   sid:    { w: 428,  h: 620 },
 }
 

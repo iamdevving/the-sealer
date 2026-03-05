@@ -3,4 +3,5 @@
 /* eslint-disable */
 export { SealerID__factory } from "./SealerID__factory";
 export { SealerSealed__factory } from "./SealerSealed__factory";
+export { SealerSleeve__factory } from "./SealerSleeve__factory";
 export { SealerStatement__factory } from "./SealerStatement__factory";

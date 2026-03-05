@@ -17,14 +17,12 @@ const account      = privateKeyToAccount(privateKey as `0x${string}`);
 const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
 const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
 
-// Contract addresses
 const STATEMENT_ADDRESS = process.env.STATEMENT_CONTRACT_ADDRESS as `0x${string}`;
 const SID_ADDRESS       = process.env.SEALER_ID_CONTRACT_ADDRESS as `0x${string}`;
-const SEALED_ADDRESS    = process.env.SEALED_CONTRACT_ADDRESS as `0x${string}`;
+const SLEEVE_ADDRESS    = process.env.SLEEVE_CONTRACT_ADDRESS as `0x${string}`;
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.thesealer.xyz';
 
-// ABIs
 const STATEMENT_ABI = parseAbi([
   'function mint(address recipient, string uri, uint8 productType, string attestationTx) returns (uint256)',
 ]);
@@ -35,7 +33,7 @@ const SID_ABI = parseAbi([
   'function hasSID(address wallet) view returns (bool)',
 ]);
 
-const SEALED_ABI = parseAbi([
+const SLEEVE_ABI = parseAbi([
   'function mint(address recipient, string uri, string attestationTx, string paymentChain) returns (uint256)',
 ]);
 
@@ -44,13 +42,12 @@ async function sendAndWait(hash: `0x${string}`) {
 }
 
 function extractTokenId(receipt: any): bigint {
-  // Transfer event: topics[3] is tokenId
   const log = receipt.logs?.find((l: any) => l.topics?.length === 4);
   return log ? BigInt(log.topics[3]) : BigInt(0);
 }
 
 async function storeMetadata(
-  contract: 'statement' | 'sid' | 'sealed',
+  contract: 'statement' | 'sid' | 'sleeve',
   tokenId: bigint,
   metadata: object,
 ) {
@@ -59,9 +56,6 @@ async function storeMetadata(
   console.log(`[NFT] Metadata stored: ${key}`);
 }
 
-/**
- * Mint a Badge NFT (productType = 0)
- */
 export async function mintBadge(
   recipient: `0x${string}`,
   svgUrl: string,
@@ -70,8 +64,6 @@ export async function mintBadge(
 ): Promise<{ tokenId: bigint; txHash: string }> {
   console.log(`[NFT] Minting Badge for ${recipient}`);
 
-  // Use metadata URL as tokenURI
-  // We'll store first with a temp ID, then update after mint
   const hash = await walletClient.writeContract({
     address: STATEMENT_ADDRESS,
     abi:     STATEMENT_ABI,
@@ -82,7 +74,6 @@ export async function mintBadge(
   const receipt = await sendAndWait(hash);
   const tokenId = extractTokenId(receipt);
 
-  // Build and store metadata
   const metadata = {
     name:        `Sealer Badge #${tokenId}`,
     description: statement,
@@ -101,9 +92,6 @@ export async function mintBadge(
   return { tokenId, txHash: hash };
 }
 
-/**
- * Mint a Card NFT (productType = 1)
- */
 export async function mintCard(
   recipient: `0x${string}`,
   svgUrl: string,
@@ -140,9 +128,6 @@ export async function mintCard(
   return { tokenId, txHash: hash };
 }
 
-/**
- * Mint or renew a Sealer ID NFT.
- */
 export async function mintOrRenewSealerID(
   recipient: `0x${string}`,
   svgUrl: string,
@@ -163,8 +148,7 @@ export async function mintOrRenewSealerID(
 
   if (hasSID) {
     console.log(`[NFT] Renewing SealerID for ${recipient}`);
-    // For renewal we need the existing tokenId — read from Redis
-    const existingKey = `nft:sid:wallet:${recipient}`;
+    const existingKey     = `nft:sid:wallet:${recipient}`;
     const existingTokenId = await redis.get<string>(existingKey) || '0';
 
     const hash = await walletClient.writeContract({
@@ -175,7 +159,6 @@ export async function mintOrRenewSealerID(
     });
     await sendAndWait(hash);
 
-    // Update metadata
     const metadata = buildSIDMetadata(existingTokenId, name, entityType, chain, svgUrl);
     await storeMetadata('sid', BigInt(existingTokenId), metadata);
 
@@ -194,10 +177,8 @@ export async function mintOrRenewSealerID(
   const receipt  = await sendAndWait(hash);
   const tokenId  = extractTokenId(receipt);
 
-  // Store wallet → tokenId mapping
   await redis.set(`nft:sid:wallet:${recipient}`, tokenId.toString());
 
-  // Build and store metadata
   const metadata = buildSIDMetadata(tokenId.toString(), name, entityType, chain, svgUrl);
   await storeMetadata('sid', tokenId, metadata);
 
@@ -227,42 +208,39 @@ function buildSIDMetadata(
   };
 }
 
-/**
- * Mint a SEALed NFT (transferable)
- */
-export async function mintSealed(
+export async function mintSleeve(
   recipient: `0x${string}`,
   svgUrl: string,
   attestationTx: string,
   paymentChain: string,
   statement: string,
 ): Promise<{ tokenId: bigint; txHash: string }> {
-  console.log(`[NFT] Minting SEALed for ${recipient}`);
+  console.log(`[NFT] Minting Sleeve for ${recipient}`);
 
   const hash = await walletClient.writeContract({
-    address:      SEALED_ADDRESS,
-    abi:          SEALED_ABI,
+    address:      SLEEVE_ADDRESS,
+    abi:          SLEEVE_ABI,
     functionName: 'mint',
-    args:         [recipient, `${BASE_URL}/api/metadata/sealed/pending`, attestationTx, paymentChain],
+    args:         [recipient, `${BASE_URL}/api/metadata/sleeve/pending`, attestationTx, paymentChain],
   });
 
   const receipt = await sendAndWait(hash);
   const tokenId = extractTokenId(receipt);
 
   const metadata = {
-    name:        `Sealer Sealed #${tokenId}`,
+    name:        `Sealer Sleeve #${tokenId}`,
     description: statement,
     image:       svgUrl,
     external_url: `${BASE_URL}/c/`,
     attributes: [
-      { trait_type: 'Product',       value: 'SEALed' },
+      { trait_type: 'Product',       value: 'Sleeve' },
       { trait_type: 'Payment Chain', value: paymentChain },
       { trait_type: 'Protocol',      value: 'EAS' },
-      { trait_type: 'Transferable',  value: 'true' },
+      { trait_type: 'Soulbound',     value: 'true' },
     ],
   };
-  await storeMetadata('sealed', tokenId, metadata);
+  await storeMetadata('sleeve', tokenId, metadata);
 
-  console.log(`[NFT] SEALed minted — tokenId: ${tokenId}, tx: ${hash}`);
+  console.log(`[NFT] Sleeve minted — tokenId: ${tokenId}, tx: ${hash}`);
   return { tokenId, txHash: hash };
 }

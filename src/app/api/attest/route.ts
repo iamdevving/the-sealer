@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
-import { mintBadge, mintCard, mintOrRenewSealerID, mintSealed } from '@/lib/nft';
+import { mintBadge, mintCard, mintOrRenewSealerID, mintSleeve } from '@/lib/nft';
 import { nanoid } from 'nanoid';
 
 export async function POST(req: NextRequest) {
   const body   = await req.json();
   const format = body.format || 'card';
   const price  = format === 'badge'  ? '0.05'
-               : format === 'sealed' ? '0.15'
+               : format === 'sleeve' ? '0.15'
                : format === 'sid'    ? '0.15'
                : '0.10';
 
@@ -39,7 +39,6 @@ export async function POST(req: NextRequest) {
         const tags       = body.tags?.trim()       || '';
         const firstSeen  = body.firstSeen?.trim()  || '';
 
-        // EAS attestation
         const receipt = await issueIdentityAttestation(name, entityType, chain, imageUrl);
         const txHash  = receipt.transactionHash;
 
@@ -56,7 +55,6 @@ export async function POST(req: NextRequest) {
         const sidUrl    = `${baseUrl}/api/sid?${sidParams}`;
         const permalink = `${baseUrl}/c/${uid}`;
 
-        // NFT mint (non-fatal)
         let nftTxHash: string | null = null;
         let tokenId:   bigint | null = null;
         let nftRenewed = false;
@@ -70,7 +68,6 @@ export async function POST(req: NextRequest) {
           console.warn('[attest] SID NFT mint failed (non-fatal):', err);
         }
 
-        // Snapshot (non-fatal)
         try {
           const svgRes = await fetch(sidUrl);
           if (svgRes.ok) {
@@ -98,13 +95,12 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Statement flow (badge / card / sealed) ──────────────────────────
+      // ── Statement flow (badge / card / sleeve) ──────────────────────────
       const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
       const uploadedImg      = body.uploadedImg || null;
       const attestationChain = 'Base';
       const entityType       = await checkEntityType(walletAddress);
 
-      // EAS attestation
       const receipt = await issueSealAttestation(statement);
       const txHash  = receipt.transactionHash;
 
@@ -114,7 +110,7 @@ export async function POST(req: NextRequest) {
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
-      const sealedParams = new URLSearchParams({
+      const sleeveParams = new URLSearchParams({
         statement, theme, agentId, txHash,
         chain: paymentSource, entityType,
         ...(uploadedImg ? { uploadedImg } : {}),
@@ -122,20 +118,19 @@ export async function POST(req: NextRequest) {
 
       const cardUrl        = `${baseUrl}/api/card?${attestParams}`;
       const badgeUrl       = `${baseUrl}/api/badge?${attestParams}`;
-      const sealedUrl      = `${baseUrl}/api/sealed?${sealedParams}`;
+      const sleeveUrl      = `${baseUrl}/api/sleeve?${sleeveParams}`;
       const cardPermalink  = `${baseUrl}/api/card?uid=${txHash}&theme=${theme}`;
       const badgePermalink = `${baseUrl}/api/badge?uid=${txHash}&theme=${theme}`;
       const permalink      = `${baseUrl}/c/${uid}`;
 
-      // NFT mint (non-fatal)
       let nftTxHash: string | null = null;
       let tokenId:   bigint | null = null;
       try {
         if (format === 'badge') {
           const nft = await mintBadge(walletAddress, badgeUrl, txHash, statement);
           nftTxHash = nft.txHash; tokenId = nft.tokenId;
-        } else if (format === 'sealed') {
-          const nft = await mintSealed(walletAddress, sealedUrl, txHash, paymentSource, statement);
+        } else if (format === 'sleeve') {
+          const nft = await mintSleeve(walletAddress, sleeveUrl, txHash, paymentSource, statement);
           nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else {
           const nft = await mintCard(walletAddress, cardUrl, txHash, statement);
@@ -146,10 +141,9 @@ export async function POST(req: NextRequest) {
         console.warn(`[attest] ${format} NFT mint failed (non-fatal):`, err);
       }
 
-      // Snapshot (non-fatal)
       try {
-        const svgRoute    = format === 'badge' ? 'badge' : format === 'sealed' ? 'sealed' : 'card';
-        const svgParams   = format === 'sealed' ? sealedParams : attestParams;
+        const svgRoute    = format === 'badge' ? 'badge' : format === 'sleeve' ? 'sleeve' : 'card';
+        const svgParams   = format === 'sleeve' ? sleeveParams : attestParams;
         const svgFetchUrl = `${baseUrl}/api/${svgRoute}?${svgParams}`;
         const svgRes      = await fetch(svgFetchUrl);
         if (svgRes.ok) {
@@ -166,14 +160,14 @@ export async function POST(req: NextRequest) {
         statement, theme, agentId, entityType, format, uid, txHash,
         nftTxHash,
         tokenId:          tokenId?.toString() ?? null,
-        nftContract:      format === 'sealed'
-                            ? process.env.SEALED_CONTRACT_ADDRESS
+        nftContract:      format === 'sleeve'
+                            ? process.env.SLEEVE_CONTRACT_ADDRESS
                             : process.env.STATEMENT_CONTRACT_ADDRESS,
         attestationChain,
         paymentChain:     paymentSource,
         easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
         permalink,
-        cardUrl, badgeUrl, sealedUrl, cardPermalink, badgePermalink,
+        cardUrl, badgeUrl, sleeveUrl, cardPermalink, badgePermalink,
         date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       });
 

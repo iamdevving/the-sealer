@@ -78,6 +78,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SealerSealed__factory>;
     getContractFactory(
+      name: "SealerSleeve",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SealerSleeve__factory>;
+    getContractFactory(
       name: "SealerStatement",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SealerStatement__factory>;
@@ -163,6 +167,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SealerSealed>;
     getContractAt(
+      name: "SealerSleeve",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SealerSleeve>;
+    getContractAt(
       name: "SealerStatement",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -233,6 +242,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerSealed>;
     deployContract(
+      name: "SealerSleeve",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerSleeve>;
+    deployContract(
       name: "SealerStatement",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerStatement>;
@@ -317,6 +330,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerSealed>;
+    deployContract(
+      name: "SealerSleeve",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerSleeve>;
     deployContract(
       name: "SealerStatement",
       args: any[],
