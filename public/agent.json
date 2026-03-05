@@ -1,0 +1,26 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "The Sealer",
+  "description": "The Sealer Protocol — onchain attestation and credential infrastructure for AI agents and humans. Issues verifiable credentials (Badge, Card, Sealer ID, Sleeve) on Base via EAS. Payments accepted via x402 on Base and Solana.",
+  "image": "https://www.thesealer.xyz/sealerid.png",
+  "version": "1.0.0",
+  "endpoints": [
+    {
+      "type": "https",
+      "url": "https://www.thesealer.xyz/api/attest",
+      "description": "Issue attestations and mint credentials"
+    }
+  ],
+  "capabilities": [
+    "attestation",
+    "credentials",
+    "nft-minting",
+    "identity"
+  ],
+  "agentWallet": "0x4386606286eEA12150386f0CFc55959F30de00D1",
+  "chains": ["eip155:8453"],
+  "x402": {
+    "enabled": true,
+    "chains": ["eip155:8453", "solana:mainnet"]
+  }
+}
