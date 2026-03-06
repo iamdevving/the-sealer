@@ -20,6 +20,7 @@ const walletClient = createWalletClient({ account, chain: base, transport: http(
 const STATEMENT_ADDRESS = process.env.STATEMENT_CONTRACT_ADDRESS as `0x${string}`;
 const SID_ADDRESS       = process.env.SEALER_ID_CONTRACT_ADDRESS as `0x${string}`;
 const SLEEVE_ADDRESS    = process.env.SLEEVE_CONTRACT_ADDRESS as `0x${string}`;
+const MIRROR_ADDRESS    = process.env.MIRROR_CONTRACT_ADDRESS as `0x${string}`;
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.thesealer.xyz';
 
@@ -37,6 +38,11 @@ const SLEEVE_ABI = parseAbi([
   'function mint(address recipient, string uri, string attestationTx, string paymentChain) returns (uint256)',
 ]);
 
+const MIRROR_ABI = parseAbi([
+  'function mint(address recipient, string uri, string attestationTx, string paymentChain) returns (uint256)',
+  'function invalidate(uint256 tokenId)',
+]);
+
 async function sendAndWait(hash: `0x${string}`) {
   return publicClient.waitForTransactionReceipt({ hash, pollingInterval: 1000, timeout: 90000 });
 }
@@ -47,7 +53,7 @@ function extractTokenId(receipt: any): bigint {
 }
 
 async function storeMetadata(
-  contract: 'statement' | 'sid' | 'sleeve',
+  contract: 'statement' | 'sid' | 'sleeve' | 'mirror',
   tokenId: bigint,
   metadata: object,
 ) {
@@ -243,4 +249,82 @@ export async function mintSleeve(
 
   console.log(`[NFT] Sleeve minted — tokenId: ${tokenId}, tx: ${hash}`);
   return { tokenId, txHash: hash };
+}
+
+export async function mintMirror(
+  recipient: `0x${string}`,
+  svgUrl: string,
+  attestationTx: string,
+  paymentChain: string,
+  originalChain: string,
+  originalContract: string,
+  originalTokenId: string,
+  nftName: string,
+): Promise<{ tokenId: bigint; txHash: string }> {
+  console.log(`[NFT] Minting Mirror for ${recipient}`);
+
+  const hash = await walletClient.writeContract({
+    address:      MIRROR_ADDRESS,
+    abi:          MIRROR_ABI,
+    functionName: 'mint',
+    args:         [recipient, `${BASE_URL}/api/metadata/mirror/pending`, attestationTx, paymentChain],
+  });
+
+  const receipt = await sendAndWait(hash);
+  const tokenId = extractTokenId(receipt);
+
+  // Store mirror data for invalidation tracking
+  const mirrorData = {
+    tokenId:          tokenId.toString(),
+    originalChain,
+    originalContract: originalContract.toLowerCase(),
+    originalTokenId,
+    nftName,
+    paymentChain,
+    invalidated:      false,
+    createdAt:        new Date().toISOString(),
+  };
+  await redis.set(`mirror:data:${tokenId.toString()}`, JSON.stringify(mirrorData));
+
+  // Reverse lookup: original contract+tokenId → mirror tokenId
+  // Used by webhook handler to find which mirror to invalidate on transfer
+  await redis.set(
+    `mirror:source:${originalContract.toLowerCase()}:${originalTokenId}`,
+    tokenId.toString(),
+  );
+
+  // Store metadata
+  const metadata = {
+    name:        `Sealer Mirror — ${nftName}`,
+    description: `Mirror of ${nftName} from ${originalChain}. Attested on Base via The Sealer Protocol.`,
+    image:       svgUrl,
+    external_url: `${BASE_URL}/c/`,
+    attributes: [
+      { trait_type: 'Product',           value: 'Mirror' },
+      { trait_type: 'Original Chain',    value: originalChain },
+      { trait_type: 'Original Contract', value: originalContract },
+      { trait_type: 'Original Token ID', value: originalTokenId },
+      { trait_type: 'Payment Chain',     value: paymentChain },
+      { trait_type: 'Protocol',          value: 'EAS' },
+    ],
+  };
+  await storeMetadata('mirror', tokenId, metadata);
+
+  console.log(`[NFT] Mirror minted — tokenId: ${tokenId}, tx: ${hash}`);
+  return { tokenId, txHash: hash };
+}
+
+export async function invalidateMirror(tokenId: bigint): Promise<string> {
+  console.log(`[NFT] Invalidating Mirror ${tokenId}`);
+
+  const hash = await walletClient.writeContract({
+    address:      MIRROR_ADDRESS,
+    abi:          MIRROR_ABI,
+    functionName: 'invalidate',
+    args:         [tokenId],
+  });
+
+  await sendAndWait(hash);
+  console.log(`[NFT] Mirror invalidated onchain — tx: ${hash}`);
+  return hash;
 }
