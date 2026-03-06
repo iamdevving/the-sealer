@@ -252,7 +252,7 @@ export async function GET(req: NextRequest) {
       fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>
     <text x="${W/2}" y="${IMG_Y + INNER_H/2 + 50}"
       font-family="monospace" font-size="5.5" fill="rgba(255,255,255,0.28)"
-      text-anchor="middle" letter-spacing="1.5">UPDATE MIRROR →</text>
+      text-anchor="middle" letter-spacing="1.5">FIX MIRROR →</text>
     ` : imgData ? `
     <!-- ── NFT image ── -->
     <image href="${imgData}"
