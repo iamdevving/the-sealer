@@ -4,4 +4,10 @@
       "maxDuration": 60
     }
   }
+  ,"crons": [
+    {
+      "path": "/api/cron/verify",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

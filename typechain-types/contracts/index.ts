@@ -2,6 +2,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { SealerID } from "./SealerID";
-export type { SealerSealed } from "./SealerSealed";
+export type { SealerMirror } from "./SealerMirror";
 export type { SealerSleeve } from "./SealerSleeve";
 export type { SealerStatement } from "./SealerStatement";

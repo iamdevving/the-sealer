@@ -7,7 +7,7 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN!,
 })
 
-export type Product = 'badge' | 'card' | 'sleeve' | 'sid'
+export type Product = 'badge' | 'card' | 'sleeve' | 'sid' | 'mirror'
 
 export interface SnapshotMeta {
   url: string

@@ -74,9 +74,9 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SealerID__factory>;
     getContractFactory(
-      name: "SealerSealed",
+      name: "SealerMirror",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SealerSealed__factory>;
+    ): Promise<Contracts.SealerMirror__factory>;
     getContractFactory(
       name: "SealerSleeve",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -162,10 +162,10 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.SealerID>;
     getContractAt(
-      name: "SealerSealed",
+      name: "SealerMirror",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.SealerSealed>;
+    ): Promise<Contracts.SealerMirror>;
     getContractAt(
       name: "SealerSleeve",
       address: string | ethers.Addressable,
@@ -238,9 +238,9 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerID>;
     deployContract(
-      name: "SealerSealed",
+      name: "SealerMirror",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SealerSealed>;
+    ): Promise<Contracts.SealerMirror>;
     deployContract(
       name: "SealerSleeve",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -326,10 +326,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerID>;
     deployContract(
-      name: "SealerSealed",
+      name: "SealerMirror",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SealerSealed>;
+    ): Promise<Contracts.SealerMirror>;
     deployContract(
       name: "SealerSleeve",
       args: any[],
