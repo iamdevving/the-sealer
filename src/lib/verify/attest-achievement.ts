@@ -128,15 +128,18 @@ export async function attestAchievement(
     // Cards remain self-declared only via /api/attest.
     // Theme maps to tier visually. TODO: replace with dedicated achievement
     // certificate SVG themes once theme alignment task is completed.
-    const badgeTheme = tierTheme(level, themeKey);
-    const baseUrl    = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
-    const label      = levelToLabel(level, claimType);
-    const imageUri   = [
-      `${baseUrl}/api/badge`,
-      `?statement=${encodeURIComponent(label)}`,
-      `&agentId=${encodeURIComponent(agentId.slice(0, 8))}`,
-      `&theme=${badgeTheme}`,
-      `&txHash=${achievementTxH}`,
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
+    const label   = levelToLabel(level, claimType);
+    const imageUri = [
+      `${baseUrl}/api/certificate`,
+      `?tier=${encodeURIComponent(level)}`,
+      `&claimType=${encodeURIComponent(claimType)}`,
+      `&metric=${encodeURIComponent(metric)}`,
+      `&subject=${encodeURIComponent(agentId)}`,
+      `&txHash=${encodeURIComponent(achievementTxH)}`,
+      `&score=${encodeURIComponent(String(score))}`,
+      `&onTime=${onTime ? 'true' : 'false'}`,
+      `&achievedAt=${encodeURIComponent(String(Math.floor(Date.now() / 1000)))}`,
     ].join('');
 
     const receipt   = await mintBadge(agentId, imageUri, achievementTxH, label);
@@ -172,15 +175,6 @@ export function calculateScore(params: {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function tierTheme(level: AchievementLevel, fallback: string): string {
-  switch (level) {
-    case 'gold':   return 'gold';
-    case 'silver': return 'silver';
-    case 'bronze': return 'bronze';
-    default:       return fallback;
-  }
-}
 
 function levelToLabel(level: AchievementLevel, claimType: ClaimType): string {
   return `${claimTypeToLabel(claimType)} · ${level.charAt(0).toUpperCase() + level.slice(1)}`;

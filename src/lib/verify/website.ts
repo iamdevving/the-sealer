@@ -1,0 +1,285 @@
+// src/lib/verify/website.ts
+// Verifier for Website & App Delivery achievements
+// Data sources:
+//   - Google PageSpeed Insights API (public, no key needed)
+//   - DNS TXT record verification (ownership proof)
+//   - URLScan.io (uptime + content snapshot, public API)
+//   - Zauth Vector stub (neutral third-party security scan — integrate post-launch)
+
+import type { VerificationResult, AchievementLevel } from './types';
+
+export interface WebsiteVerificationParams {
+  agentWallet:        string;
+  url:                string;   // e.g. "https://myapp.xyz"
+  dnsVerifyRecord?:   string;   // expected TXT record value for ownership proof
+  windowDays:         number;
+  mintTimestamp:      number;
+  // Optional thresholds
+  minPerformanceScore?: number; // 0–100, PageSpeed performance score
+  minAccessibility?:    number; // 0–100
+  requireHttps?:        boolean;
+  requireDnsVerify?:    boolean;
+}
+
+const THRESHOLDS: Record<AchievementLevel, {
+  minPerformanceScore: number;
+  minAccessibility:    number;
+}> = {
+  bronze: { minPerformanceScore: 50, minAccessibility: 50 },
+  silver: { minPerformanceScore: 70, minAccessibility: 70 },
+  gold:   { minPerformanceScore: 90, minAccessibility: 90 },
+};
+
+// ── PageSpeed Insights ────────────────────────────────────────────────────────
+
+interface PageSpeedResult {
+  performance:   number;
+  accessibility: number;
+  bestPractices: number;
+  seo:           number;
+  lcp:           number;  // Largest Contentful Paint (ms)
+  fid:           number;  // First Input Delay (ms)
+  cls:           number;  // Cumulative Layout Shift
+}
+
+async function fetchPageSpeed(url: string): Promise<PageSpeedResult | null> {
+  try {
+    const apiUrl = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
+    apiUrl.searchParams.set('url',      url);
+    apiUrl.searchParams.set('strategy', 'mobile'); // mobile is stricter — better signal
+    apiUrl.searchParams.set('category', 'performance');
+    apiUrl.searchParams.set('category', 'accessibility');
+    apiUrl.searchParams.set('category', 'best-practices');
+    apiUrl.searchParams.set('category', 'seo');
+
+    const res  = await fetch(apiUrl.toString(), { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const cats = data.lighthouseResult?.categories;
+    const audits = data.lighthouseResult?.audits;
+    if (!cats) return null;
+
+    return {
+      performance:   Math.round((cats.performance?.score   || 0) * 100),
+      accessibility: Math.round((cats.accessibility?.score || 0) * 100),
+      bestPractices: Math.round((cats['best-practices']?.score || 0) * 100),
+      seo:           Math.round((cats.seo?.score || 0) * 100),
+      lcp:           audits?.['largest-contentful-paint']?.numericValue || 0,
+      fid:           audits?.['max-potential-fid']?.numericValue || 0,
+      cls:           audits?.['cumulative-layout-shift']?.numericValue || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── DNS TXT Record Verification ───────────────────────────────────────────────
+// Agent proves ownership by adding a TXT record: thesealer-verify=<attestationUID>
+
+async function verifyDnsTxtRecord(
+  domain:         string,
+  expectedValue:  string,
+): Promise<boolean> {
+  try {
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const res  = await fetch(
+      `https://dns.google/resolve?name=${cleanDomain}&type=TXT`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    const records: string[] = (data.Answer || [])
+      .flatMap((a: any) => (a.data || '').replace(/"/g, '').split(' '));
+
+    return records.some(r => r.includes(expectedValue));
+  } catch {
+    return false;
+  }
+}
+
+// ── URLScan.io — site reachability + content snapshot ────────────────────────
+
+async function checkUrlScan(url: string): Promise<{
+  reachable: boolean;
+  statusCode: number | null;
+  screenshot: string | null;
+}> {
+  try {
+    // Search existing scans for this URL first (no API key needed for search)
+    const searchRes = await fetch(
+      `https://urlscan.io/api/v1/search/?q=page.url:"${encodeURIComponent(url)}"&size=1`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!searchRes.ok) return { reachable: false, statusCode: null, screenshot: null };
+
+    const data    = await searchRes.json();
+    const results = data.results || [];
+
+    if (results.length === 0) {
+      // No cached scan — just check if URL resolves
+      try {
+        const headRes = await fetch(url, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(10000),
+        });
+        return {
+          reachable:  headRes.ok,
+          statusCode: headRes.status,
+          screenshot: null,
+        };
+      } catch {
+        return { reachable: false, statusCode: null, screenshot: null };
+      }
+    }
+
+    const latest = results[0];
+    return {
+      reachable:  true,
+      statusCode: latest.page?.statusCode || 200,
+      screenshot: latest.screenshot || null,
+    };
+  } catch {
+    return { reachable: false, statusCode: null, screenshot: null };
+  }
+}
+
+// ── Zauth Vector stub ─────────────────────────────────────────────────────────
+// TODO: integrate Zauth Vector security scan as neutral third-party verifier
+// Zauth Vector provides: security audit score, vulnerability count, header analysis
+// Their scan result + signature would be a strong neutral_third_party evidence source
+// for gold-tier website_app_delivery achievements.
+//
+// Integration approach when ready:
+//   POST https://api.zauthvector.com/v1/scan { url, callbackUrl }
+//   → returns { scanId, score, vulnerabilities, signature }
+//   → store signature as evidence, use score as metricBonus input
+
+async function fetchZauthVectorScore(_url: string): Promise<number | null> {
+  // Stub — returns null until Zauth Vector API integration is complete
+  // When null, metricBonus contribution from security score is skipped
+  return null;
+}
+
+// ── HTTPS check ───────────────────────────────────────────────────────────────
+
+function isHttps(url: string): boolean {
+  return url.trim().toLowerCase().startsWith('https://');
+}
+
+// ── Level determination ───────────────────────────────────────────────────────
+
+function determineLevel(
+  performance:   number,
+  accessibility: number,
+): AchievementLevel | null {
+  for (const level of ['gold', 'silver', 'bronze'] as AchievementLevel[]) {
+    const t = THRESHOLDS[level];
+    if (
+      performance   >= t.minPerformanceScore &&
+      accessibility >= t.minAccessibility
+    ) return level;
+  }
+  return null;
+}
+
+// ── Main verifier ─────────────────────────────────────────────────────────────
+
+export async function verifyWebsiteAppDelivery(
+  params:         WebsiteVerificationParams,
+  attestationUID: string,
+): Promise<VerificationResult> {
+  const now = Math.floor(Date.now() / 1000);
+  const { url } = params;
+
+  // HTTPS gate
+  if (params.requireHttps !== false && !isHttps(url)) {
+    return {
+      passed:        false,
+      failureReason: 'URL must use HTTPS.',
+      evidence: {
+        checkedAt: now, dataSource: 'pagespeed_dns_urlscan',
+        attestationUID, rawMetrics: { url },
+      },
+    };
+  }
+
+  // Run all checks in parallel
+  const [pageSpeed, urlScan, zauthScore] = await Promise.all([
+    fetchPageSpeed(url),
+    checkUrlScan(url),
+    fetchZauthVectorScore(url),
+  ]);
+
+  // DNS ownership verification (if record provided)
+  let dnsVerified = false;
+  if (params.dnsVerifyRecord && params.requireDnsVerify) {
+    dnsVerified = await verifyDnsTxtRecord(url, params.dnsVerifyRecord);
+  }
+
+  const rawMetrics: Record<string, number | string | boolean> = {
+    url,
+    reachable:      urlScan.reachable,
+    statusCode:     urlScan.statusCode || 0,
+    httpsEnabled:   isHttps(url),
+    dnsVerified,
+    performance:    pageSpeed?.performance   || 0,
+    accessibility:  pageSpeed?.accessibility || 0,
+    bestPractices:  pageSpeed?.bestPractices || 0,
+    seo:            pageSpeed?.seo           || 0,
+    lcp:            pageSpeed?.lcp           || 0,
+    cls:            pageSpeed?.cls           || 0,
+    zauthScore:     zauthScore || 'pending',
+    hasScreenshot:  !!urlScan.screenshot,
+  };
+
+  const evidence = {
+    checkedAt:  now,
+    dataSource: 'pagespeed_dns_urlscan' + (zauthScore ? '+zauth_vector' : ''),
+    attestationUID,
+    rawMetrics,
+  };
+
+  // Reachability gate
+  if (!urlScan.reachable) {
+    return {
+      passed:        false,
+      failureReason: `URL ${url} is not reachable.`,
+      evidence,
+    };
+  }
+
+  // DNS ownership gate (if required)
+  if (params.requireDnsVerify && !dnsVerified) {
+    return {
+      passed:        false,
+      failureReason: `DNS ownership verification failed. Add TXT record: thesealer-verify=${params.dnsVerifyRecord}`,
+      evidence,
+    };
+  }
+
+  // PageSpeed required for silver/gold — bronze can pass on reachability alone
+  if (!pageSpeed) {
+    // No PageSpeed data — only bronze possible, on reachability
+    return {
+      passed: true,
+      level:  'bronze',
+      evidence: {
+        ...evidence,
+        rawMetrics: { ...rawMetrics, note: 'PageSpeed unavailable — bronze on reachability' },
+      },
+    };
+  }
+
+  const level = determineLevel(pageSpeed.performance, pageSpeed.accessibility);
+
+  if (!level) {
+    return {
+      passed:        false,
+      failureReason: `Performance score ${pageSpeed.performance}/100 and accessibility ${pageSpeed.accessibility}/100 did not meet bronze threshold (50/50).`,
+      evidence,
+    };
+  }
+
+  return { passed: true, level, evidence };
+}
