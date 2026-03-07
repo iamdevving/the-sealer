@@ -3,11 +3,11 @@
     "src/app/api/attest/route.ts": {
       "maxDuration": 60
     }
-  }
-  ,"crons": [
+  },
+  "crons": [
     {
       "path": "/api/cron/verify",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
