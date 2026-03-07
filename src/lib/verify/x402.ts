@@ -37,8 +37,9 @@ async function fetchAlchemyTransfers(
   fromBlock: string,
   pageKey?: string
 ): Promise<AlchemyTransfer[]> {
-  const apiKey = process.env.ALCHEMY_API_KEY
-  if (!apiKey) throw new Error("ALCHEMY_API_KEY not set")
+  const rpcUrl = process.env.ALCHEMY_RPC_URL!
+  const apiKey = rpcUrl?.split('/v2/')?.[1] ?? ''
+  if (!apiKey) throw new Error("Could not extract API key from ALCHEMY_RPC_URL")
 
   const body = {
     id: 1,
