@@ -16,10 +16,10 @@ interface AlchemyTransfer {
   hash: string
   from: string
   to: string | null
-  value: string          // hex string
-  blockNum: string       // hex string
+  value: string
+  blockNum: string
   metadata: {
-    blockTimestamp: string // ISO 8601
+    blockTimestamp: string
   }
   asset: string | null
   category: string
@@ -32,80 +32,49 @@ interface AlchemyTransfersResponse {
   }
 }
 
-async function fetchAlchemyTransfers(
-  wallet: string,
-  fromBlock: string,
-  pageKey?: string
-): Promise<AlchemyTransfer[]> {
-  const rpcUrl = process.env.ALCHEMY_RPC_URL!
-  const apiKey = rpcUrl?.split('/v2/')?.[1] ?? ''
-  if (!apiKey) throw new Error("Could not extract API key from ALCHEMY_RPC_URL")
-
-  const body = {
-    id: 1,
-    jsonrpc: "2.0",
-    method: "alchemy_getAssetTransfers",
-    params: [
-      {
-        fromBlock,
-        fromAddress: wallet,
-        category: ["external", "erc20"],
-        withMetadata: true,
-        excludeZeroValue: true,
-        maxCount: "0x3e8", // 1000 per page
-        ...(pageKey ? { pageKey } : {}),
-      },
-    ],
-  }
-
-  const res = await fetch(process.env.ALCHEMY_RPC_URL!, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
-
-  if (!res.ok) throw new Error(`Alchemy API error: ${res.status}`)
-
-  const data: AlchemyTransfersResponse = await res.json()
-  return data.result.transfers
-}
-
 // Paginate through all transfers from mint timestamp onwards
+// Single fetch per page — no duplicate calls
 async function getAllTransfersSinceMint(
   wallet: string,
   mintTimestamp: number
 ): Promise<AlchemyTransfer[]> {
-  // Convert timestamp to approximate block number
-  // Base produces ~2 sec blocks. Rough block estimation:
-  // (now - mintTimestamp) / 2 = blocks ago
-  // We'll fetch from slightly before mint to be safe
-  const bufferSeconds = 60
+  const bufferSeconds   = 60
   const approxBlocksAgo = Math.floor((Date.now() / 1000 - mintTimestamp + bufferSeconds) / 2)
-  const fromBlock = `0x${Math.max(0, approxBlocksAgo).toString(16)}`
+  const fromBlock       = `0x${Math.max(0, approxBlocksAgo).toString(16)}`
 
   let allTransfers: AlchemyTransfer[] = []
   let pageKey: string | undefined
 
   do {
-    const transfers = await fetchAlchemyTransfers(wallet, fromBlock, pageKey)
-    allTransfers = allTransfers.concat(transfers)
+    const body = {
+      id: 1,
+      jsonrpc: "2.0",
+      method: "alchemy_getAssetTransfers",
+      params: [{
+        fromBlock,
+        fromAddress: wallet,
+        category: ["external", "erc20"],
+        withMetadata: true,
+        excludeZeroValue: true,
+        maxCount: "0x3e8",
+        ...(pageKey ? { pageKey } : {}),
+      }],
+    }
 
-    // Check if there's a next page
     const res = await fetch(process.env.ALCHEMY_RPC_URL!, {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: 1,
-        jsonrpc: "2.0",
-        method: "alchemy_getAssetTransfers",
-        params: [{ fromBlock, fromAddress: wallet, category: ["external", "erc20"], withMetadata: true, excludeZeroValue: true, maxCount: "0x3e8", ...(pageKey ? { pageKey } : {}) }],
-      }),
+      body:    JSON.stringify(body),
     })
+
+    if (!res.ok) throw new Error(`Alchemy API error: ${res.status}`)
+
     const data: AlchemyTransfersResponse = await res.json()
-    pageKey = data.result.pageKey
+    allTransfers = allTransfers.concat(data.result.transfers || [])
+    pageKey      = data.result.pageKey
+
   } while (pageKey)
 
-  // Filter to only txs after mint timestamp
   return allTransfers.filter((tx) => {
     const txTime = new Date(tx.metadata.blockTimestamp).getTime() / 1000
     return txTime >= mintTimestamp
@@ -113,8 +82,6 @@ async function getAllTransfersSinceMint(
 }
 
 // ─── BaseScan Failed TX Fetcher ──────────────────────────────────────────────
-// Alchemy only returns successful transfers. BaseScan gives us failed txs
-// so we can compute accurate success rate.
 
 interface BaseScanTx {
   hash: string
@@ -134,13 +101,13 @@ async function fetchBaseScanTxs(
   if (!apiKey) throw new Error("BASESCAN_API_KEY not set")
 
   const url = new URL("https://api.basescan.org/api")
-  url.searchParams.set("module", "account")
-  url.searchParams.set("action", "txlist")
-  url.searchParams.set("address", wallet)
+  url.searchParams.set("module",     "account")
+  url.searchParams.set("action",     "txlist")
+  url.searchParams.set("address",    wallet)
   url.searchParams.set("startblock", "0")
-  url.searchParams.set("endblock", "99999999")
-  url.searchParams.set("sort", "asc")
-  url.searchParams.set("apikey", apiKey)
+  url.searchParams.set("endblock",   "99999999")
+  url.searchParams.set("sort",       "asc")
+  url.searchParams.set("apikey",     apiKey)
 
   const res = await fetch(url.toString())
   if (!res.ok) throw new Error(`BaseScan API error: ${res.status}`)
@@ -148,32 +115,26 @@ async function fetchBaseScanTxs(
   const data = await res.json()
   if (data.status !== "1") return []
 
-  const txs: BaseScanTx[] = data.result
-  // Filter to window
-  return txs.filter((tx) => parseInt(tx.timeStamp) >= mintTimestamp)
+  return (data.result as BaseScanTx[]).filter(
+    (tx) => parseInt(tx.timeStamp) >= mintTimestamp
+  )
 }
 
-// ─── ETH Price Fetcher (for USD volume) ─────────────────────────────────────
+// ─── ETH Price Fetcher ───────────────────────────────────────────────────────
 
 async function getEthPriceUSD(): Promise<number> {
   try {
-    const res = await fetch(
+    const res  = await fetch(
       "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
     )
     const data = await res.json()
     return data.ethereum.usd
   } catch {
-    // Fallback — don't block verification on price feed
     return 2500
   }
 }
 
 // ─── x402 Payment Filter ─────────────────────────────────────────────────────
-// x402 payments on Base are small ETH transfers to service endpoints.
-// We identify them by:
-// 1. Amount is small (< $1 typically — micropayments)
-// 2. Recipient is not the sender (no self-payments)
-// 3. Transaction is in the window
 
 function isX402Payment(
   tx: AlchemyTransfer,
@@ -181,18 +142,13 @@ function isX402Payment(
   ethPriceUSD: number
 ): boolean {
   if (!tx.to) return false
-
-  // No self-payments
   if (tx.to.toLowerCase() === agentWallet.toLowerCase()) return false
 
-  // Must have value
   const valueEth = parseInt(tx.value, 16) / 1e18
   const valueUSD = valueEth * ethPriceUSD
 
-  // x402 micropayments — filter obvious non-payments
-  // Upper bound $5 to exclude large transfers that aren't micropayments
-  if (valueUSD > 5) return false
-  if (valueUSD < 0.001) return false // dust filter
+  if (valueUSD > 5)     return false
+  if (valueUSD < 0.001) return false
 
   return true
 }
@@ -200,10 +156,10 @@ function isX402Payment(
 // ─── Gap Checker ─────────────────────────────────────────────────────────────
 
 function checkMaxGap(
-  payments: AlchemyTransfer[],
-  maxGapHours: number,
+  payments:      AlchemyTransfer[],
+  maxGapHours:   number,
   mintTimestamp: number,
-  deadline: number
+  deadline:      number
 ): boolean {
   if (payments.length === 0) return false
 
@@ -211,15 +167,12 @@ function checkMaxGap(
     .map((tx) => new Date(tx.metadata.blockTimestamp).getTime() / 1000)
     .sort((a, b) => a - b)
 
-  // Check gap from mint to first payment
   if (timestamps[0] - mintTimestamp > maxGapHours * 3600) return false
 
-  // Check gaps between consecutive payments
   for (let i = 1; i < timestamps.length; i++) {
     if (timestamps[i] - timestamps[i - 1] > maxGapHours * 3600) return false
   }
 
-  // Check gap from last payment to deadline
   if (deadline - timestamps[timestamps.length - 1] > maxGapHours * 3600) return false
 
   return true
@@ -228,21 +181,19 @@ function checkMaxGap(
 // ─── Level Determination ─────────────────────────────────────────────────────
 
 function determineLevel(
-  paymentCount: number,
-  successRate: number,
-  totalUSD: number,
+  paymentCount:       number,
+  successRate:        number,
+  totalUSD:           number,
   distinctRecipients: number
 ): AchievementLevel | null {
   for (const level of ["gold", "silver", "bronze"] as AchievementLevel[]) {
     const t = X402_THRESHOLDS[level]
     if (
-      paymentCount >= t.minPaymentCount &&
-      successRate >= t.minSuccessRate &&
-      totalUSD >= t.minTotalUSD &&
+      paymentCount       >= t.minPaymentCount       &&
+      successRate        >= t.minSuccessRate         &&
+      totalUSD           >= t.minTotalUSD            &&
       distinctRecipients >= t.minDistinctRecipients
-    ) {
-      return level
-    }
+    ) return level
   }
   return null
 }
@@ -250,14 +201,11 @@ function determineLevel(
 // ─── Main Verifier ────────────────────────────────────────────────────────────
 
 export async function verifyX402PaymentReliability(
-  params: X402VerificationParams,
+  params:         X402VerificationParams,
   attestationUID: string
 ): Promise<VerificationResult> {
-  const now = Math.floor(Date.now() / 1000)
+  const now      = Math.floor(Date.now() / 1000)
   const deadline = params.mintTimestamp + params.windowDays * 86400
-
-  // Don't verify before deadline unless manually triggered
-  // (caller can override this check)
 
   const [transfers, baseScanTxs, ethPrice] = await Promise.all([
     getAllTransfersSinceMint(params.agentWallet, params.mintTimestamp),
@@ -265,141 +213,81 @@ export async function verifyX402PaymentReliability(
     getEthPriceUSD(),
   ])
 
-  // Filter to x402 payments only
-  const payments = transfers.filter((tx) =>
-    isX402Payment(tx, params.agentWallet, ethPrice)
-  )
-
-  // Count failed txs from BaseScan
-  const failedTxs = baseScanTxs.filter((tx) => tx.isError === "1")
-  const totalAttempted = payments.length + failedTxs.length
-  const successRate =
-    totalAttempted === 0 ? 0 : (payments.length / totalAttempted) * 100
-
-  // Total volume in USD
-  const totalETH = payments.reduce((sum, tx) => {
-    return sum + parseInt(tx.value, 16) / 1e18
-  }, 0)
-  const totalUSD = totalETH * ethPrice
-
-  // Distinct recipients
-  const recipients = new Set(
-    payments.map((tx) => tx.to?.toLowerCase()).filter(Boolean)
-  )
+  const payments           = transfers.filter((tx) => isX402Payment(tx, params.agentWallet, ethPrice))
+  const failedTxs          = baseScanTxs.filter((tx) => tx.isError === "1")
+  const totalAttempted     = payments.length + failedTxs.length
+  const successRate        = totalAttempted === 0 ? 0 : (payments.length / totalAttempted) * 100
+  const totalETH           = payments.reduce((sum, tx) => sum + parseInt(tx.value, 16) / 1e18, 0)
+  const totalUSD           = totalETH * ethPrice
+  const recipients         = new Set(payments.map((tx) => tx.to?.toLowerCase()).filter(Boolean))
   const distinctRecipients = recipients.size
 
-  // Gap check (optional)
   let gapCheckPassed = true
   if (params.maxGapHours) {
-    gapCheckPassed = checkMaxGap(
-      payments,
-      params.maxGapHours,
-      params.mintTimestamp,
-      deadline
-    )
+    gapCheckPassed = checkMaxGap(payments, params.maxGapHours, params.mintTimestamp, deadline)
   }
 
-  // Minimum noise filters
+  const baseEvidence = {
+    checkedAt:  now,
+    dataSource: "alchemy_tx_api + basescan",
+    attestationUID,
+    rawMetrics: {
+      paymentCount:       payments.length,
+      totalUSD:           parseFloat(totalUSD.toFixed(4)),
+      successRate:        parseFloat(successRate.toFixed(2)),
+      distinctRecipients,
+    },
+  }
+
   if (totalUSD < 0.10) {
     return {
-      passed: false,
+      passed:        false,
       failureReason: "Total volume below minimum ($0.10). Dust activity filtered.",
-      evidence: {
-        checkedAt: now,
-        dataSource: "alchemy_tx_api + basescan",
-        attestationUID,
-        rawMetrics: {
-          paymentCount: payments.length,
-          totalUSD: totalUSD.toFixed(4),
-          successRate: successRate.toFixed(2),
-          distinctRecipients,
-        },
-      },
+      evidence:      baseEvidence,
     }
   }
 
-  // Distinct recipients requirement
-  if (
-    params.requireDistinctRecipients &&
-    distinctRecipients < params.requireDistinctRecipients
-  ) {
+  if (params.requireDistinctRecipients && distinctRecipients < params.requireDistinctRecipients) {
     return {
-      passed: false,
+      passed:        false,
       failureReason: `Required ${params.requireDistinctRecipients} distinct recipients, found ${distinctRecipients}`,
-      evidence: {
-        checkedAt: now,
-        dataSource: "alchemy_tx_api + basescan",
-        attestationUID,
-        rawMetrics: {
-          paymentCount: payments.length,
-          totalUSD: totalUSD.toFixed(4),
-          successRate: successRate.toFixed(2),
-          distinctRecipients,
-        },
-      },
+      evidence:      baseEvidence,
     }
   }
 
-  // Gap check
   if (params.maxGapHours && !gapCheckPassed) {
     return {
-      passed: false,
+      passed:        false,
       failureReason: `Activity gap exceeded ${params.maxGapHours}h maximum`,
-      evidence: {
-        checkedAt: now,
-        dataSource: "alchemy_tx_api + basescan",
-        attestationUID,
-        rawMetrics: {
-          paymentCount: payments.length,
-          totalUSD: totalUSD.toFixed(4),
-          successRate: successRate.toFixed(2),
-          distinctRecipients,
-        },
-      },
+      evidence:      baseEvidence,
     }
   }
 
-  // Determine achievement level
-  const level = determineLevel(
-    payments.length,
-    successRate,
-    totalUSD,
-    distinctRecipients
-  )
+  const level = determineLevel(payments.length, successRate, totalUSD, distinctRecipients)
 
-  const rawMetrics = {
-    paymentCount: payments.length,
-    failedCount: failedTxs.length,
+  const fullMetrics = {
+    paymentCount:       payments.length,
+    failedCount:        failedTxs.length,
     totalAttempted,
-    successRate: parseFloat(successRate.toFixed(2)),
-    totalETH: parseFloat(totalETH.toFixed(6)),
-    totalUSD: parseFloat(totalUSD.toFixed(4)),
+    successRate:        parseFloat(successRate.toFixed(2)),
+    totalETH:           parseFloat(totalETH.toFixed(6)),
+    totalUSD:           parseFloat(totalUSD.toFixed(4)),
     distinctRecipients,
-    windowDays: params.windowDays,
-    ethPriceUsed: ethPrice,
+    windowDays:         params.windowDays,
+    ethPriceUsed:       ethPrice,
   }
 
   if (!level) {
     return {
-      passed: false,
+      passed:        false,
       failureReason: `Metrics did not meet bronze threshold. payments=${payments.length}, successRate=${successRate.toFixed(1)}%, totalUSD=$${totalUSD.toFixed(2)}`,
-      evidence: {
-        checkedAt: now,
-        dataSource: "alchemy_tx_api + basescan",
-        attestationUID,
-        rawMetrics,
-      },
+      evidence:      { ...baseEvidence, rawMetrics: fullMetrics },
     }
   }
 
   return {
-    passed: true,
+    passed:   true,
     level,
-    evidence: {
-      checkedAt: now,
-      dataSource: "alchemy_tx_api + basescan",
-      attestationUID,
-      rawMetrics,
-    },
+    evidence: { ...baseEvidence, rawMetrics: fullMetrics },
   }
 }
