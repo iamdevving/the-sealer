@@ -34,6 +34,7 @@ interface AlchemyTransfersResponse {
 
 // Paginate through all transfers from mint timestamp onwards
 // Single fetch per page — no duplicate calls
+console.log('[x402] RPC URL:', process.env.ALCHEMY_RPC_URL?.slice(0, 40))
 async function getAllTransfersSinceMint(
   wallet: string,
   mintTimestamp: number
