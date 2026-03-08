@@ -39,8 +39,6 @@ async function getAllTransfersSinceMint(
   const fromBlockNum       = Math.max(0, CURRENT_BASE_BLOCK - blocksAgo)
   const fromBlock          = `0x${fromBlockNum.toString(16)}`
 
-  console.log('[x402] calling alchemy, fromBlock:', fromBlock, 'wallet:', wallet)
-
   let allTransfers: AlchemyTransfer[] = []
   let pageKey: string | undefined
 
@@ -65,8 +63,6 @@ async function getAllTransfersSinceMint(
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(body),
     })
-
-    console.log('[x402] alchemy response status:', res.status)
 
     if (!res.ok) throw new Error(`Alchemy API error: ${res.status}`)
 
@@ -108,9 +104,7 @@ async function fetchBaseScanTxs(
   url.searchParams.set("sort",       "asc")
   url.searchParams.set("apikey",     apiKey)
 
-  console.log('[x402] calling basescan...')
   const res = await fetch(url.toString())
-  console.log('[x402] basescan response status:', res.status)
 
   if (!res.ok) throw new Error(`BaseScan API error: ${res.status}`)
 
@@ -199,15 +193,11 @@ export async function verifyX402PaymentReliability(
   const now      = Math.floor(Date.now() / 1000)
   const deadline = params.mintTimestamp + params.windowDays * 86400
 
-  console.log('[x402] starting verification for', params.agentWallet)
-
   const [transfers, baseScanTxs, ethPrice] = await Promise.all([
     getAllTransfersSinceMint(params.agentWallet, params.mintTimestamp),
     fetchBaseScanTxs(params.agentWallet, params.mintTimestamp),
     getEthPriceUSD(),
   ])
-
-  console.log('[x402] transfers:', transfers.length, 'baseScanTxs:', baseScanTxs.length)
 
   const payments           = transfers.filter((tx) => isX402Payment(tx, params.agentWallet, ethPrice))
   const failedTxs          = baseScanTxs.filter((tx) => tx.isError === "1")
