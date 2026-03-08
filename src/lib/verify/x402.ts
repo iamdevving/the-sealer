@@ -1,7 +1,6 @@
 // src/lib/verify/x402.ts
 // Verifier for x402 Payment Reliability achievements
 // Data sources: Alchemy Transaction API + BaseScan API
-// Both already in stack — zero new dependencies
 
 import {
   X402VerificationParams,
@@ -9,8 +8,6 @@ import {
   AchievementLevel,
   X402_THRESHOLDS,
 } from "./types"
-
-// ─── Alchemy Transaction Fetcher ────────────────────────────────────────────
 
 interface AlchemyTransfer {
   hash: string
@@ -32,18 +29,17 @@ interface AlchemyTransfersResponse {
   }
 }
 
-// Paginate through all transfers from mint timestamp onwards
-// Single fetch per page — no duplicate calls
-console.log('[x402] RPC URL:', process.env.ALCHEMY_RPC_URL?.slice(0, 40))
 async function getAllTransfersSinceMint(
   wallet: string,
   mintTimestamp: number
 ): Promise<AlchemyTransfer[]> {
-  const secondsAgo    = Math.floor(Date.now() / 1000) - mintTimestamp
-  const blocksAgo     = Math.floor(secondsAgo / 2)
+  const secondsAgo         = Math.floor(Date.now() / 1000) - mintTimestamp
+  const blocksAgo          = Math.floor(secondsAgo / 2)
   const CURRENT_BASE_BLOCK = 28000000
-  const fromBlockNum  = Math.max(0, CURRENT_BASE_BLOCK - blocksAgo)
-  const fromBlock     = `0x${fromBlockNum.toString(16)}`
+  const fromBlockNum       = Math.max(0, CURRENT_BASE_BLOCK - blocksAgo)
+  const fromBlock          = `0x${fromBlockNum.toString(16)}`
+
+  console.log('[x402] calling alchemy, fromBlock:', fromBlock, 'wallet:', wallet)
 
   let allTransfers: AlchemyTransfer[] = []
   let pageKey: string | undefined
@@ -70,6 +66,8 @@ async function getAllTransfersSinceMint(
       body:    JSON.stringify(body),
     })
 
+    console.log('[x402] alchemy response status:', res.status)
+
     if (!res.ok) throw new Error(`Alchemy API error: ${res.status}`)
 
     const data: AlchemyTransfersResponse = await res.json()
@@ -83,8 +81,6 @@ async function getAllTransfersSinceMint(
     return txTime >= mintTimestamp
   })
 }
-
-// ─── BaseScan Failed TX Fetcher ──────────────────────────────────────────────
 
 interface BaseScanTx {
   hash: string
@@ -112,7 +108,10 @@ async function fetchBaseScanTxs(
   url.searchParams.set("sort",       "asc")
   url.searchParams.set("apikey",     apiKey)
 
+  console.log('[x402] calling basescan...')
   const res = await fetch(url.toString())
+  console.log('[x402] basescan response status:', res.status)
+
   if (!res.ok) throw new Error(`BaseScan API error: ${res.status}`)
 
   const data = await res.json()
@@ -122,8 +121,6 @@ async function fetchBaseScanTxs(
     (tx) => parseInt(tx.timeStamp) >= mintTimestamp
   )
 }
-
-// ─── ETH Price Fetcher ───────────────────────────────────────────────────────
 
 async function getEthPriceUSD(): Promise<number> {
   try {
@@ -136,8 +133,6 @@ async function getEthPriceUSD(): Promise<number> {
     return 2500
   }
 }
-
-// ─── x402 Payment Filter ─────────────────────────────────────────────────────
 
 function isX402Payment(
   tx: AlchemyTransfer,
@@ -155,8 +150,6 @@ function isX402Payment(
 
   return true
 }
-
-// ─── Gap Checker ─────────────────────────────────────────────────────────────
 
 function checkMaxGap(
   payments:      AlchemyTransfer[],
@@ -181,8 +174,6 @@ function checkMaxGap(
   return true
 }
 
-// ─── Level Determination ─────────────────────────────────────────────────────
-
 function determineLevel(
   paymentCount:       number,
   successRate:        number,
@@ -201,8 +192,6 @@ function determineLevel(
   return null
 }
 
-// ─── Main Verifier ────────────────────────────────────────────────────────────
-
 export async function verifyX402PaymentReliability(
   params:         X402VerificationParams,
   attestationUID: string
@@ -210,11 +199,15 @@ export async function verifyX402PaymentReliability(
   const now      = Math.floor(Date.now() / 1000)
   const deadline = params.mintTimestamp + params.windowDays * 86400
 
+  console.log('[x402] starting verification for', params.agentWallet)
+
   const [transfers, baseScanTxs, ethPrice] = await Promise.all([
     getAllTransfersSinceMint(params.agentWallet, params.mintTimestamp),
     fetchBaseScanTxs(params.agentWallet, params.mintTimestamp),
     getEthPriceUSD(),
   ])
+
+  console.log('[x402] transfers:', transfers.length, 'baseScanTxs:', baseScanTxs.length)
 
   const payments           = transfers.filter((tx) => isX402Payment(tx, params.agentWallet, ethPrice))
   const failedTxs          = baseScanTxs.filter((tx) => tx.isError === "1")
@@ -294,4 +287,3 @@ export async function verifyX402PaymentReliability(
     evidence: { ...baseEvidence, rawMetrics: fullMetrics },
   }
 }
-// cache-bust: 20260308-012701
