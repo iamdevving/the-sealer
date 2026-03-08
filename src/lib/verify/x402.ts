@@ -38,9 +38,11 @@ async function getAllTransfersSinceMint(
   wallet: string,
   mintTimestamp: number
 ): Promise<AlchemyTransfer[]> {
-  const bufferSeconds   = 60
-  const approxBlocksAgo = Math.floor((Date.now() / 1000 - mintTimestamp + bufferSeconds) / 2)
-  const fromBlock       = `0x${Math.max(0, approxBlocksAgo).toString(16)}`
+  const secondsAgo    = Math.floor(Date.now() / 1000) - mintTimestamp
+  const blocksAgo     = Math.floor(secondsAgo / 2)
+  const CURRENT_BASE_BLOCK = 28000000
+  const fromBlockNum  = Math.max(0, CURRENT_BASE_BLOCK - blocksAgo)
+  const fromBlock     = `0x${fromBlockNum.toString(16)}`
 
   let allTransfers: AlchemyTransfer[] = []
   let pageKey: string | undefined
