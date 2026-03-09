@@ -240,32 +240,36 @@ export default function CardPage() {
           {/* Circuit animation overlay */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
-              viewBox="0 0 560 530" preserveAspectRatio="none">
-              <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.8" fill="none"
+              viewBox="0 0 560 500" preserveAspectRatio="none">
+              <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.9" fill="none"
                 opacity={theme==='circuit-anim'?'0.28':'0.18'}>
-                {/* Left side — stamp column, extends below stamp */}
-                <polyline className="trace" points="0,70 42,70 56,84 56,180"/>
-                <polyline className="trace" points="0,200 35,200 48,213 48,280"/>
-                <polyline className="trace" points="0,330 52,330 52,310 70,310"/>
-                {/* Left stamp extension — goes down past stamp area */}
-                <polyline className="trace" points="56,180 56,240 72,240"/>
-                {/* Right side — beyond upload zone */}
-                <polyline className="trace" points="560,80 518,80 504,94 504,160"/>
-                <polyline className="trace" points="560,200 525,200 512,213 512,280"/>
-                <polyline className="trace" points="560,340 508,340 494,320 476,320"/>
-                {/* Top deco from header */}
-                <polyline className="trace" points="200,0 200,36 184,52 140,52"/>
-                <polyline className="trace" points="360,0 360,36 376,52 420,52"/>
+                {/* Left column — runs down past stamp into body */}
+                <polyline className="trace" points="0,72 40,72 54,86 54,170"/>
+                <polyline className="trace" points="54,170 54,220 70,220"/>
+                <polyline className="trace" points="0,110 28,110 42,124"/>
+                <polyline className="trace" points="0,280 38,280 52,266"/>
+                <polyline className="trace" points="0,360 32,360 46,374"/>
+                {/* Right column — full height */}
+                <polyline className="trace" points="560,72 520,72 506,86 506,170"/>
+                <polyline className="trace" points="506,170 506,220 490,220"/>
+                <polyline className="trace" points="560,110 532,110 518,124"/>
+                <polyline className="trace" points="560,280 522,280 508,266"/>
+                <polyline className="trace" points="560,360 528,360 514,374"/>
+                {/* Top header deco */}
+                <polyline className="trace" points="190,0 190,42"/>
+                <polyline className="trace" points="370,0 370,42"/>
               </g>
-              <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'}>
-                <circle className="node" cx="56" cy="180" r="3"/>
-                <circle className="node" cx="72" cy="240" r="2.5"/>
-                <circle className="node" cx="48" cy="280" r="2.5"/>
-                <circle className="node" cx="70" cy="310" r="3"/>
-                <circle className="node" cx="504" cy="160" r="3"/>
-                <circle className="node" cx="512" cy="280" r="2.5"/>
-                <circle className="node" cx="476" cy="320" r="3"/>
-                <circle className="node" cx="140" cy="52" r="3"/>
+              <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} opacity="0.7">
+                <circle className="node" cx="54" cy="170" r="3"/>
+                <circle className="node" cx="70" cy="220" r="2.5"/>
+                <circle className="node" cx="42" cy="124" r="2"/>
+                <circle className="node" cx="52" cy="266" r="2"/>
+                <circle className="node" cx="46" cy="374" r="2"/>
+                <circle className="node" cx="506" cy="170" r="3"/>
+                <circle className="node" cx="490" cy="220" r="2.5"/>
+                <circle className="node" cx="518" cy="124" r="2"/>
+                <circle className="node" cx="508" cy="266" r="2"/>
+                <circle className="node" cx="514" cy="374" r="2"/>
               </g>
             </svg>
           )}

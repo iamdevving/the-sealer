@@ -185,19 +185,31 @@ export default function StatementPage() {
           {/* Circuit overlay */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
-              viewBox="0 0 560 530" preserveAspectRatio="none">
-              <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.8" fill="none"
-                opacity={theme==='circuit-anim'?'0.3':'0.18'}>
-                <polyline className="trace" points="0,70 42,70 56,84 56,140"/>
-                <polyline className="trace" points="0,310 52,310 52,290 70,290"/>
-                <polyline className="trace" points="560,70 518,70 504,84 504,140"/>
-                <polyline className="trace" points="560,310 508,310 494,290 476,290"/>
+              viewBox="0 0 560 500" preserveAspectRatio="none">
+              <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.9" fill="none"
+                opacity={theme==='circuit-anim'?'0.28':'0.18'}>
+                {/* Left — 5 traces at different heights */}
+                <polyline className="trace" points="0,68 44,68 58,82 58,148"/>
+                <polyline className="trace" points="0,96 34,96 48,110"/>
+                <polyline className="trace" points="0,126 26,126"/>
+                <polyline className="trace" points="0,248 40,248 54,234"/>
+                <polyline className="trace" points="0,336 36,336 50,350"/>
+                {/* Right — 5 traces mirrored */}
+                <polyline className="trace" points="560,68 516,68 502,82 502,148"/>
+                <polyline className="trace" points="560,96 526,96 512,110"/>
+                <polyline className="trace" points="560,126 534,126"/>
+                <polyline className="trace" points="560,248 520,248 506,234"/>
+                <polyline className="trace" points="560,336 524,336 510,350"/>
               </g>
-              <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'}>
-                <circle className="node" cx="56" cy="140" r="3"/>
-                <circle className="node" cx="70" cy="290" r="3"/>
-                <circle className="node" cx="504" cy="140" r="3"/>
-                <circle className="node" cx="476" cy="290" r="3"/>
+              <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} opacity="0.7">
+                <circle className="node" cx="58" cy="148" r="3"/>
+                <circle className="node" cx="48" cy="110" r="2"/>
+                <circle className="node" cx="54" cy="234" r="2.5"/>
+                <circle className="node" cx="50" cy="350" r="2"/>
+                <circle className="node" cx="502" cy="148" r="3"/>
+                <circle className="node" cx="512" cy="110" r="2"/>
+                <circle className="node" cx="506" cy="234" r="2.5"/>
+                <circle className="node" cx="510" cy="350" r="2"/>
               </g>
             </svg>
           )}
@@ -220,14 +232,7 @@ export default function StatementPage() {
             />
           </div>
 
-          {/* Divider */}
-          <div className="divider">
-            <div className="div-line"/>
-            <div className="div-ornament">✦ ✦ ✦</div>
-            <div className="div-line"/>
-          </div>
-
-          {/* Statement text */}
+          {/* Statement text — no divider */}
           <div className="statement-section">
             <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>

@@ -116,20 +116,35 @@ export async function GET(req: NextRequest) {
   <!-- Background -->
   <rect width="540" height="${H}" fill="${t.bg}"/>
 
-  <!-- Stamp column background -->
-  <rect x="0" y="42" width="150" height="200" fill="${t.statBg}" opacity="0.4"/>
+  <!-- Bitcoin background deco -->
+  ${themeKey === 'bitcoin' ? `
+  <g font-family="Arial,sans-serif" font-weight="bold" fill="white" opacity="0.06">
+    <text x="10" y="150" font-size="120" transform="rotate(-15,10,150)">₿</text>
+    <text x="340" y="100" font-size="100" transform="rotate(-15,340,100)">₿</text>
+    <text x="420" y="380" font-size="80" transform="rotate(-15,420,380)">₿</text>
+  </g>` : ''}
 
-  <!-- Circuit traces on right of upload zone -->
+  <!-- Circuit traces — left column (behind stamp) + right side full height -->
   ${isCircuit ? `
-  <g stroke="${traceColor}" stroke-width="0.8" fill="none" opacity="0.2">
-    <polyline points="540,80 498,80 484,94 484,150"/>
-    <polyline points="540,190 505,190 492,203 492,230"/>
-    <polyline points="540,310 488,310 474,290"/>
+  <g stroke="${traceColor}" stroke-width="0.8" fill="none" opacity="0.25">
+    <!-- Left: from edge, runs down the stamp column -->
+    <polyline points="0,72 38,72 52,86 52,160"/>
+    <polyline points="0,100 30,100 44,114 44,200"/>
+    <polyline points="0,130 24,130"/>
+    <polyline points="0,260 36,260 50,246"/>
+    <polyline points="0,340 30,340 44,356"/>
+    <!-- Right: from edge, full height -->
+    <polyline points="540,72 502,72 488,86 488,160"/>
+    <polyline points="540,100 510,100 496,114 496,200"/>
+    <polyline points="540,130 516,130"/>
+    <polyline points="540,260 504,260 490,246"/>
+    <polyline points="540,340 510,340 496,356"/>
   </g>
-  <g fill="${traceColor}" opacity="0.5">
-    <circle cx="484" cy="150" r="3"/>
-    <circle cx="492" cy="230" r="2.5"/>
-    <circle cx="474" cy="290" r="3"/>
+  <g fill="${traceColor}" opacity="0.6">
+    <circle cx="52" cy="160" r="3"/><circle cx="44" cy="200" r="2.5"/>
+    <circle cx="50" cy="246" r="2"/><circle cx="44" cy="356" r="2"/>
+    <circle cx="488" cy="160" r="3"/><circle cx="496" cy="200" r="2.5"/>
+    <circle cx="490" cy="246" r="2"/><circle cx="496" cy="356" r="2"/>
   </g>` : ''}
 
   <!-- Header -->
@@ -138,11 +153,12 @@ export async function GET(req: NextRequest) {
   <text x="22" y="25" font-family="monospace" font-size="9.5" font-weight="bold" fill="${t.headerText}" letter-spacing="2">THE SEALER PROTOCOL &#183; ONCHAIN STATEMENT</text>
   <text x="518" y="25" font-family="monospace" font-size="8" fill="${uidColor}" text-anchor="end">UID: ${uid}</text>
 
-  <!-- Stamp — displayed in left column, centred -->
+  <!-- Stamp — displayed in left column, no background rect -->
   <image href="${stamp}" x="29" y="58" width="92" height="92" preserveAspectRatio="xMidYMid meet" opacity="0.95"/>
 
-  <!-- Chain pill removed, just a subtle label -->
-  <text x="75" y="164" font-family="monospace" font-size="6" font-weight="bold" fill="${t.accent}" text-anchor="middle" letter-spacing="2" opacity="0.6">${chain} &#183; EAS</text>
+  <!-- Chain pill — proper pill shape restored -->
+  <rect x="20" y="162" width="110" height="16" rx="8" fill="${t.statBg}" stroke="${t.accent}" stroke-width="0.8" opacity="0.8"/>
+  <text x="75" y="173" font-family="monospace" font-size="6" font-weight="bold" fill="${t.accent}" text-anchor="middle" letter-spacing="2">${chain} &#183; EAS</text>
 
   <!-- Upload zone -->
   <rect x="158" y="50" width="366" height="186" rx="8"
