@@ -80,18 +80,20 @@ export default function StatementPage() {
 
         /* Circuit animation */
         ${theme === 'circuit-anim' ? `
-        .trace { stroke-dasharray: 120; stroke-dashoffset: 120; animation: drawTrace 1.8s ease forwards; }
+        .trace { stroke-dasharray: 300; stroke-dashoffset: 300; animation: drawTrace 1.8s ease forwards; }
         .trace:nth-child(2){animation-delay:.15s} .trace:nth-child(3){animation-delay:.3s}
         .trace:nth-child(4){animation-delay:.45s} .trace:nth-child(5){animation-delay:.6s}
         .trace:nth-child(6){animation-delay:.75s} .trace:nth-child(7){animation-delay:.9s}
-        .trace:nth-child(8){animation-delay:1.05s}
+        .trace:nth-child(8){animation-delay:1.05s} .trace:nth-child(9){animation-delay:1.1s}
+        .trace:nth-child(10){animation-delay:1.15s}
         @keyframes drawTrace { to { stroke-dashoffset: 0; } }
         .node { opacity: 0; animation: fadeNode 0.3s ease forwards; }
         .node:nth-child(1){animation-delay:1.2s} .node:nth-child(2){animation-delay:1.3s}
         .node:nth-child(3){animation-delay:1.4s} .node:nth-child(4){animation-delay:1.5s}
         .node:nth-child(5){animation-delay:1.6s} .node:nth-child(6){animation-delay:1.7s}
-        .node:nth-child(7){animation-delay:1.8s}
-        @keyframes fadeNode { to { opacity: 0.6; } }
+        .node:nth-child(7){animation-delay:1.8s} .node:nth-child(8){animation-delay:1.9s}
+        .node:nth-child(9){animation-delay:2.0s} .node:nth-child(10){animation-delay:2.1s}
+        @keyframes fadeNode { to { opacity: 0.65; } }
         ` : ''}
 
         .card-header {
@@ -182,6 +184,20 @@ export default function StatementPage() {
       <div className="page-wrap">
         <div className="card">
 
+          {/* Bitcoin background deco */}
+          {theme === 'bitcoin' && (
+            <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
+              viewBox="0 0 560 500" preserveAspectRatio="none">
+              <g fontFamily="Arial,sans-serif" fontWeight="bold" fill="white" opacity="0.055">
+                <text x="-10" y="160" fontSize="130" transform="rotate(-15,-10,160)">₿</text>
+                <text x="310" y="90" fontSize="100" transform="rotate(-15,310,90)">₿</text>
+                <text x="360" y="360" fontSize="85" transform="rotate(-15,360,360)">₿</text>
+                <text x="120" y="380" fontSize="65" transform="rotate(-15,120,380)">₿</text>
+                <text x="450" y="230" fontSize="55" transform="rotate(-15,450,230)">₿</text>
+              </g>
+            </svg>
+          )}
+
           {/* Circuit overlay */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
@@ -202,14 +218,14 @@ export default function StatementPage() {
                 <polyline className="trace" points="560,336 524,336 510,350"/>
               </g>
               <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} opacity="0.7">
-                <circle className="node" cx="58" cy="148" r="3"/>
-                <circle className="node" cx="48" cy="110" r="2"/>
-                <circle className="node" cx="54" cy="234" r="2.5"/>
-                <circle className="node" cx="50" cy="350" r="2"/>
-                <circle className="node" cx="502" cy="148" r="3"/>
-                <circle className="node" cx="512" cy="110" r="2"/>
-                <circle className="node" cx="506" cy="234" r="2.5"/>
-                <circle className="node" cx="510" cy="350" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="58" cy="148" r="3"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="48" cy="110" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="54" cy="234" r="2.5"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="50" cy="350" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="502" cy="148" r="3"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="512" cy="110" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="506" cy="234" r="2.5"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="510" cy="350" r="2"/>
               </g>
             </svg>
           )}

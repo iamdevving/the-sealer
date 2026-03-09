@@ -195,13 +195,23 @@ export async function GET(req: NextRequest) {
   <!-- Card background -->
   <rect width="540" height="${H}" fill="${t.bg}"/>
 
+  <!-- Bitcoin background deco -->
+  ${themeKey === 'bitcoin' ? `
+  <g font-family="Arial,sans-serif" font-weight="bold" fill="white" opacity="0.055">
+    <text x="-10" y="150" font-size="120" transform="rotate(-15,-10,150)">₿</text>
+    <text x="300" y="80" font-size="100" transform="rotate(-15,300,80)">₿</text>
+    <text x="360" y="340" font-size="85" transform="rotate(-15,360,340)">₿</text>
+    <text x="120" y="360" font-size="65" transform="rotate(-15,120,360)">₿</text>
+    <text x="450" y="200" font-size="55" transform="rotate(-15,450,200)">₿</text>
+  </g>` : ''}
+
   <!-- Stamp area tint -->
   <rect x="0" y="42" width="540" height="${stampH}" fill="${t.statBg}" opacity="0.3"/>
 
-  <!-- Theme deco -->
+  <!-- Theme deco (stamp area) -->
   ${topDeco(themeKey, t.accent)}
 
-  <!-- Full-card circuit traces (mid + lower) -->
+  <!-- Full-card circuit traces (mid + lower) with dots -->
   ${(themeKey === 'circuit-anim' || themeKey === 'circuit') ? `
   <g stroke="${themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4'}" stroke-width="0.7" fill="none" opacity="0.22">
     <polyline points="0,240 40,240 40,256 56,256"/>
@@ -209,9 +219,9 @@ export async function GET(req: NextRequest) {
     <polyline points="540,240 500,240 500,256 484,256"/>
     <polyline points="540,305 506,305 492,291"/>
   </g>
-  <g fill="${themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4'}" opacity="0.55">
-    <circle cx="56" cy="256" r="2"/><circle cx="48" cy="291" r="2"/>
-    <circle cx="484" cy="256" r="2"/><circle cx="492" cy="291" r="2"/>
+  <g fill="${themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4'}" opacity="0.6">
+    <circle cx="56" cy="256" r="2.5"/><circle cx="48" cy="291" r="2.5"/>
+    <circle cx="484" cy="256" r="2.5"/><circle cx="492" cy="291" r="2.5"/>
   </g>` : ''}
 
   <!-- Header -->

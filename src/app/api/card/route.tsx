@@ -116,24 +116,26 @@ export async function GET(req: NextRequest) {
   <!-- Background -->
   <rect width="540" height="${H}" fill="${t.bg}"/>
 
-  <!-- Bitcoin background deco -->
+  <!-- Bitcoin background deco — more symbols spread across full card -->
   ${themeKey === 'bitcoin' ? `
-  <g font-family="Arial,sans-serif" font-weight="bold" fill="white" opacity="0.06">
-    <text x="10" y="150" font-size="120" transform="rotate(-15,10,150)">₿</text>
-    <text x="340" y="100" font-size="100" transform="rotate(-15,340,100)">₿</text>
-    <text x="420" y="380" font-size="80" transform="rotate(-15,420,380)">₿</text>
+  <g font-family="Arial,sans-serif" font-weight="bold" fill="white" opacity="0.055">
+    <text x="-10" y="160" font-size="130" transform="rotate(-15,-10,160)">₿</text>
+    <text x="310" y="90" font-size="110" transform="rotate(-15,310,90)">₿</text>
+    <text x="380" y="360" font-size="90" transform="rotate(-15,380,360)">₿</text>
+    <text x="130" y="380" font-size="70" transform="rotate(-15,130,380)">₿</text>
+    <text x="460" y="220" font-size="60" transform="rotate(-15,460,220)">₿</text>
   </g>` : ''}
 
   <!-- Circuit traces — left column (behind stamp) + right side full height -->
   ${isCircuit ? `
   <g stroke="${traceColor}" stroke-width="0.8" fill="none" opacity="0.25">
-    <!-- Left: from edge, runs down the stamp column -->
+    <!-- Left -->
     <polyline points="0,72 38,72 52,86 52,160"/>
     <polyline points="0,100 30,100 44,114 44,200"/>
     <polyline points="0,130 24,130"/>
     <polyline points="0,260 36,260 50,246"/>
     <polyline points="0,340 30,340 44,356"/>
-    <!-- Right: from edge, full height -->
+    <!-- Right -->
     <polyline points="540,72 502,72 488,86 488,160"/>
     <polyline points="540,100 510,100 496,114 496,200"/>
     <polyline points="540,130 516,130"/>
@@ -141,8 +143,10 @@ export async function GET(req: NextRequest) {
     <polyline points="540,340 510,340 496,356"/>
   </g>
   <g fill="${traceColor}" opacity="0.6">
+    <circle cx="52" cy="86" r="2.5"/>
     <circle cx="52" cy="160" r="3"/><circle cx="44" cy="200" r="2.5"/>
     <circle cx="50" cy="246" r="2"/><circle cx="44" cy="356" r="2"/>
+    <circle cx="488" cy="86" r="2.5"/>
     <circle cx="488" cy="160" r="3"/><circle cx="496" cy="200" r="2.5"/>
     <circle cx="490" cy="246" r="2"/><circle cx="496" cy="356" r="2"/>
   </g>` : ''}

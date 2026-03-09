@@ -111,18 +111,20 @@ export default function CardPage() {
 
         /* Circuit animation */
         ${theme === 'circuit-anim' ? `
-        .trace { stroke-dasharray: 120; stroke-dashoffset: 120; animation: drawTrace 1.8s ease forwards; }
+        .trace { stroke-dasharray: 400; stroke-dashoffset: 400; animation: drawTrace 1.8s ease forwards; }
         .trace:nth-child(2){animation-delay:.15s} .trace:nth-child(3){animation-delay:.3s}
         .trace:nth-child(4){animation-delay:.45s} .trace:nth-child(5){animation-delay:.6s}
         .trace:nth-child(6){animation-delay:.75s} .trace:nth-child(7){animation-delay:.9s}
-        .trace:nth-child(8){animation-delay:1.05s}
+        .trace:nth-child(8){animation-delay:1.05s} .trace:nth-child(9){animation-delay:1.1s}
+        .trace:nth-child(10){animation-delay:1.15s}
         @keyframes drawTrace { to { stroke-dashoffset: 0; } }
         .node { opacity: 0; animation: fadeNode 0.3s ease forwards; }
         .node:nth-child(1){animation-delay:1.2s} .node:nth-child(2){animation-delay:1.3s}
         .node:nth-child(3){animation-delay:1.4s} .node:nth-child(4){animation-delay:1.5s}
         .node:nth-child(5){animation-delay:1.6s} .node:nth-child(6){animation-delay:1.7s}
-        .node:nth-child(7){animation-delay:1.8s}
-        @keyframes fadeNode { to { opacity: 0.6; } }
+        .node:nth-child(7){animation-delay:1.8s} .node:nth-child(8){animation-delay:1.9s}
+        .node:nth-child(9){animation-delay:2.0s} .node:nth-child(10){animation-delay:2.1s}
+        @keyframes fadeNode { to { opacity: 0.65; } }
         ` : ''}
 
         /* Header */
@@ -237,39 +239,50 @@ export default function CardPage() {
       <div className="page-wrap">
         <div className="card">
 
-          {/* Circuit animation overlay */}
+          {/* Bitcoin background deco */}
+          {theme === 'bitcoin' && (
+            <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
+              viewBox="0 0 560 500" preserveAspectRatio="none">
+              <g fontFamily="Arial,sans-serif" fontWeight="bold" fill="white" opacity="0.055">
+                <text x="-10" y="160" fontSize="130" transform="rotate(-15,-10,160)">₿</text>
+                <text x="310" y="90" fontSize="100" transform="rotate(-15,310,90)">₿</text>
+                <text x="360" y="380" fontSize="85" transform="rotate(-15,360,380)">₿</text>
+                <text x="120" y="390" fontSize="65" transform="rotate(-15,120,390)">₿</text>
+                <text x="450" y="240" fontSize="55" transform="rotate(-15,450,240)">₿</text>
+              </g>
+            </svg>
+          )}
+
+          {/* Circuit animation overlay — starts below header (y>50) */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 500" preserveAspectRatio="none">
               <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.9" fill="none"
                 opacity={theme==='circuit-anim'?'0.28':'0.18'}>
-                {/* Left column — runs down past stamp into body */}
-                <polyline className="trace" points="0,72 40,72 54,86 54,170"/>
-                <polyline className="trace" points="54,170 54,220 70,220"/>
-                <polyline className="trace" points="0,110 28,110 42,124"/>
-                <polyline className="trace" points="0,280 38,280 52,266"/>
-                <polyline className="trace" points="0,360 32,360 46,374"/>
-                {/* Right column — full height */}
-                <polyline className="trace" points="560,72 520,72 506,86 506,170"/>
-                <polyline className="trace" points="506,170 506,220 490,220"/>
-                <polyline className="trace" points="560,110 532,110 518,124"/>
-                <polyline className="trace" points="560,280 522,280 508,266"/>
-                <polyline className="trace" points="560,360 528,360 514,374"/>
-                {/* Top header deco */}
-                <polyline className="trace" points="190,0 190,42"/>
-                <polyline className="trace" points="370,0 370,42"/>
+                {/* Left — all start from x=0, y > 50 (below header) */}
+                <polyline className="trace" points="0,80 40,80 54,94 54,200"/>
+                <polyline className="trace" points="54,200 54,240 72,240"/>
+                <polyline className="trace" points="0,120 30,120 44,134"/>
+                <polyline className="trace" points="0,290 36,290 50,276"/>
+                <polyline className="trace" points="0,370 30,370 44,384"/>
+                {/* Right — all start from x=560, y > 50 */}
+                <polyline className="trace" points="560,80 520,80 506,94 506,200"/>
+                <polyline className="trace" points="506,200 506,240 488,240"/>
+                <polyline className="trace" points="560,120 530,120 516,134"/>
+                <polyline className="trace" points="560,290 524,290 510,276"/>
+                <polyline className="trace" points="560,370 530,370 516,384"/>
               </g>
               <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} opacity="0.7">
-                <circle className="node" cx="54" cy="170" r="3"/>
-                <circle className="node" cx="70" cy="220" r="2.5"/>
-                <circle className="node" cx="42" cy="124" r="2"/>
-                <circle className="node" cx="52" cy="266" r="2"/>
-                <circle className="node" cx="46" cy="374" r="2"/>
-                <circle className="node" cx="506" cy="170" r="3"/>
-                <circle className="node" cx="490" cy="220" r="2.5"/>
-                <circle className="node" cx="518" cy="124" r="2"/>
-                <circle className="node" cx="508" cy="266" r="2"/>
-                <circle className="node" cx="514" cy="374" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="54" cy="200" r="3"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="72" cy="240" r="2.5"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="44" cy="134" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="50" cy="276" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="44" cy="384" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="506" cy="200" r="3"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="488" cy="240" r="2.5"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="516" cy="134" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="510" cy="276" r="2"/>
+                <circle className={theme==='circuit-anim'?'node':''} cx="516" cy="384" r="2"/>
               </g>
             </svg>
           )}
@@ -334,14 +347,7 @@ export default function CardPage() {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="footer-verified">
-            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
-            <div className="basescan-link">
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
-            </div>
-          </div>
-
+          {/* Footer band only */}
           <div className="bottom-band">
             <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
             <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:18,height:18,opacity:0.55}}/>
