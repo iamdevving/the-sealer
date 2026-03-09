@@ -2,17 +2,26 @@
 //
 // Called by any verifier (x402, defi, github, website, social) when
 // verification passes. Issues an EAS Achievement attestation and mints
-// a Badge NFT as the visible reward (all tiers — bronze, silver, gold).
+// a Badge NFT as the visible reward.
 //
-// Cards remain exclusively under /api/attest (self-declared, manual).
-// Badges are the achievement reward tier — earned not bought.
+// v2 changes:
+//   - Difficulty scoring via computeDifficulty() from @/lib/difficulty
+//   - New EAS schema fields: difficulty uint8, difficultyVersion uint8, bootstrapped bool
+//   - Schema: 0x6348b363af438e6b35ef28e2d1a798e213f54a38809f58f0397a20e592a70ffb
+//   - imageUri now passes full certificate v2 query params
+//   - level/score/tier removed — achievements are just "Achieved"
 
 import { createPublicClient, createWalletClient, http, type Hash } from 'viem';
 import { base } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
 import { mintBadge } from '@/lib/nft';
-import type { AchievementLevel, ClaimType } from './types';
+import {
+  computeDifficulty,
+  type CommitmentThresholds,
+  type HistoricalRecord,
+} from '@/lib/difficulty';
+import type { ClaimType } from './types';
 
 const rpcUrl        = process.env.ALCHEMY_RPC_URL!;
 const rawPrivateKey = (process.env.TEST_PRIVATE_KEY || '').trim();
@@ -21,42 +30,52 @@ const privateKey    = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawP
 const EAS_ADDRESS            = '0x4200000000000000000000000000000000000021';
 const ACHIEVEMENT_SCHEMA_UID = process.env.EAS_ACHIEVEMENT_SCHEMA_UID!;
 
-// ── Schema (deploy once on EAS, set EAS_ACHIEVEMENT_SCHEMA_UID in env) ────────
-// string claimType, string level, string commitmentUID, string evidence,
-// string metric, uint64 score, uint64 achievedAt, bool onTime
-//
-// score and onTime are included now so leaderboard queries work from EAS data
-// alone — no secondary DB needed for ranking.
+// Matches EAS schema 0x6348b363…
+const SCHEMA_STRING =
+  'string claimType,string commitmentUID,string evidence,string metric,' +
+  'uint64 achievedAt,bool onTime,uint8 difficulty,uint8 difficultyVersion,bool bootstrapped';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface CertificateMetric {
+  label:   string;
+  value:   string;
+  accent?: boolean;
+}
 
 export interface AttestAchievementParams {
-  agentId:       `0x${string}`;
-  claimType:     ClaimType;
-  level:         AchievementLevel;
-  commitmentUID: string;        // TX hash / EAS UID of the original commitment
-  evidence:      string;        // JSON-serialised VerificationEvidence[]
-  metric:        string;        // Human-readable metric, e.g. "97.3% success rate"
-  score:         number;        // 0–1000 weighted score (see scoring guide below)
-  onTime:        boolean;       // achieved before or on deadline
-  themeKey?:     string;
+  agentId:              `0x${string}`;
+  claimType:            ClaimType;
+  commitmentUID:        string;               // TX hash or EAS UID of original commitment
+  evidence:             string;               // JSON-serialised VerificationEvidence[]
+  metric:               string;               // Human-readable summary e.g. "97.3% success rate"
+  onTime:               boolean;
+  sid?:                 string;               // SealerID address (for certificate footer)
+  // Certificate display
+  commitmentText:       string;
+  certificateMetrics:   CertificateMetric[];  // Up to 6 cells
+  committedDate:        number;               // Unix timestamp (s)
+  deadline:             number;               // Unix timestamp (s)
+  achievedDate:         number;               // Unix timestamp (s)
+  daysEarly:            number;               // positive = early, negative = late
+  amended?:             boolean;
+  originalText?:        string;
+  // Difficulty inputs
+  commitmentThresholds: CommitmentThresholds; // numeric thresholds the agent set
+  historicalRecords:    HistoricalRecord[];   // existing achievements for percentile comparison
 }
 
 export interface AttestAchievementResult {
-  success:           boolean;
+  success:            boolean;
   achievementTxHash?: string;
-  nftTxHash?:        string;
-  error?:            string;
+  achievementUID?:    string;
+  nftTxHash?:         string;
+  difficulty?:        number;
+  bootstrapped?:      boolean;
+  error?:             string;
 }
 
-// ── Scoring guide (bake this into every verifier's return value) ─────────────
-//
-// Base score by level:   bronze=300  silver=600  gold=900
-// On-time bonus:         +50
-// Speed bonus:           +0–50  (days_remaining / deadline_days * 50, capped)
-// Evidence depth bonus:  +0–50  (number of evidence items, capped at 5 → +50)
-// Raw metric bonus:      +0–50  (verifier-specific, e.g. success rate above threshold)
-//
-// Max possible: 1000
-// Stored onchain in EAS so leaderboard logic can be rebuilt from chain data alone.
+// ── Main function ─────────────────────────────────────────────────────────────
 
 export async function attestAchievement(
   params: AttestAchievementParams,
@@ -64,20 +83,37 @@ export async function attestAchievement(
   const {
     agentId,
     claimType,
-    level,
     commitmentUID,
     evidence,
     metric,
-    score,
     onTime,
-    themeKey = 'circuit-anim',
+    sid            = '',
+    commitmentText,
+    certificateMetrics,
+    committedDate,
+    deadline,
+    achievedDate,
+    daysEarly,
+    amended        = false,
+    originalText   = '',
+    commitmentThresholds,
+    historicalRecords,
   } = params;
 
-  console.log(
-    `[attest-achievement] ${claimType}/${level} score=${score} onTime=${onTime} agent=${agentId}`
-  );
+  console.log(`[attest-achievement] ${claimType} onTime=${onTime} agent=${agentId}`);
 
   try {
+    // ── 1. Compute difficulty ─────────────────────────────────────────────
+    const diffResult = computeDifficulty(claimType, commitmentThresholds, historicalRecords);
+    console.log(
+      `[attest-achievement] difficulty=${diffResult.difficulty} ` +
+      `bootstrapped=${diffResult.bootstrapped} ` +
+      `percentile=${diffResult.breakdown.percentileScore} ` +
+      `breadth=${diffResult.breakdown.breadthMultiplier} ` +
+      `metrics=[${diffResult.breakdown.metricsScored.join(',')}]`
+    );
+
+    // ── 2. Issue EAS attestation ──────────────────────────────────────────
     const account      = privateKeyToAccount(privateKey as `0x${string}`);
     const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
@@ -85,19 +121,17 @@ export async function attestAchievement(
     const eas = new EAS(EAS_ADDRESS);
     (eas as any).connect(walletClient);
 
-    // ── 1. Issue EAS Achievement attestation ──────────────────────────────
-    const schemaEncoder = new SchemaEncoder(
-      'string claimType,string level,string commitmentUID,string evidence,string metric,uint64 score,uint64 achievedAt,bool onTime'
-    );
-    const encodedData = schemaEncoder.encodeData([
-      { name: 'claimType',     value: claimType,                           type: 'string' },
-      { name: 'level',         value: level,                               type: 'string' },
-      { name: 'commitmentUID', value: commitmentUID,                       type: 'string' },
-      { name: 'evidence',      value: evidence,                            type: 'string' },
-      { name: 'metric',        value: metric,                              type: 'string' },
-      { name: 'score',         value: BigInt(Math.round(score)),           type: 'uint64' },
-      { name: 'achievedAt',    value: BigInt(Math.floor(Date.now()/1000)), type: 'uint64' },
-      { name: 'onTime',        value: onTime,                              type: 'bool'   },
+    const schemaEncoder = new SchemaEncoder(SCHEMA_STRING);
+    const encodedData   = schemaEncoder.encodeData([
+      { name: 'claimType',         value: claimType,                         type: 'string' },
+      { name: 'commitmentUID',     value: commitmentUID,                     type: 'string' },
+      { name: 'evidence',          value: evidence,                          type: 'string' },
+      { name: 'metric',            value: metric,                            type: 'string' },
+      { name: 'achievedAt',        value: BigInt(Math.floor(achievedDate)),  type: 'uint64' },
+      { name: 'onTime',            value: onTime,                            type: 'bool'   },
+      { name: 'difficulty',        value: diffResult.difficulty,             type: 'uint8'  },
+      { name: 'difficultyVersion', value: diffResult.difficultyVersion,      type: 'uint8'  },
+      { name: 'bootstrapped',      value: diffResult.bootstrapped,           type: 'bool'   },
     ]);
 
     const txResponse = await eas.attest({
@@ -109,45 +143,58 @@ export async function attestAchievement(
         refUID:         isValidUID(commitmentUID)
           ? (commitmentUID as `0x${string}`)
           : '0x0000000000000000000000000000000000000000000000000000000000000000',
-        data:           encodedData,
+        data: encodedData,
       },
     });
 
-    const preparedTx     = (txResponse as any).data || txResponse;
-    const achievementTxH = await walletClient.sendTransaction(preparedTx as any);
+    const preparedTx    = (txResponse as any).data || txResponse;
+    const achievementTx = await walletClient.sendTransaction(preparedTx as any);
 
-    await publicClient.waitForTransactionReceipt({
-      hash:            achievementTxH as Hash,
+    const txReceipt = await publicClient.waitForTransactionReceipt({
+      hash:            achievementTx as Hash,
       pollingInterval: 1000,
       timeout:         90_000,
     });
 
-    console.log('[attest-achievement] ✅ EAS attestation mined:', achievementTxH);
+    // EAS UID is emitted as the first topic of the Attested event
+    const achievementUID =
+      (txReceipt.logs?.[0]?.topics?.[1] as string | undefined) ?? achievementTx;
 
-    // ── 2. Mint Badge NFT (all tiers — bronze, silver, gold) ──────────────
-    // Cards remain self-declared only via /api/attest.
-    // Theme maps to tier visually. TODO: replace with dedicated achievement
-    // certificate SVG themes once theme alignment task is completed.
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
-    const label   = levelToLabel(level, claimType);
-    const imageUri = [
-      `${baseUrl}/api/certificate`,
-      `?tier=${encodeURIComponent(level)}`,
-      `&claimType=${encodeURIComponent(claimType)}`,
-      `&metric=${encodeURIComponent(metric)}`,
-      `&subject=${encodeURIComponent(agentId)}`,
-      `&txHash=${encodeURIComponent(achievementTxH)}`,
-      `&score=${encodeURIComponent(String(score))}`,
-      `&onTime=${onTime ? 'true' : 'false'}`,
-      `&achievedAt=${encodeURIComponent(String(Math.floor(Date.now() / 1000)))}`,
-    ].join('');
+    console.log('[attest-achievement] ✅ EAS attestation mined:', achievementTx);
+    console.log('[attest-achievement]    UID:', achievementUID);
 
-    const receipt   = await mintBadge(agentId, imageUri, achievementTxH, label);
-    const nftTxHash = receipt.txHash;
+    // ── 3. Mint Badge NFT ─────────────────────────────────────────────────
+    const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
+    const label    = claimTypeToLabel(claimType);
+    const imageUri = buildCertificateUrl(baseUrl, {
+      claimType,
+      commitmentText,
+      metrics:     certificateMetrics,
+      committedDate,
+      deadline,
+      achievedDate,
+      daysEarly,
+      agentId,
+      sid,
+      txHash:      achievementTx,
+      uid:         achievementUID,
+      difficulty:  diffResult.difficulty,
+      amended,
+      originalText,
+    });
 
-    console.log('[attest-achievement] ✅ Badge NFT minted:', nftTxHash);
+    const nftReceipt = await mintBadge(agentId, imageUri, achievementTx, label);
 
-    return { success: true, achievementTxHash: achievementTxH, nftTxHash };
+    console.log('[attest-achievement] ✅ Badge NFT minted:', nftReceipt.txHash);
+
+    return {
+      success:           true,
+      achievementTxHash: achievementTx,
+      achievementUID,
+      nftTxHash:         nftReceipt.txHash,
+      difficulty:        diffResult.difficulty,
+      bootstrapped:      diffResult.bootstrapped,
+    };
 
   } catch (err: unknown) {
     console.error('[attest-achievement] Failed:', err);
@@ -155,38 +202,56 @@ export async function attestAchievement(
   }
 }
 
-// ── Score calculator (exported — every verifier should use this) ──────────────
-export function calculateScore(params: {
-  level:         AchievementLevel;
-  onTime:        boolean;
-  daysRemaining: number;   // negative = late
-  deadlineDays:  number;   // total commitment window
-  evidenceCount: number;
-  metricBonus:   number;   // 0–50, verifier-specific
-}): number {
-  const base         = { bronze: 300, silver: 600, gold: 900 }[params.level] ?? 300;
-  const onTimeBonus  = params.onTime ? 50 : 0;
-  const speedBonus   = params.onTime && params.deadlineDays > 0
-    ? Math.round(Math.min(params.daysRemaining / params.deadlineDays, 1) * 50)
-    : 0;
-  const evidenceBonus = Math.min(params.evidenceCount, 5) * 10;
-  const metricBonus   = Math.min(Math.max(params.metricBonus, 0), 50);
-  return Math.min(base + onTimeBonus + speedBonus + evidenceBonus + metricBonus, 1000);
+// ── Certificate URL builder ───────────────────────────────────────────────────
+
+interface CertUrlParams {
+  claimType:      string;
+  commitmentText: string;
+  metrics:        CertificateMetric[];
+  committedDate:  number;
+  deadline:       number;
+  achievedDate:   number;
+  daysEarly:      number;
+  agentId:        string;
+  sid:            string;
+  txHash:         string;
+  uid:            string;
+  difficulty:     number;
+  amended:        boolean;
+  originalText:   string;
+}
+
+function buildCertificateUrl(baseUrl: string, p: CertUrlParams): string {
+  const params = new URLSearchParams({
+    claimType:      p.claimType,
+    commitmentText: p.commitmentText,
+    metrics:        JSON.stringify(p.metrics),
+    committedDate:  String(p.committedDate),
+    deadline:       String(p.deadline),
+    achievedDate:   String(p.achievedDate),
+    daysEarly:      String(p.daysEarly),
+    agentId:        p.agentId,
+    sid:            p.sid,
+    txHash:         p.txHash,
+    uid:            p.uid,
+    difficulty:     String(p.difficulty),
+  });
+  if (p.amended) {
+    params.set('amended', 'true');
+    if (p.originalText) params.set('originalText', p.originalText);
+  }
+  return `${baseUrl}/api/certificate?${params.toString()}`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function levelToLabel(level: AchievementLevel, claimType: ClaimType): string {
-  return `${claimTypeToLabel(claimType)} · ${level.charAt(0).toUpperCase() + level.slice(1)}`;
-}
-
 function claimTypeToLabel(claimType: ClaimType): string {
   const map: Record<string, string> = {
-    x402_reliability: 'x402 Payment Reliability',
-    defi_pnl:         'DeFi Trading Performance',
-    github_delivery:  'Code Delivery',
-    website_delivery: 'Website Delivery',
-    social_growth:    'Social Growth',
+    x402_payment_reliability: 'x402 Payment Reliability',
+    code_software_delivery:   'Code Software Delivery',
+    website_app_delivery:     'Website App Delivery',
+    defi_trading_performance: 'DeFi Trading Performance',
+    social_media_growth:      'Social Media Growth',
   };
   return map[claimType] ?? 'Achievement';
 }

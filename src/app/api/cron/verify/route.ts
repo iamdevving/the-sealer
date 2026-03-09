@@ -13,26 +13,26 @@ import { verifyDefiTradingPerformance }  from '@/lib/verify/defi';
 import { verifyCodeSoftwareDelivery }    from '@/lib/verify/github';
 import { verifyWebsiteAppDelivery }      from '@/lib/verify/website';
 import { verifySocialMediaGrowth }       from '@/lib/verify/social';
-import { attestAchievement, calculateScore } from '@/lib/verify/attest-achievement';
+import { attestAchievement }             from '@/lib/verify/attest-achievement';
+import type { CertificateMetric }        from '@/lib/verify/attest-achievement';
+import type { CommitmentThresholds }     from '@/lib/difficulty';
 
-export const runtime  = 'nodejs';
+export const runtime     = 'nodejs';
 export const maxDuration = 60;
 
 const redis      = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 const KEY_PREFIX = 'achievement:pending:';
 
-// How long a verifying entry is considered stuck before we retry
-const STUCK_THRESHOLD_SEC = 15 * 60; // 15 minutes
+const STUCK_THRESHOLD_SEC = 15 * 60;
 
 export async function GET(req: NextRequest) {
-  // Auth
   const secret = req.headers.get('authorization')?.replace('Bearer ', '');
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const now    = Math.floor(Date.now() / 1000);
-  const keys   = await redis.keys(`${KEY_PREFIX}*`);
+  const now     = Math.floor(Date.now() / 1000);
+  const keys    = await redis.keys(`${KEY_PREFIX}*`);
   const results = { processed: 0, skipped: 0, achieved: 0, failed: 0, errors: 0 };
 
   for (const key of keys) {
@@ -43,28 +43,23 @@ export async function GET(req: NextRequest) {
       ? JSON.parse(raw)
       : raw as PendingAchievement;
 
-    // Skip already resolved
     if (['achieved', 'failed', 'expired'].includes(pending.status)) {
       results.skipped++;
       continue;
     }
 
-    // Skip if currently verifying and not stuck
     if (pending.status === 'verifying' && pending.lastChecked) {
       if (now - pending.lastChecked < STUCK_THRESHOLD_SEC) {
         results.skipped++;
         continue;
       }
-      // Stuck — reset and retry
     }
 
-    // Skip if deadline not yet reached
     if (pending.deadline > now) {
       results.skipped++;
       continue;
     }
 
-    // Mark as verifying
     await redis.set(key, JSON.stringify({
       ...pending,
       status:      'verifying',
@@ -88,31 +83,29 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Passed — calculate score and attest
-      const onTime       = now <= pending.deadline;
-      const deadlineDays = Math.ceil((pending.deadline - pending.mintTimestamp) / 86400);
-      const score        = calculateScore({
-        level:         result.level!,
-        onTime,
-        daysRemaining: Math.ceil((pending.deadline - now) / 86400),
-        deadlineDays,
-        evidenceCount: Object.keys(result.evidence.rawMetrics).length,
-        metricBonus:   0,
-      });
+      const onTime    = now <= pending.deadline;
+      const daysEarly = Math.ceil((pending.deadline - now) / 86400);
+      const rawM      = result.evidence.rawMetrics as Record<string, number | string | boolean>;
 
       const achieved = await attestAchievement({
-        agentId:       pending.subject as `0x${string}`,
-        claimType:     pending.claimType,
-        level:         result.level!,
-        commitmentUID: uid,
-        evidence:      JSON.stringify(result.evidence),
-        metric:        buildMetricString(pending.claimType, result.evidence.rawMetrics),
-        score,
+        agentId:              pending.subject as `0x${string}`,
+        claimType:            pending.claimType,
+        commitmentUID:        uid,
+        evidence:             JSON.stringify(result.evidence),
+        metric:               buildMetricString(pending.claimType, rawM),
         onTime,
+        sid:                  params.sid || '',
+        commitmentText:       params.commitmentText || buildCommitmentText(pending.claimType, params),
+        certificateMetrics:   buildCertificateMetrics(pending.claimType, rawM),
+        committedDate:        pending.mintTimestamp,
+        deadline:             pending.deadline,
+        achievedDate:         now,
+        daysEarly,
+        commitmentThresholds: extractThresholds(pending.claimType, params),
+        historicalRecords:    [], // bootstrap mode until N≥50 per claim type
       });
 
       if (!achieved.success) {
-        // Keep as pending — will retry next cron run
         await redis.set(key, JSON.stringify({
           ...pending,
           status:      'pending',
@@ -127,15 +120,16 @@ export async function GET(req: NextRequest) {
         ...pending,
         status:      'achieved',
         lastChecked: now,
-        level:       result.level,
       } satisfies PendingAchievement), { ex: 90 * 86400 });
 
       results.achieved++;
       results.processed++;
-      console.log(`[cron] ✅ Achieved: ${uid} ${pending.claimType}/${result.level} score=${score}`);
+      console.log(
+        `[cron] ✅ ${uid} ${pending.claimType}` +
+        ` difficulty=${achieved.difficulty} bootstrapped=${achieved.bootstrapped}`
+      );
 
     } catch (err) {
-      // Reset to pending on unexpected error
       await redis.set(key, JSON.stringify({
         ...pending,
         status:      'pending',
@@ -193,7 +187,7 @@ async function runVerifier(
         repoOwner:       params.repoOwner,
         repoName:        params.repoName,
         githubUsername:  params.githubUsername,
-        windowDays:      params.windowDays    || 30,
+        windowDays:      params.windowDays  || 30,
         mintTimestamp:   pending.mintTimestamp,
         requireCIPass:   params.requireCIPass,
         minLinesChanged: params.minLinesChanged,
@@ -204,9 +198,9 @@ async function runVerifier(
         agentWallet:         pending.subject,
         url:                 params.url,
         dnsVerifyRecord:     params.dnsVerifyRecord,
-        windowDays:          params.windowDays        || 30,
+        windowDays:          params.windowDays     || 30,
         mintTimestamp:       pending.mintTimestamp,
-        requireHttps:        params.requireHttps      !== false,
+        requireHttps:        params.requireHttps   !== false,
         requireDnsVerify:    params.requireDnsVerify,
         minPerformanceScore: params.minPerformanceScore,
         minAccessibility:    params.minAccessibility,
@@ -238,23 +232,144 @@ async function runVerifier(
   }
 }
 
-// ── Metric string builder ──────────────────────────────────────────────────────
+// ── Threshold extractor ────────────────────────────────────────────────────────
+
+function extractThresholds(
+  claimType: string,
+  params: Record<string, any>,
+): CommitmentThresholds {
+  const pick = (keys: string[]) =>
+    Object.fromEntries(
+      keys
+        .filter(k => typeof params[k] === 'number')
+        .map(k => [k, params[k] as number])
+    );
+
+  switch (claimType) {
+    case 'x402_payment_reliability':
+      return pick(['minSuccessRate', 'minTotalUSD', 'requireDistinctRecipients', 'maxGapHours']);
+    case 'code_software_delivery':
+      return pick(['minMergedPRs', 'minCommits', 'minLinesChanged']);
+    case 'website_app_delivery':
+      return pick(['minPerformanceScore', 'minAccessibility']);
+    case 'defi_trading_performance':
+      return pick(['minTradeCount', 'minVolumeUSD', 'minPnlPercent']);
+    case 'social_media_growth':
+      return pick(['minFollowerGrowth', 'minEngagementRate']);
+    default:
+      return {};
+  }
+}
+
+// ── Certificate metrics builder ────────────────────────────────────────────────
+
+function buildCertificateMetrics(
+  claimType: string,
+  raw: Record<string, number | string | boolean>,
+): CertificateMetric[] {
+  const n = (v: unknown, d = 1) =>
+    typeof v === 'number' ? v.toFixed(d) : String(v ?? '—');
+
+  switch (claimType) {
+    case 'x402_payment_reliability':
+      return [
+        { label: 'Success Rate',         value: `${n(raw.successRate)}%`,              accent: true  },
+        { label: 'Total Volume',          value: `$${n(raw.totalUSD, 0)}`,              accent: false },
+        { label: 'Distinct Recipients',   value: String(raw.distinctRecipients ?? '—'), accent: false },
+        { label: 'Payment Count',         value: String(raw.paymentCount ?? '—'),       accent: false },
+        { label: 'Failed Txns',           value: String(raw.failedCount ?? '—'),        accent: false },
+        { label: 'Chain',                 value: 'Base',                                accent: false },
+      ];
+    case 'code_software_delivery':
+      return [
+        { label: 'Merged PRs',    value: String(raw.mergedPRCount ?? '—'),    accent: true  },
+        { label: 'Commits',       value: String(raw.commitCount ?? '—'),      accent: false },
+        { label: 'CI Pass Rate',  value: `${n(raw.ciPassRate)}%`,             accent: false },
+        { label: 'Reviews',       value: String(raw.reviewCount ?? '—'),      accent: false },
+        { label: 'Lines Changed', value: `+${raw.linesChanged ?? '—'}`,       accent: false },
+        { label: 'Contributors',  value: String(raw.contributorCount ?? '—'), accent: false },
+      ];
+    case 'website_app_delivery':
+      return [
+        { label: 'Performance',   value: String(raw.performance ?? '—'),      accent: true  },
+        { label: 'Accessibility', value: String(raw.accessibility ?? '—'),    accent: false },
+        { label: 'LCP',           value: `${n(raw.lcp, 1)}s`,                accent: false },
+        { label: 'DNS Verified',  value: raw.dnsVerified ? 'Yes' : 'No',     accent: false },
+        { label: 'HTTPS',         value: raw.https ? 'Valid' : 'No',         accent: false },
+        { label: 'URLScan',       value: String(raw.urlscanStatus ?? 'OK'),  accent: false },
+      ];
+    case 'defi_trading_performance':
+      return [
+        { label: 'Trade Count',  value: String(raw.tradeCount ?? '—'),        accent: true  },
+        { label: 'Total Volume', value: `$${n(raw.volumeUSD, 0)}`,            accent: false },
+        { label: 'Realised P&L', value: `${n(raw.pnlPercent)}%`,              accent: false },
+        { label: 'Avg Trade',    value: `$${n(raw.avgTradeUSD, 0)}`,          accent: false },
+        { label: 'Protocols',    value: String(raw.protocolCount ?? '—'),     accent: false },
+        { label: 'Gas Spent',    value: `$${n(raw.gasUSD, 2)}`,               accent: false },
+      ];
+    case 'social_media_growth':
+      return [
+        { label: 'Follower Growth',  value: `+${n(raw.followerGrowth)}%`,    accent: true  },
+        { label: 'Engagement Rate',  value: `${n(raw.engagementRate)}%`,     accent: false },
+        { label: 'Posts Published',  value: String(raw.postCount ?? '—'),    accent: false },
+        { label: 'Replies',          value: String(raw.replyCount ?? '—'),   accent: false },
+        { label: 'Recasts',          value: String(raw.recastCount ?? '—'),  accent: false },
+        { label: 'Platform',         value: String(raw.platform ?? '—'),     accent: false },
+      ];
+    default:
+      return [];
+  }
+}
+
+// ── Commitment text fallback ───────────────────────────────────────────────────
+
+function buildCommitmentText(claimType: string, params: Record<string, any>): string {
+  switch (claimType) {
+    case 'x402_payment_reliability':
+      return `Maintain a payment success rate above ${params.minSuccessRate ?? '?'}%` +
+        (params.minTotalUSD ? ` processing a minimum of $${params.minTotalUSD} USDC` : '') +
+        (params.requireDistinctRecipients ? ` across ${params.requireDistinctRecipients}+ distinct recipients` : '') +
+        ' within the commitment window.';
+    case 'code_software_delivery':
+      return `Merge at least ${params.minMergedPRs ?? '?'} pull requests` +
+        (params.repoName ? ` into ${params.repoOwner}/${params.repoName}` : '') +
+        ' with CI passing within the commitment window.';
+    case 'website_app_delivery':
+      return `Achieve a PageSpeed score of ${params.minPerformanceScore ?? '?'} or above` +
+        (params.url ? ` on ${params.url}` : '') +
+        (params.requireDnsVerify ? ', verified via DNS TXT record ownership.' : '.');
+    case 'defi_trading_performance':
+      return `Execute at least ${params.minTradeCount ?? '?'} on-chain trades` +
+        (params.minVolumeUSD ? ` with total volume exceeding $${params.minVolumeUSD}` : '') +
+        (params.minPnlPercent ? ` and a positive P&L above ${params.minPnlPercent}%` : '') +
+        ' within the commitment window.';
+    case 'social_media_growth':
+      return `Grow following by ${params.minFollowerGrowth ?? '?'}% or more` +
+        (params.minEngagementRate ? ` with an engagement rate above ${params.minEngagementRate}%` : '') +
+        ' over the measurement window.';
+    default:
+      return 'Achievement commitment.';
+  }
+}
+
+// ── Metric string (for EAS evidence field) ────────────────────────────────────
 
 function buildMetricString(
   claimType: string,
-  metrics:   Record<string, number | string | boolean>,
+  metrics: Record<string, number | string | boolean>,
 ): string {
+  const n = (v: unknown, d = 1) => typeof v === 'number' ? v.toFixed(d) : String(v ?? '?');
   switch (claimType) {
     case 'x402_payment_reliability':
-      return `${metrics.paymentCount} payments · ${Number(metrics.successRate).toFixed(1)}% success · $${Number(metrics.totalUSD).toFixed(2)}`;
+      return `${metrics.paymentCount} payments · ${n(metrics.successRate)}% success · $${n(metrics.totalUSD, 2)}`;
     case 'defi_trading_performance':
-      return `${metrics.tradeCount} trades · $${Number(metrics.volumeUSD).toFixed(0)} volume · ${Number(metrics.pnlPercent).toFixed(1)}% PnL`;
+      return `${metrics.tradeCount} trades · $${n(metrics.volumeUSD, 0)} volume · ${n(metrics.pnlPercent)}% PnL`;
     case 'code_software_delivery':
       return `${metrics.mergedPRCount} PRs · ${metrics.commitCount} commits · ${metrics.linesChanged} lines`;
     case 'website_app_delivery':
       return `perf=${metrics.performance}/100 · a11y=${metrics.accessibility}/100`;
     case 'social_media_growth':
-      return `+${metrics.followerGrowth} followers · ${Number(metrics.engagementRate).toFixed(1)}% engagement`;
+      return `+${metrics.followerGrowth} followers · ${n(metrics.engagementRate)}% engagement`;
     default:
       return 'Achievement verified';
   }
