@@ -153,8 +153,10 @@ export async function GET(req: NextRequest) {
   const mark       = t.dark ? MARK_WHITE : MARK_BLACK;
   const claimMeta  = CLAIM_META[claimType];
   // Claim colour — falls back to theme accent so unset claimType still looks fine
-  const claimColor = claimMeta?.color ?? t.accent;
-  const claimLabel = claimMeta ? claimMeta.label.toUpperCase() : 'ACHIEVEMENT';
+  // On bitcoin theme the bg is orange — use white for pill text/border to stay readable
+  const rawClaimColor = claimMeta?.color ?? t.accent;
+  const claimColor    = themeKey === 'bitcoin' ? 'rgba(255,255,255,0.85)' : rawClaimColor;
+  const claimLabel    = claimMeta ? claimMeta.label.toUpperCase() : 'ACHIEVEMENT';
   const dateStr    = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 
   const deco = decoration(themeKey, t);
@@ -176,7 +178,7 @@ export async function GET(req: NextRequest) {
   <image href="${mark}" x="12" y="9" width="18" height="18"
     preserveAspectRatio="xMidYMid meet" opacity="0.9"/>
   <text x="132" y="22" font-family="monospace" font-size="7" font-weight="bold"
-    fill="${t.headerText}" text-anchor="middle" letter-spacing="1.5">THE SEALER · ACHIEVEMENT</text>
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="1.5">THE SEALER · ACHIEVEMENT BADGE</text>
 
   <!-- Claim-type colour line — thin rule, full width, sits just below header -->
   <rect x="0" y="36" width="${W}" height="2.5" fill="${claimColor}" opacity="0.7"/>
@@ -210,25 +212,25 @@ export async function GET(req: NextRequest) {
 
   <!-- Col 1: Attestation UID -->
   <text x="48" y="201" font-family="monospace" font-size="5" font-weight="bold"
-    fill="${t.accentDim}" text-anchor="middle" letter-spacing="0.5">EAS UID</text>
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="0.5" opacity="0.6">EAS UID</text>
   <text x="48" y="213" font-family="monospace" font-size="6" font-weight="bold"
-    fill="${claimColor}" text-anchor="middle">${displayUid}</text>
+    fill="${t.headerText}" text-anchor="middle">${displayUid}</text>
 
   <!-- Col 2: Agent ID -->
   <text x="126" y="201" font-family="monospace" font-size="5" font-weight="bold"
-    fill="${t.accentDim}" text-anchor="middle" letter-spacing="0.5">AGENT</text>
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="0.5" opacity="0.6">AGENT</text>
   <text x="126" y="213" font-family="monospace" font-size="6.5" font-weight="bold"
-    fill="${t.bodyText}" text-anchor="middle">#${agentId}</text>
+    fill="${t.headerText}" text-anchor="middle">#${agentId}</text>
 
   <!-- Col 3: Date + chain -->
   <text x="202" y="201" font-family="monospace" font-size="5" font-weight="bold"
-    fill="${t.accentDim}" text-anchor="middle" letter-spacing="0.5">${chain} · EAS</text>
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="0.5" opacity="0.6">${chain} · EAS</text>
   <text x="202" y="213" font-family="monospace" font-size="5.5"
-    fill="${t.bodyText}" text-anchor="middle">${dateStr}</text>
+    fill="${t.headerText}" text-anchor="middle">${dateStr}</text>
 
   <!-- Footer provenance line -->
   <text x="120" y="237" font-family="monospace" font-size="5" font-weight="bold"
-    fill="${t.accentDim}" text-anchor="middle" letter-spacing="1" opacity="0.45">
+    fill="${t.headerText}" text-anchor="middle" letter-spacing="1" opacity="0.55">
     CRYPTOGRAPHICALLY VERIFIED · ONCHAIN · IMMUTABLE
   </text>
 

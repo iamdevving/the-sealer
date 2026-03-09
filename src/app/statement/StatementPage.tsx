@@ -4,6 +4,7 @@
 // Pairs with /api/statement SVG endpoint.
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { STAMP_STATEMENT_WHITE, STAMP_STATEMENT_BLACK } from '@/lib/assets';
 
 const THEMES: Record<string, {
   bg: string; headerBg: string; headerText: string;
@@ -213,18 +214,19 @@ export default function StatementPage() {
 
           {/* Header */}
           <div className="card-header">
-            <span className="header-title">The Sealer · Official Credential</span>
+            <span className="header-title">The Sealer · Onchain Statement</span>
             <span className="header-uid" onClick={handleCopyUid}>
               {uidCopied ? '✓ Copied!' : `UID: ${uid}`}
             </span>
           </div>
           <div className="dashes"/>
 
-          {/* Stamp area — no upload, stamp is the hero */}
+          {/* Stamp area — stamp PNG from assets.ts, no upload */}
           <div className="stamp-area">
-            {/* Render stamp from the SVG API as an image — it will show the REGISTERED STATEMENT PNG */}
-            <img className="stamp-preview" src={svgUrl} alt="Registered Statement stamp"
-              style={{borderRadius:8, objectFit:'cover', objectPosition:'center top'}}
+            <img
+              className="stamp-preview"
+              src={t.dark ? STAMP_STATEMENT_WHITE : STAMP_STATEMENT_BLACK}
+              alt="Registered Statement stamp"
             />
             <div className="stamp-subtitle">REGISTERED STATEMENT</div>
             <div className="chain-pill">{chain} · EAS</div>

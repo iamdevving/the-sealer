@@ -267,7 +267,7 @@ export default function CardPage() {
 
           {/* Header */}
           <div className="card-header">
-            <span className="header-title">The Sealer · Official Credential</span>
+            <span className="header-title">The Sealer · Onchain Statement</span>
             <span className="header-uid" onClick={handleCopyUid}>
               {uidCopied ? '✓ Copied!' : `UID: ${uid}`}
             </span>
@@ -277,24 +277,18 @@ export default function CardPage() {
           {/* Upper: stamp + upload */}
           <div className="upper">
             <div className="stamp-col">
-              {/* Uses the SVG API which now renders STAMP_STATEMENT from assets.ts */}
-              <img className="stamp-img"
-                src={`/api/card?theme=${theme}&statement=x&agentId=0x0000&txHash=0x0`}
-                alt="Statement stamp"
-                style={{opacity:0, position:'absolute'}}
-              />
-              {/* Render stamp directly via the statement SVG crop — simpler: just show a themed badge */}
               <div style={{
-                width:92, height:92,
-                background: t.statBg,
+                width: 92, height: 92,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: 4,
                 border: `1px solid ${t.accent}`,
-                borderRadius: 8,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                flexDirection:'column', gap:4,
+                borderRadius: 6,
+                background: t.statBg,
               }}>
-                <div style={{fontFamily:'monospace',fontSize:7,fontWeight:700,color:t.accent,letterSpacing:2,textAlign:'center',lineHeight:1.4}}>
-                  REGISTERED<br/>STATEMENT
-                </div>
+                <div style={{
+                  fontFamily: 'monospace', fontSize: 7, fontWeight: 700,
+                  color: t.accent, letterSpacing: 2, textAlign: 'center', lineHeight: 1.5,
+                }}>REGISTERED<br/>STATEMENT</div>
               </div>
               <div className="stamp-label">Statement</div>
               <div className="chain-pill">{chain} · EAS</div>
