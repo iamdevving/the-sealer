@@ -214,7 +214,7 @@ export default function StatementPage() {
 
           {/* Header */}
           <div className="card-header">
-            <span className="header-title">The Sealer · Onchain Statement</span>
+            <span className="header-title">THE SEALER PROTOCOL · ONCHAIN STATEMENT</span>
             <span className="header-uid" onClick={handleCopyUid}>
               {uidCopied ? '✓ Copied!' : `UID: ${uid}`}
             </span>
@@ -228,8 +228,6 @@ export default function StatementPage() {
               src={t.dark ? STAMP_STATEMENT_WHITE : STAMP_STATEMENT_BLACK}
               alt="Registered Statement stamp"
             />
-            <div className="stamp-subtitle">REGISTERED STATEMENT</div>
-            <div className="chain-pill">{chain} · EAS</div>
           </div>
 
           {/* Divider */}
@@ -241,37 +239,36 @@ export default function StatementPage() {
 
           {/* Statement text */}
           <div className="statement-section">
-            <div className="statement-label">Statement</div>
+            <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>
           </div>
 
           {/* Stats */}
           <div className="stats-bar">
             <div className="stat-cell">
-              <div className="stat-label">Date Issued</div>
+              <div className="stat-label">DATE ISSUED</div>
               <div className="stat-value">{dateStr}</div>
             </div>
             <div className="stat-cell">
-              <div className="stat-label">Agent ID</div>
+              <div className="stat-label">AGENT ID</div>
               <div className="stat-value">#{agentId}</div>
             </div>
             <div className="stat-cell">
-              <div className="stat-label">TX Hash</div>
+              <div className="stat-label">TX HASH</div>
               <div className="stat-value mono" onClick={handleCopyUid}>{uidCopied ? '✓ Copied!' : uid}</div>
             </div>
           </div>
 
           {/* Footer */}
           <div className="footer-verified">
-            <span className="verified-text">Cryptographically Verified · Onchain · Immutable</span>
+            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED · ONCHAIN</span>
             <div className="basescan-link">
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation</a>
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">basescan.org ↗</a>
+              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
             </div>
           </div>
 
           <div className="bottom-band">
-            <span className="band-text">THESEALER.XYZ · AUTONOMOUS · IMMUTABLE</span>
+            <span className="band-text">THESEALER.XYZ</span>
           </div>
         </div>
 

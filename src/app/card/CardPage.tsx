@@ -267,7 +267,7 @@ export default function CardPage() {
 
           {/* Header */}
           <div className="card-header">
-            <span className="header-title">The Sealer · Onchain Statement</span>
+            <span className="header-title">THE SEALER PROTOCOL · ONCHAIN STATEMENT</span>
             <span className="header-uid" onClick={handleCopyUid}>
               {uidCopied ? '✓ Copied!' : `UID: ${uid}`}
             </span>
@@ -277,21 +277,21 @@ export default function CardPage() {
           {/* Upper: stamp + upload */}
           <div className="upper">
             <div className="stamp-col">
+              <img
+                className="stamp-img"
+                src={t.dark
+                  ? `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>`
+                  : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>`}
+                alt=""
+                style={{display:'none'}}
+              />
+              {/* Stamp rendered from assets via next/image not available in client — use bg trick */}
               <div style={{
-                width: 92, height: 92,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexDirection: 'column', gap: 4,
-                border: `1px solid ${t.accent}`,
-                borderRadius: 6,
-                background: t.statBg,
-              }}>
-                <div style={{
-                  fontFamily: 'monospace', fontSize: 7, fontWeight: 700,
-                  color: t.accent, letterSpacing: 2, textAlign: 'center', lineHeight: 1.5,
-                }}>REGISTERED<br/>STATEMENT</div>
-              </div>
-              <div className="stamp-label">Statement</div>
-              <div className="chain-pill">{chain} · EAS</div>
+                width: 92, height: 92, position: 'relative',
+                backgroundImage: `url(/api/stamp?theme=${theme})`,
+                backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
+              }}/>
+              <div style={{fontFamily:'monospace',fontSize:'6px',fontWeight:700,color:t.accent,letterSpacing:2,opacity:0.6}}>{chain} · EAS</div>
             </div>
 
             <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
@@ -320,7 +320,7 @@ export default function CardPage() {
 
           {/* Statement */}
           <div className="statement-section">
-            <div className="statement-label">Statement</div>
+            <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>
           </div>
 
@@ -342,15 +342,14 @@ export default function CardPage() {
 
           {/* Footer */}
           <div className="footer-verified">
-            <span className="verified-text">Cryptographically Verified · Onchain · Immutable</span>
+            <span className="verified-text">Cryptographically Verified · Onchain</span>
             <div className="basescan-link">
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation</a>
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">basescan.org ↗</a>
+              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
             </div>
           </div>
 
           <div className="bottom-band">
-            <span className="band-text">THESEALER.XYZ · AUTONOMOUS · IMMUTABLE</span>
+            <span className="band-text">THESEALER.XYZ</span>
           </div>
         </div>
 
