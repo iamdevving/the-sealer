@@ -49,22 +49,16 @@ function topDeco(themeKey: string, accent: string): string {
       const c = themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4';
       return [
         `<g stroke="${c}" stroke-width="0.7" fill="none" opacity="0.3">`,
-        // top area left
-        `<polyline points="0,62 52,62 66,76"/>`,
-        `<polyline points="0,92 40,92 54,106"/>`,
+        `<polyline points="0,62 52,62 66,76 66,110"/>`,
+        `<polyline points="0,92 40,92 54,106 54,130"/>`,
         `<polyline points="0,122 30,122"/>`,
-        // top area right
-        `<polyline points="540,62 488,62 474,76"/>`,
-        `<polyline points="540,92 500,92 486,106"/>`,
+        `<polyline points="540,62 488,62 474,76 474,110"/>`,
+        `<polyline points="540,92 500,92 486,106 486,130"/>`,
         `<polyline points="540,122 510,122"/>`,
         `</g>`,
         `<g fill="${c}" opacity="0.7">`,
-        `<circle cx="66" cy="76" r="2.5"/><circle cx="54" cy="106" r="2"/>`,
-        `<circle cx="474" cy="76" r="2.5"/><circle cx="486" cy="106" r="2"/>`,
-        `</g>`,
-        `<g stroke="${c}" stroke-width="1" fill="none" opacity="0.5">`,
-        `<polyline points="0,46 0,60 14,60"/>`,
-        `<polyline points="540,46 540,60 526,60"/>`,
+        `<circle cx="66" cy="110" r="2.5"/><circle cx="54" cy="130" r="2"/>`,
+        `<circle cx="474" cy="110" r="2.5"/><circle cx="486" cy="130" r="2"/>`,
         `</g>`,
       ].join('');
     }
