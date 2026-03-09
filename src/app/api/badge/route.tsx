@@ -168,8 +168,9 @@ export async function GET(req: NextRequest) {
     <clipPath id="bc"><rect width="${W}" height="${H}" rx="12" ry="12"/></clipPath>
   </defs>
 
-  <!-- Base -->
-  <rect width="${W}" height="${H}" rx="12" ry="12" fill="${t.bg}" stroke="${t.border}" stroke-width="1"/>
+  <!-- Base — outer border + inner accent line for depth -->
+  <rect width="${W}" height="${H}" rx="12" ry="12" fill="${t.bg}" stroke="${t.border}" stroke-width="2"/>
+  <rect x="2.5" y="2.5" width="${W-5}" height="${H-5}" rx="10" ry="10" fill="none" stroke="${t.accent}" stroke-width="0.5" opacity="0.25"/>
   <g clip-path="url(#bc)">${deco}</g>
 
   <!-- Header band -->
@@ -191,10 +192,11 @@ export async function GET(req: NextRequest) {
   <text x="120" y="55.5" font-family="monospace" font-size="6.5" font-weight="bold"
     fill="${claimColor}" text-anchor="middle" letter-spacing="1.5">${claimLabel}</text>
 
-  <!-- Wax seal — centred -->
-  <circle cx="120" cy="116" r="46" fill="${t.accent}" opacity="${t.dark ? '0.03' : '0'}"/>
-  <image href="${BADGE_SEAL}" x="76" y="72" width="88" height="88"
-    preserveAspectRatio="xMidYMid meet"/>
+  <!-- Wax seal — nested svg enforces square viewport, prevents stretch -->
+  <svg x="76" y="72" width="88" height="88" viewBox="0 0 88 88">
+    <image href="${BADGE_SEAL}" x="0" y="0" width="88" height="88"
+      preserveAspectRatio="xMidYMid meet"/>
+  </svg>
 
   <!-- Achievement text -->
   <text x="120" y="172" font-family="Georgia,serif" font-size="9.5" font-style="italic"

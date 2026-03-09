@@ -78,7 +78,9 @@ export async function GET(req: NextRequest) {
     <clipPath id="cc"><rect width="540" height="500" rx="14" ry="14"/></clipPath>
   </defs>
 
-  <rect width="540" height="500" rx="14" ry="14" fill="${t.bg}" stroke="${t.border}" stroke-width="1"/>
+  <!-- Outer border + inner accent line (double border depth) -->
+  <rect width="540" height="500" rx="14" ry="14" fill="${t.bg}" stroke="${t.border}" stroke-width="2"/>
+  <rect x="3" y="3" width="534" height="494" rx="12" ry="12" fill="none" stroke="${t.accent}" stroke-width="0.5" opacity="0.25"/>
 
   <!-- Circuit traces -->
   ${isCircuit ? `

@@ -51,20 +51,20 @@ function topDeco(themeKey: string, accent: string, accentDim: string): string {
       const c = themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4';
       return [
         `<g stroke="${c}" stroke-width="0.7" fill="none" opacity="0.35">`,
-        `<polyline points="22,72 80,72 94,86"/>`,
-        `<polyline points="22,97 65,97 79,111"/>`,
-        `<polyline points="22,122 55,122"/>`,
-        `<polyline points="518,72 460,72 446,86"/>`,
-        `<polyline points="518,97 475,97 461,111"/>`,
-        `<polyline points="518,122 485,122"/>`,
+        `<polyline points="0,72 58,72 72,86"/>`,
+        `<polyline points="0,100 48,100 62,114"/>`,
+        `<polyline points="0,128 38,128"/>`,
+        `<polyline points="540,72 482,72 468,86"/>`,
+        `<polyline points="540,100 492,100 478,114"/>`,
+        `<polyline points="540,128 502,128"/>`,
         `</g>`,
         `<g fill="${c}" opacity="0.6">`,
-        `<circle cx="94" cy="86" r="2.5"/><circle cx="79" cy="111" r="2"/>`,
-        `<circle cx="446" cy="86" r="2.5"/><circle cx="461" cy="111" r="2"/>`,
+        `<circle cx="72" cy="86" r="2.5"/><circle cx="62" cy="114" r="2"/>`,
+        `<circle cx="468" cy="86" r="2.5"/><circle cx="478" cy="114" r="2"/>`,
         `</g>`,
         `<g stroke="${c}" stroke-width="1" fill="none" opacity="0.4">`,
-        `<polyline points="22,50 22,63 35,63"/>`,
-        `<polyline points="518,50 518,63 505,63"/>`,
+        `<polyline points="0,50 0,65 14,65"/>`,
+        `<polyline points="540,50 540,65 526,65"/>`,
         `</g>`,
       ].join('');
     }
@@ -81,13 +81,14 @@ function topDeco(themeKey: string, accent: string, accentDim: string): string {
       ].join('');
     case 'aurora':
       return [
-        `<g opacity="0.08">`,
-        `<ellipse cx="90" cy="125" rx="110" ry="80" fill="#7c3aed"/>`,
-        `<ellipse cx="450" cy="125" rx="110" ry="80" fill="${accent}"/>`,
+        `<g fill="none" opacity="0.15">`,
+        `<path d="M 0,80 Q 135,50 270,80 Q 405,110 540,80" stroke="${accent}" stroke-width="1"/>`,
+        `<path d="M 0,108 Q 135,78 270,108 Q 405,138 540,108" stroke="#c4b5fd" stroke-width="0.8"/>`,
+        `<path d="M 0,136 Q 135,106 270,136 Q 405,166 540,136" stroke="${accent}" stroke-width="0.5" opacity="0.5"/>`,
         `</g>`,
-        `<g fill="none" opacity="0.12">`,
-        `<path d="M 0,85 Q 130,55 270,85 Q 410,115 540,85" stroke="${accent}" stroke-width="1"/>`,
-        `<path d="M 0,110 Q 130,80 270,110 Q 410,140 540,110" stroke="#c4b5fd" stroke-width="0.7"/>`,
+        `<g fill="#c4b5fd" opacity="0.4">`,
+        `<circle cx="30" cy="65" r="1.5"/><circle cx="510" cy="72" r="1.2"/>`,
+        `<circle cx="150" cy="58" r="1"/><circle cx="400" cy="62" r="1.5"/>`,
         `</g>`,
       ].join('');
     case 'base':
@@ -212,7 +213,9 @@ export async function GET(req: NextRequest) {
     `</linearGradient>`,
     `</defs>`,
 
-    `<rect width="540" height="${H}" rx="14" ry="14" fill="${t.bg}" stroke="${t.border}" stroke-width="1"/>`,
+    // Outer border (thicker, darker) + inner accent line (double border effect)
+    `<rect width="540" height="${H}" rx="14" ry="14" fill="${t.bg}" stroke="${t.border}" stroke-width="2"/>`,
+    `<rect x="3" y="3" width="534" height="${H-6}" rx="12" ry="12" fill="none" stroke="${t.accent}" stroke-width="0.5" opacity="0.25"/>`,
 
     // Header
     `<rect x="0" y="0" width="540" height="42" rx="14" ry="14" fill="${t.headerBg}"/>`,
