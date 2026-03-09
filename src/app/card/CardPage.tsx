@@ -1,9 +1,8 @@
 'use client';
 // src/app/card/CardPage.tsx
-// Interactive viewer for the Statement Card (with optional image attachment).
-// Pairs with /api/card SVG endpoint.
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { MARK_WHITE, MARK_BLACK } from '@/lib/assets';
 
 const THEMES: Record<string, {
   bg: string; headerBg: string; headerText: string;
@@ -177,12 +176,12 @@ export default function CardPage() {
         .div-ornament { font-size: 10px; color: ${t.accentDim}; letter-spacing: 10px; opacity:.6; padding: 8px 0; }
 
         /* Statement text */
-        .statement-section { padding: 8px 22px 20px; text-align: center; }
-        .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 12px; }
+        .statement-section { padding: 16px 22px 24px; text-align: center; }
+        .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 14px; }
         .statement-text {
           font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 18px; font-style: italic; color: ${t.bodyTextDim};
-          line-height: 1.55; max-width: 420px; margin: 0 auto;
+          font-size: 18px; font-style: italic; color: ${t.bodyText};
+          line-height: 1.6; max-width: 480px; margin: 0 auto;
         }
 
         /* Stats row */
@@ -243,23 +242,29 @@ export default function CardPage() {
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 530" preserveAspectRatio="none">
               <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.8" fill="none"
-                opacity={theme==='circuit-anim'?'0.3':'0.18'}>
-                <polyline className="trace" points="0,70 42,70 56,84 56,140"/>
-                <polyline className="trace" points="0,180 35,180 48,193 48,230"/>
-                <polyline className="trace" points="0,310 52,310 52,290 70,290"/>
-                <polyline className="trace" points="560,70 518,70 504,84 504,140"/>
-                <polyline className="trace" points="560,180 525,180 512,193 512,230"/>
-                <polyline className="trace" points="560,310 508,310 494,290 476,290"/>
+                opacity={theme==='circuit-anim'?'0.28':'0.18'}>
+                {/* Left side — stamp column, extends below stamp */}
+                <polyline className="trace" points="0,70 42,70 56,84 56,180"/>
+                <polyline className="trace" points="0,200 35,200 48,213 48,280"/>
+                <polyline className="trace" points="0,330 52,330 52,310 70,310"/>
+                {/* Left stamp extension — goes down past stamp area */}
+                <polyline className="trace" points="56,180 56,240 72,240"/>
+                {/* Right side — beyond upload zone */}
+                <polyline className="trace" points="560,80 518,80 504,94 504,160"/>
+                <polyline className="trace" points="560,200 525,200 512,213 512,280"/>
+                <polyline className="trace" points="560,340 508,340 494,320 476,320"/>
+                {/* Top deco from header */}
                 <polyline className="trace" points="200,0 200,36 184,52 140,52"/>
                 <polyline className="trace" points="360,0 360,36 376,52 420,52"/>
               </g>
               <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'}>
-                <circle className="node" cx="56" cy="140" r="3"/>
-                <circle className="node" cx="48" cy="230" r="2.5"/>
-                <circle className="node" cx="70" cy="290" r="3"/>
-                <circle className="node" cx="504" cy="140" r="3"/>
-                <circle className="node" cx="512" cy="230" r="2.5"/>
-                <circle className="node" cx="476" cy="290" r="3"/>
+                <circle className="node" cx="56" cy="180" r="3"/>
+                <circle className="node" cx="72" cy="240" r="2.5"/>
+                <circle className="node" cx="48" cy="280" r="2.5"/>
+                <circle className="node" cx="70" cy="310" r="3"/>
+                <circle className="node" cx="504" cy="160" r="3"/>
+                <circle className="node" cx="512" cy="280" r="2.5"/>
+                <circle className="node" cx="476" cy="320" r="3"/>
                 <circle className="node" cx="140" cy="52" r="3"/>
               </g>
             </svg>
@@ -277,21 +282,13 @@ export default function CardPage() {
           {/* Upper: stamp + upload */}
           <div className="upper">
             <div className="stamp-col">
-              <img
-                className="stamp-img"
-                src={t.dark
-                  ? `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>`
-                  : `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>`}
-                alt=""
-                style={{display:'none'}}
-              />
-              {/* Stamp rendered from assets via next/image not available in client — use bg trick */}
               <div style={{
-                width: 92, height: 92, position: 'relative',
+                width: 92, height: 92,
                 backgroundImage: `url(/api/stamp?theme=${theme})`,
                 backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
+                filter: `drop-shadow(0 4px 16px rgba(${t.accentRgb},.25))`,
               }}/>
-              <div style={{fontFamily:'monospace',fontSize:'6px',fontWeight:700,color:t.accent,letterSpacing:2,opacity:0.6}}>{chain} · EAS</div>
+              <div className="chain-pill">{chain} · EAS</div>
             </div>
 
             <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
@@ -311,14 +308,7 @@ export default function CardPage() {
               style={{display:'none'}} onChange={handleUpload}/>
           </div>
 
-          {/* Divider */}
-          <div className="divider">
-            <div className="div-line"/>
-            <div className="div-ornament">✦ ✦ ✦</div>
-            <div className="div-line"/>
-          </div>
-
-          {/* Statement */}
+          {/* Statement — no divider, label sits directly above text */}
           <div className="statement-section">
             <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>
@@ -342,14 +332,15 @@ export default function CardPage() {
 
           {/* Footer */}
           <div className="footer-verified">
-            <span className="verified-text">Cryptographically Verified · Onchain</span>
+            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
             <div className="basescan-link">
               <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
             </div>
           </div>
 
           <div className="bottom-band">
-            <span className="band-text">THESEALER.XYZ</span>
+            <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
+            <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:18,height:18,opacity:0.55}}/>
           </div>
         </div>
 

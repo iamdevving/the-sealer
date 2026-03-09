@@ -1,10 +1,8 @@
 'use client';
 // src/app/statement/StatementPage.tsx
-// Interactive viewer for the Statement Card (no image attachment).
-// Pairs with /api/statement SVG endpoint.
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { STAMP_STATEMENT_WHITE, STAMP_STATEMENT_BLACK } from '@/lib/assets';
+import { STAMP_STATEMENT_WHITE, STAMP_STATEMENT_BLACK, MARK_WHITE, MARK_BLACK } from '@/lib/assets';
 
 const THEMES: Record<string, {
   bg: string; headerBg: string; headerText: string;
@@ -106,38 +104,30 @@ export default function StatementPage() {
         .header-uid:hover { color: ${t.accent}; }
         .dashes { height: 3px; background: repeating-linear-gradient(90deg,${t.accent} 0,${t.accent} 7px,transparent 7px,transparent 11px); opacity:.5; }
 
-        /* Stamp area — large, centred, no upload zone */
+        /* Stamp area — smaller, tighter */
         .stamp-area {
           background: ${t.statBg};
           opacity: 0.95;
           border-bottom: 1px solid ${t.statBorder};
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          padding: 28px 22px 24px;
-          gap: 10px; position: relative; overflow: hidden;
+          padding: 16px 22px 14px;
+          gap: 0; position: relative; overflow: hidden;
         }
-        /* The SVG endpoint renders the stamp embedded — we show it as an <img> */
         .stamp-preview {
-          width: 140px; height: 140px;
-          filter: drop-shadow(0 6px 24px rgba(${t.accentRgb},.2));
-        }
-        .stamp-subtitle { font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 3px; opacity: .7; }
-        .chain-pill {
-          background: ${t.bg}; border: .8px solid ${t.accent}; border-radius: 10px;
-          padding: 3px 12px; font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 1px;
+          width: 110px; height: 110px;
+          filter: drop-shadow(0 4px 18px rgba(${t.accentRgb},.22));
         }
 
-        /* Divider */
-        .divider { padding: 0 22px; display: flex; align-items: center; gap: 12px; }
-        .div-line { flex: 1; height: 1px; background: linear-gradient(90deg,transparent,${t.accentDim},transparent); opacity:.5; }
-        .div-ornament { font-size: 10px; color: ${t.accentDim}; letter-spacing: 10px; opacity:.6; padding: 8px 0; }
+        /* Remove old divider, just use a thin line */
+        .divider { display: none; }
 
-        /* Statement text */
-        .statement-section { padding: 8px 28px 24px; text-align: center; }
+        /* Statement text — more room */
+        .statement-section { padding: 16px 22px 20px; text-align: center; }
         .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 14px; }
         .statement-text {
           font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 20px; font-style: italic; color: ${t.bodyTextDim};
-          line-height: 1.6; max-width: 460px; margin: 0 auto;
+          font-size: 20px; font-style: italic; color: ${t.bodyText};
+          line-height: 1.6; max-width: 480px; margin: 0 auto;
         }
 
         /* Stats */
@@ -261,14 +251,15 @@ export default function StatementPage() {
 
           {/* Footer */}
           <div className="footer-verified">
-            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED · ONCHAIN</span>
+            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
             <div className="basescan-link">
               <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
             </div>
           </div>
 
           <div className="bottom-band">
-            <span className="band-text">THESEALER.XYZ</span>
+            <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
+            <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:18,height:18,opacity:0.55}}/>
           </div>
         </div>
 

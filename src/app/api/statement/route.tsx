@@ -47,23 +47,24 @@ function topDeco(themeKey: string, accent: string): string {
     case 'circuit-anim':
     case 'circuit': {
       const c = themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4';
-      // Traces start flush at x=0 / x=540, different y levels, spread out
       return [
-        `<g stroke="${c}" stroke-width="0.7" fill="none" opacity="0.35">`,
-        `<polyline points="0,68 55,68 70,83"/>`,
-        `<polyline points="0,96 44,96 58,110"/>`,
-        `<polyline points="0,124 34,124"/>`,
-        `<polyline points="540,68 485,68 470,83"/>`,
-        `<polyline points="540,96 496,96 482,110"/>`,
-        `<polyline points="540,124 506,124"/>`,
+        `<g stroke="${c}" stroke-width="0.7" fill="none" opacity="0.3">`,
+        // top area left
+        `<polyline points="0,62 52,62 66,76"/>`,
+        `<polyline points="0,92 40,92 54,106"/>`,
+        `<polyline points="0,122 30,122"/>`,
+        // top area right
+        `<polyline points="540,62 488,62 474,76"/>`,
+        `<polyline points="540,92 500,92 486,106"/>`,
+        `<polyline points="540,122 510,122"/>`,
         `</g>`,
         `<g fill="${c}" opacity="0.7">`,
-        `<circle cx="70" cy="83" r="2.5"/><circle cx="58" cy="110" r="2"/>`,
-        `<circle cx="470" cy="83" r="2.5"/><circle cx="482" cy="110" r="2"/>`,
+        `<circle cx="66" cy="76" r="2.5"/><circle cx="54" cy="106" r="2"/>`,
+        `<circle cx="474" cy="76" r="2.5"/><circle cx="486" cy="106" r="2"/>`,
         `</g>`,
         `<g stroke="${c}" stroke-width="1" fill="none" opacity="0.5">`,
-        `<polyline points="0,48 0,62 16,62"/>`,
-        `<polyline points="540,48 540,62 524,62"/>`,
+        `<polyline points="0,46 0,60 14,60"/>`,
+        `<polyline points="540,46 540,60 526,60"/>`,
         `</g>`,
       ].join('');
     }
@@ -199,6 +200,19 @@ export async function GET(req: NextRequest) {
 
   <!-- Theme deco -->
   ${topDeco(themeKey, t.accent)}
+
+  <!-- Full-card circuit traces (mid + lower) -->
+  ${(themeKey === 'circuit-anim' || themeKey === 'circuit') ? `
+  <g stroke="${themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4'}" stroke-width="0.7" fill="none" opacity="0.22">
+    <polyline points="0,240 40,240 40,256 56,256"/>
+    <polyline points="0,305 34,305 48,291"/>
+    <polyline points="540,240 500,240 500,256 484,256"/>
+    <polyline points="540,305 506,305 492,291"/>
+  </g>
+  <g fill="${themeKey === 'circuit-anim' ? '#00e5ff' : '#00bcd4'}" opacity="0.55">
+    <circle cx="56" cy="256" r="2"/><circle cx="48" cy="291" r="2"/>
+    <circle cx="484" cy="256" r="2"/><circle cx="492" cy="291" r="2"/>
+  </g>` : ''}
 
   <!-- Header -->
   <rect x="0" y="0" width="540" height="42" fill="${t.headerBg}"/>
