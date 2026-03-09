@@ -10,6 +10,10 @@
 //   - Schema: 0x6348b363af438e6b35ef28e2d1a798e213f54a38809f58f0397a20e592a70ffb
 //   - imageUri now passes full certificate v2 query params
 //   - level/score/tier removed — achievements are just "Achieved"
+//
+// v2.1 changes:
+//   - executionScore computed via computeExecution() — display-only until schema v2 deployed
+//   - actualValues added to params — verifier passes measured values alongside thresholds
 
 import { createPublicClient, createWalletClient, http, type Hash } from 'viem';
 import { base } from 'viem/chains';
@@ -18,7 +22,9 @@ import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
 import { mintBadge } from '@/lib/nft';
 import {
   computeDifficulty,
+  computeExecution,
   type CommitmentThresholds,
+  type ActualValues,
   type HistoricalRecord,
 } from '@/lib/difficulty';
 import type { ClaimType } from './types';
@@ -46,23 +52,26 @@ export interface CertificateMetric {
 export interface AttestAchievementParams {
   agentId:              `0x${string}`;
   claimType:            ClaimType;
-  commitmentUID:        string;               // TX hash or EAS UID of original commitment
-  evidence:             string;               // JSON-serialised VerificationEvidence[]
-  metric:               string;               // Human-readable summary e.g. "97.3% success rate"
+  commitmentUID:        string;
+  evidence:             string;
+  metric:               string;
   onTime:               boolean;
-  sid?:                 string;               // SealerID address (for certificate footer)
+  sid?:                 string;
   // Certificate display
   commitmentText:       string;
-  certificateMetrics:   CertificateMetric[];  // Up to 6 cells
-  committedDate:        number;               // Unix timestamp (s)
-  deadline:             number;               // Unix timestamp (s)
-  achievedDate:         number;               // Unix timestamp (s)
-  daysEarly:            number;               // positive = early, negative = late
+  certificateMetrics:   CertificateMetric[];
+  committedDate:        number;
+  deadline:             number;
+  achievedDate:         number;
+  daysEarly:            number;
   amended?:             boolean;
   originalText?:        string;
   // Difficulty inputs
-  commitmentThresholds: CommitmentThresholds; // numeric thresholds the agent set
-  historicalRecords:    HistoricalRecord[];   // existing achievements for percentile comparison
+  commitmentThresholds: CommitmentThresholds;
+  historicalRecords:    HistoricalRecord[];
+  // Execution inputs — actual measured values from the verifier
+  // Optional: if not provided, executionScore is skipped (0 on certificate)
+  actualValues?:        ActualValues;
 }
 
 export interface AttestAchievementResult {
@@ -72,6 +81,7 @@ export interface AttestAchievementResult {
   nftTxHash?:         string;
   difficulty?:        number;
   bootstrapped?:      boolean;
+  executionScore?:    number;
   error?:             string;
 }
 
@@ -98,6 +108,7 @@ export async function attestAchievement(
     originalText   = '',
     commitmentThresholds,
     historicalRecords,
+    actualValues,
   } = params;
 
   console.log(`[attest-achievement] ${claimType} onTime=${onTime} agent=${agentId}`);
@@ -113,7 +124,20 @@ export async function attestAchievement(
       `metrics=[${diffResult.breakdown.metricsScored.join(',')}]`
     );
 
-    // ── 2. Issue EAS attestation ──────────────────────────────────────────
+    // ── 2. Compute execution score (display-only until schema v2) ─────────
+    const execResult = actualValues
+      ? computeExecution(claimType, commitmentThresholds, actualValues)
+      : null;
+
+    if (execResult) {
+      console.log(
+        `[attest-achievement] executionScore=${execResult.executionScore} ` +
+        `metrics=[${execResult.breakdown.metricsScored.join(',')}] ` +
+        `headrooms=${JSON.stringify(execResult.breakdown.headrooms)}`
+      );
+    }
+
+    // ── 3. Issue EAS attestation ──────────────────────────────────────────
     const account      = privateKeyToAccount(privateKey as `0x${string}`);
     const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) });
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
@@ -132,6 +156,7 @@ export async function attestAchievement(
       { name: 'difficulty',        value: diffResult.difficulty,             type: 'uint8'  },
       { name: 'difficultyVersion', value: diffResult.difficultyVersion,      type: 'uint8'  },
       { name: 'bootstrapped',      value: diffResult.bootstrapped,           type: 'bool'   },
+      // executionScore not yet in schema — added in schema v2
     ]);
 
     const txResponse = await eas.attest({
@@ -156,29 +181,29 @@ export async function attestAchievement(
       timeout:         90_000,
     });
 
-    // EAS UID is emitted as the first topic of the Attested event
     const achievementUID =
       (txReceipt.logs?.[0]?.topics?.[1] as string | undefined) ?? achievementTx;
 
     console.log('[attest-achievement] ✅ EAS attestation mined:', achievementTx);
     console.log('[attest-achievement]    UID:', achievementUID);
 
-    // ── 3. Mint Badge NFT ─────────────────────────────────────────────────
+    // ── 4. Mint Badge NFT ─────────────────────────────────────────────────
     const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
     const label    = claimTypeToLabel(claimType);
     const imageUri = buildCertificateUrl(baseUrl, {
       claimType,
       commitmentText,
-      metrics:     certificateMetrics,
+      metrics:        certificateMetrics,
       committedDate,
       deadline,
       achievedDate,
       daysEarly,
       agentId,
       sid,
-      txHash:      achievementTx,
-      uid:         achievementUID,
-      difficulty:  diffResult.difficulty,
+      txHash:         achievementTx,
+      uid:            achievementUID,
+      difficulty:     diffResult.difficulty,
+      executionScore: execResult?.executionScore ?? 0,
       amended,
       originalText,
     });
@@ -194,6 +219,7 @@ export async function attestAchievement(
       nftTxHash:         nftReceipt.txHash,
       difficulty:        diffResult.difficulty,
       bootstrapped:      diffResult.bootstrapped,
+      executionScore:    execResult?.executionScore,
     };
 
   } catch (err: unknown) {
@@ -217,6 +243,7 @@ interface CertUrlParams {
   txHash:         string;
   uid:            string;
   difficulty:     number;
+  executionScore: number;
   amended:        boolean;
   originalText:   string;
 }
@@ -235,6 +262,7 @@ function buildCertificateUrl(baseUrl: string, p: CertUrlParams): string {
     txHash:         p.txHash,
     uid:            p.uid,
     difficulty:     String(p.difficulty),
+    executionScore: String(p.executionScore),
   });
   if (p.amended) {
     params.set('amended', 'true');

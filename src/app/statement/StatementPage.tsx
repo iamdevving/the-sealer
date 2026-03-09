@@ -1,8 +1,8 @@
 'use client';
-// src/app/card/CardPage.tsx
-// Interactive viewer for the Statement Card (with optional image attachment).
-// Pairs with /api/card SVG endpoint.
-import { useState, useRef, useEffect } from 'react';
+// src/app/statement/StatementPage.tsx
+// Interactive viewer for the Statement Card (no image attachment).
+// Pairs with /api/statement SVG endpoint.
+import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 const THEMES: Record<string, {
@@ -10,17 +10,17 @@ const THEMES: Record<string, {
   accent: string; accentDim: string; accentRgb: string;
   bodyText: string; bodyTextDim: string;
   statBg: string; statBorder: string;
-  bandBg: string; border: string; uploadBg: string; dark: boolean;
+  bandBg: string; border: string; dark: boolean;
 }> = {
-  'circuit-anim': { bg:'#081420', headerBg:'#04090f', headerText:'#00e5ff', accent:'#00e5ff', accentDim:'#1a5060', accentRgb:'0,229,255', bodyText:'#d0eef5', bodyTextDim:'#7ab8cc', statBg:'#0a1f32', statBorder:'#0d3545', bandBg:'#03070d', border:'#0d3040', uploadBg:'#04090f', dark:true },
-  'circuit':      { bg:'#08121e', headerBg:'#030a12', headerText:'#00bcd4', accent:'#00bcd4', accentDim:'#0d3a42', accentRgb:'0,188,212', bodyText:'#cce8ee', bodyTextDim:'#5a9aa8', statBg:'#091c2a', statBorder:'#0d3040', bandBg:'#020608', border:'#0d3040', uploadBg:'#030a12', dark:true },
-  'parchment':    { bg:'#f2ead8', headerBg:'#8b1a1a', headerText:'#ffffff', accent:'#8b1a1a', accentDim:'#c9b882', accentRgb:'139,26,26', bodyText:'#0d0a07', bodyTextDim:'#3a2a2a', statBg:'#ede6d4', statBorder:'#c9b882', bandBg:'#f2ead8', border:'#c9b882', uploadBg:'#ede6d4', dark:false },
-  'aurora':       { bg:'#080c1a', headerBg:'#04030e', headerText:'#a78bfa', accent:'#a78bfa', accentDim:'#3a2a70', accentRgb:'167,139,250', bodyText:'#ddd6fe', bodyTextDim:'#7060a0', statBg:'#0a081c', statBorder:'#201840', bandBg:'#04030c', border:'#201840', uploadBg:'#04030e', dark:true },
-  'base':         { bg:'#eef2ff', headerBg:'#0052ff', headerText:'#ffffff', accent:'#0052ff', accentDim:'#93b4f5', accentRgb:'0,82,255', bodyText:'#0d1b2a', bodyTextDim:'#3a5080', statBg:'#d8e4ff', statBorder:'#93b4f5', bandBg:'#dce8ff', border:'#93b4f5', uploadBg:'#dce8ff', dark:false },
-  'gold':         { bg:'#0e0b06', headerBg:'#070503', headerText:'#d4af37', accent:'#d4af37', accentDim:'#3a2e10', accentRgb:'212,175,55', bodyText:'#e8ddc0', bodyTextDim:'#8a7a50', statBg:'#120e07', statBorder:'#2a2010', bandBg:'#050300', border:'#2a2010', uploadBg:'#070503', dark:true },
-  'silver':       { bg:'#0c0c10', headerBg:'#070709', headerText:'#c0c8d8', accent:'#c0c8d8', accentDim:'#2a3040', accentRgb:'192,200,216', bodyText:'#e0e8f0', bodyTextDim:'#6070a0', statBg:'#101018', statBorder:'#2a3040', bandBg:'#070709', border:'#2a3040', uploadBg:'#070709', dark:true },
-  'bronze':       { bg:'#0e0803', headerBg:'#080400', headerText:'#cd7f32', accent:'#cd7f32', accentDim:'#3a2010', accentRgb:'205,127,50', bodyText:'#e8d0b0', bodyTextDim:'#806040', statBg:'#120a04', statBorder:'#2a1808', bandBg:'#050200', border:'#2a1808', uploadBg:'#080400', dark:true },
-  'bitcoin':      { bg:'#f7931a', headerBg:'#c97a10', headerText:'#ffffff', accent:'#ffffff', accentDim:'rgba(255,255,255,0.4)', accentRgb:'255,255,255', bodyText:'#1a0800', bodyTextDim:'#5a3010', statBg:'rgba(0,0,0,0.15)', statBorder:'rgba(255,255,255,0.2)', bandBg:'#c97a10', border:'rgba(255,255,255,0.25)', uploadBg:'rgba(0,0,0,0.1)', dark:false },
+  'circuit-anim': { bg:'#081420', headerBg:'#04090f', headerText:'#00e5ff', accent:'#00e5ff', accentDim:'#1a5060', accentRgb:'0,229,255', bodyText:'#d0eef5', bodyTextDim:'#7ab8cc', statBg:'#0a1f32', statBorder:'#0d3545', bandBg:'#03070d', border:'#0d3040', dark:true },
+  'circuit':      { bg:'#08121e', headerBg:'#030a12', headerText:'#00bcd4', accent:'#00bcd4', accentDim:'#0d3a42', accentRgb:'0,188,212', bodyText:'#cce8ee', bodyTextDim:'#5a9aa8', statBg:'#091c2a', statBorder:'#0d3040', bandBg:'#020608', border:'#0d3040', dark:true },
+  'parchment':    { bg:'#f2ead8', headerBg:'#8b1a1a', headerText:'#ffffff', accent:'#8b1a1a', accentDim:'#c9b882', accentRgb:'139,26,26', bodyText:'#0d0a07', bodyTextDim:'#3a2a2a', statBg:'#ede6d4', statBorder:'#c9b882', bandBg:'#f2ead8', border:'#c9b882', dark:false },
+  'aurora':       { bg:'#080c1a', headerBg:'#04030e', headerText:'#a78bfa', accent:'#a78bfa', accentDim:'#3a2a70', accentRgb:'167,139,250', bodyText:'#ddd6fe', bodyTextDim:'#7060a0', statBg:'#0a081c', statBorder:'#201840', bandBg:'#04030c', border:'#201840', dark:true },
+  'base':         { bg:'#eef2ff', headerBg:'#0052ff', headerText:'#ffffff', accent:'#0052ff', accentDim:'#93b4f5', accentRgb:'0,82,255', bodyText:'#0d1b2a', bodyTextDim:'#3a5080', statBg:'#d8e4ff', statBorder:'#93b4f5', bandBg:'#dce8ff', border:'#93b4f5', dark:false },
+  'gold':         { bg:'#0e0b06', headerBg:'#070503', headerText:'#d4af37', accent:'#d4af37', accentDim:'#3a2e10', accentRgb:'212,175,55', bodyText:'#e8ddc0', bodyTextDim:'#8a7a50', statBg:'#120e07', statBorder:'#2a2010', bandBg:'#050300', border:'#2a2010', dark:true },
+  'silver':       { bg:'#0c0c10', headerBg:'#070709', headerText:'#c0c8d8', accent:'#c0c8d8', accentDim:'#2a3040', accentRgb:'192,200,216', bodyText:'#e0e8f0', bodyTextDim:'#6070a0', statBg:'#101018', statBorder:'#2a3040', bandBg:'#070709', border:'#2a3040', dark:true },
+  'bronze':       { bg:'#0e0803', headerBg:'#080400', headerText:'#cd7f32', accent:'#cd7f32', accentDim:'#3a2010', accentRgb:'205,127,50', bodyText:'#e8d0b0', bodyTextDim:'#806040', statBg:'#120a04', statBorder:'#2a1808', bandBg:'#050200', border:'#2a1808', dark:true },
+  'bitcoin':      { bg:'#f7931a', headerBg:'#c97a10', headerText:'#ffffff', accent:'#ffffff', accentDim:'rgba(255,255,255,0.4)', accentRgb:'255,255,255', bodyText:'#1a0800', bodyTextDim:'#5a3010', statBg:'rgba(0,0,0,0.15)', statBorder:'rgba(255,255,255,0.2)', bandBg:'#c97a10', border:'rgba(255,255,255,0.25)', dark:false },
 };
 
 function formatDate(d: Date) {
@@ -30,63 +30,34 @@ function truncateHash(h: string) {
   return h ? '0x' + h.slice(2, 6) + '…' + h.slice(-4) : '0x????…????';
 }
 
-export default function CardPage() {
+export default function StatementPage() {
   const searchParams = useSearchParams();
-  const theme      = searchParams.get('theme') || 'circuit-anim';
-  const statement  = searchParams.get('statement') || searchParams.get('achievement') || 'Verified Statement';
-  const agentId    = searchParams.get('agentId') || '????';
-  const txHash     = searchParams.get('txHash') || '';
-  const chain      = searchParams.get('chain') || 'Base';
+  const theme     = searchParams.get('theme') || 'circuit-anim';
+  const statement = searchParams.get('statement') || 'Verified Statement';
+  const agentId   = searchParams.get('agentId') || '????';
+  const txHash    = searchParams.get('txHash') || '';
+  const chain     = searchParams.get('chain') || 'Base';
 
-  const t          = THEMES[theme] ?? THEMES['circuit-anim'];
-  const uid        = truncateHash(txHash);
-  const dateStr    = formatDate(new Date());
+  const t           = THEMES[theme] ?? THEMES['circuit-anim'];
+  const uid         = truncateHash(txHash);
+  const dateStr     = formatDate(new Date());
   const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
 
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [copied, setCopied]       = useState(false);
   const [uidCopied, setUidCopied] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Persist upload per TX hash
-  useEffect(() => {
-    if (txHash) {
-      try {
-        const saved = localStorage.getItem(`sealer-card-img-${txHash}`);
-        if (saved) setUploadedImage(saved);
-      } catch { /* storage unavailable */ }
-    }
-  }, [txHash]);
-
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string;
-      setUploadedImage(result);
-      if (txHash) {
-        try { localStorage.setItem(`sealer-card-img-${txHash}`, result); } catch { /* ok */ }
-      }
-    };
-    reader.readAsDataURL(file);
-  }
 
   function handleShare() {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
   function handleCopyUid() {
     navigator.clipboard.writeText(txHash || uid);
     setUidCopied(true);
     setTimeout(() => setUidCopied(false), 2000);
   }
 
-  // SVG download URL — passes imageUrl if we have one uploaded (can't pass base64 in URL,
-  // so for downloaded SVG we omit the image; the interactive page shows it instead)
-  const svgUrl = `/api/card?theme=${theme}&statement=${encodeURIComponent(statement)}&agentId=${agentId}&txHash=${txHash}&chain=${chain}`;
+  const svgUrl = `/api/statement?theme=${theme}&statement=${encodeURIComponent(statement)}&agentId=${agentId}&txHash=${txHash}&chain=${chain}`;
 
   return (
     <>
@@ -97,17 +68,15 @@ export default function CardPage() {
           background: ${t.dark ? '#020408' : '#c8d0da'};
           min-height: 100vh;
           display: flex; align-items: center; justify-content: center;
-          font-family: 'Space Mono', monospace;
-          padding: 24px;
+          font-family: 'Space Mono', monospace; padding: 24px;
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; }
 
-        /* Card shell */
         .card {
           width: 100%; max-width: 560px;
           background: ${t.bg}; border: 1px solid ${t.border}; border-radius: 14px;
           overflow: hidden; position: relative;
-          box-shadow: 0 0 60px rgba(${t.accentRgb},0.08), 0 20px 60px rgba(0,0,0,0.4);
+          box-shadow: 0 0 60px rgba(${t.accentRgb},.08), 0 20px 60px rgba(0,0,0,.4);
         }
 
         /* Circuit animation */
@@ -126,7 +95,6 @@ export default function CardPage() {
         @keyframes fadeNode { to { opacity: 0.6; } }
         ` : ''}
 
-        /* Header */
         .card-header {
           background: ${t.headerBg}; padding: 10px 22px;
           display: flex; justify-content: space-between; align-items: center;
@@ -137,39 +105,25 @@ export default function CardPage() {
         .header-uid:hover { color: ${t.accent}; }
         .dashes { height: 3px; background: repeating-linear-gradient(90deg,${t.accent} 0,${t.accent} 7px,transparent 7px,transparent 11px); opacity:.5; }
 
-        /* Upper: stamp col + upload */
-        .upper { display: flex; min-height: 216px; }
-        .stamp-col {
-          width: 150px; flex-shrink: 0;
+        /* Stamp area — large, centred, no upload zone */
+        .stamp-area {
+          background: ${t.statBg};
+          opacity: 0.95;
+          border-bottom: 1px solid ${t.statBorder};
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          padding: 16px 12px; gap: 8px;
+          padding: 28px 22px 24px;
+          gap: 10px; position: relative; overflow: hidden;
         }
-        .stamp-img { width: 92px; height: 92px; filter: drop-shadow(0 4px 16px rgba(${t.accentRgb},.2)); }
-        .stamp-label { font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 2px; text-align: center; }
+        /* The SVG endpoint renders the stamp embedded — we show it as an <img> */
+        .stamp-preview {
+          width: 140px; height: 140px;
+          filter: drop-shadow(0 6px 24px rgba(${t.accentRgb},.2));
+        }
+        .stamp-subtitle { font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 3px; opacity: .7; }
         .chain-pill {
-          background: ${t.statBg}; border: .8px solid ${t.accent}; border-radius: 10px;
-          padding: 3px 10px; font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 1px;
+          background: ${t.bg}; border: .8px solid ${t.accent}; border-radius: 10px;
+          padding: 3px 12px; font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 1px;
         }
-
-        /* Upload zone */
-        .upload-zone {
-          flex: 1; margin: 12px 12px 12px 0;
-          border: 1.2px dashed ${t.accentDim}; border-radius: 8px;
-          background: ${t.uploadBg}; display: flex; align-items: center; justify-content: center;
-          cursor: pointer; overflow: hidden; transition: border-color .2s, box-shadow .2s; position: relative;
-        }
-        .upload-zone:hover { border-color: ${t.accent}; box-shadow: inset 0 0 20px rgba(${t.accentRgb},.05); }
-        .upload-placeholder { text-align: center; pointer-events: none; }
-        .upload-placeholder p { font-size: 9px; color: ${t.accentDim}; opacity: .5; letter-spacing: 1px; }
-        .upload-placeholder small { font-size: 7px; color: ${t.accentDim}; opacity: .28; letter-spacing: .5px; }
-        .upload-zone img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-        .upload-overlay {
-          position: absolute; inset: 0; background: rgba(0,0,0,.5);
-          display: flex; align-items: center; justify-content: center;
-          opacity: 0; transition: opacity .2s; border-radius: 6px;
-        }
-        .upload-zone:hover .upload-overlay { opacity: 1; }
-        .upload-overlay span { font-size: 8px; color: #fff; letter-spacing: 1.5px; font-weight: 700; }
 
         /* Divider */
         .divider { padding: 0 22px; display: flex; align-items: center; gap: 12px; }
@@ -177,15 +131,15 @@ export default function CardPage() {
         .div-ornament { font-size: 10px; color: ${t.accentDim}; letter-spacing: 10px; opacity:.6; padding: 8px 0; }
 
         /* Statement text */
-        .statement-section { padding: 8px 22px 20px; text-align: center; }
-        .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 12px; }
+        .statement-section { padding: 8px 28px 24px; text-align: center; }
+        .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 14px; }
         .statement-text {
           font-family: 'Cormorant Garamond', Georgia, serif;
-          font-size: 18px; font-style: italic; color: ${t.bodyTextDim};
-          line-height: 1.55; max-width: 420px; margin: 0 auto;
+          font-size: 20px; font-style: italic; color: ${t.bodyTextDim};
+          line-height: 1.6; max-width: 460px; margin: 0 auto;
         }
 
-        /* Stats row */
+        /* Stats */
         .stats-bar {
           margin: 0 22px 16px; border: 1px solid ${t.statBorder}; border-radius: 4px;
           background: ${t.statBg}; display: grid; grid-template-columns: 1fr 1fr 1fr; overflow: hidden;
@@ -228,9 +182,8 @@ export default function CardPage() {
 
         @media (max-width: 520px) {
           body { padding: 12px; }
-          .stamp-col { width: 120px; padding: 12px 8px; }
-          .stamp-img { width: 76px; height: 76px; }
-          .statement-text { font-size: 15px; }
+          .stamp-preview { width: 110px; height: 110px; }
+          .statement-text { font-size: 17px; }
           .actions { flex-wrap: wrap; }
         }
       `}</style>
@@ -238,29 +191,22 @@ export default function CardPage() {
       <div className="page-wrap">
         <div className="card">
 
-          {/* Circuit animation overlay */}
+          {/* Circuit overlay */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 530" preserveAspectRatio="none">
               <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.8" fill="none"
                 opacity={theme==='circuit-anim'?'0.3':'0.18'}>
                 <polyline className="trace" points="0,70 42,70 56,84 56,140"/>
-                <polyline className="trace" points="0,180 35,180 48,193 48,230"/>
                 <polyline className="trace" points="0,310 52,310 52,290 70,290"/>
                 <polyline className="trace" points="560,70 518,70 504,84 504,140"/>
-                <polyline className="trace" points="560,180 525,180 512,193 512,230"/>
                 <polyline className="trace" points="560,310 508,310 494,290 476,290"/>
-                <polyline className="trace" points="200,0 200,36 184,52 140,52"/>
-                <polyline className="trace" points="360,0 360,36 376,52 420,52"/>
               </g>
               <g fill={theme==='circuit-anim'?'#00e5ff':'#00bcd4'}>
                 <circle className="node" cx="56" cy="140" r="3"/>
-                <circle className="node" cx="48" cy="230" r="2.5"/>
                 <circle className="node" cx="70" cy="290" r="3"/>
                 <circle className="node" cx="504" cy="140" r="3"/>
-                <circle className="node" cx="512" cy="230" r="2.5"/>
                 <circle className="node" cx="476" cy="290" r="3"/>
-                <circle className="node" cx="140" cy="52" r="3"/>
               </g>
             </svg>
           )}
@@ -274,47 +220,14 @@ export default function CardPage() {
           </div>
           <div className="dashes"/>
 
-          {/* Upper: stamp + upload */}
-          <div className="upper">
-            <div className="stamp-col">
-              {/* Uses the SVG API which now renders STAMP_STATEMENT from assets.ts */}
-              <img className="stamp-img"
-                src={`/api/card?theme=${theme}&statement=x&agentId=0x0000&txHash=0x0`}
-                alt="Statement stamp"
-                style={{opacity:0, position:'absolute'}}
-              />
-              {/* Render stamp directly via the statement SVG crop — simpler: just show a themed badge */}
-              <div style={{
-                width:92, height:92,
-                background: t.statBg,
-                border: `1px solid ${t.accent}`,
-                borderRadius: 8,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                flexDirection:'column', gap:4,
-              }}>
-                <div style={{fontFamily:'monospace',fontSize:7,fontWeight:700,color:t.accent,letterSpacing:2,textAlign:'center',lineHeight:1.4}}>
-                  REGISTERED<br/>STATEMENT
-                </div>
-              </div>
-              <div className="stamp-label">Statement</div>
-              <div className="chain-pill">{chain} · EAS</div>
-            </div>
-
-            <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
-              {uploadedImage ? (
-                <>
-                  <img src={uploadedImage} alt="Attachment"/>
-                  <div className="upload-overlay"><span>Change Image</span></div>
-                </>
-              ) : (
-                <div className="upload-placeholder">
-                  <p>NO ATTACHMENT</p>
-                  <small>PNL CARD · SCREENSHOT · CHART</small>
-                </div>
-              )}
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*"
-              style={{display:'none'}} onChange={handleUpload}/>
+          {/* Stamp area — no upload, stamp is the hero */}
+          <div className="stamp-area">
+            {/* Render stamp from the SVG API as an image — it will show the REGISTERED STATEMENT PNG */}
+            <img className="stamp-preview" src={svgUrl} alt="Registered Statement stamp"
+              style={{borderRadius:8, objectFit:'cover', objectPosition:'center top'}}
+            />
+            <div className="stamp-subtitle">REGISTERED STATEMENT</div>
+            <div className="chain-pill">{chain} · EAS</div>
           </div>
 
           {/* Divider */}
@@ -324,7 +237,7 @@ export default function CardPage() {
             <div className="div-line"/>
           </div>
 
-          {/* Statement */}
+          {/* Statement text */}
           <div className="statement-section">
             <div className="statement-label">Statement</div>
             <div className="statement-text">{statement}</div>
@@ -363,7 +276,7 @@ export default function CardPage() {
         {/* Actions */}
         <div className="actions">
           <button className="btn btn-primary" onClick={handleShare}>
-            {copied ? '✓ Link Copied!' : '⇧ Share Card'}
+            {copied ? '✓ Link Copied!' : '⇧ Share Statement'}
           </button>
           <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
             ⬡ View on Basescan

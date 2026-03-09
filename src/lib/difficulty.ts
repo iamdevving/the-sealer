@@ -46,6 +46,9 @@ export interface ClaimConfig {
 // Values are numeric. Boolean flags (e.g. ciPassing) are excluded from scoring.
 export type CommitmentThresholds = Record<string, number>;
 
+// Actual values measured by the verifier — same keys as CommitmentThresholds.
+export type ActualValues = Record<string, number>;
+
 // A single verified achievement record from EAS / your dataset.
 // Only the threshold values matter for percentile computation.
 export type HistoricalRecord = CommitmentThresholds;
@@ -61,34 +64,39 @@ export interface DifficultyResult {
   };
 }
 
+export interface ExecutionResult {
+  executionScore: number;   // 0–100
+  breakdown: {
+    metricsScored: string[];                          // which metrics were scored
+    headrooms: Record<string, number>;                // per-metric headroom 0–100
+    weightedAverage: number;                          // before clamp/round
+  };
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const DIFFICULTY_VERSION = 1;
 const MIN_SAMPLE_SIZE = 50; // minimum real records before leaving bootstrap mode
 
 // ── Claim type configurations ─────────────────────────────────────────────────
-// Each entry lists the scoreable metrics and their properties.
-// Only metrics present in the agent's CommitmentThresholds are scored —
-// if an agent didn't commit to a metric, it doesn't factor in.
 
 export const CLAIM_CONFIGS: Record<string, ClaimConfig> = {
 
   x402_payment_reliability: {
     maxMultiplier: 1.5,
     metrics: [
-      { key: 'minSuccessRate',         weight: 1.2 },  // core reliability signal
-      { key: 'minTotalUSD',            weight: 1.0 },  // volume commitment
-      { key: 'requireDistinctRecipients', weight: 0.9 }, // breadth of payments
-      { key: 'maxGapHours',            weight: 1.1, inverted: true }, // consistency
+      { key: 'minSuccessRate',            weight: 1.2 },
+      { key: 'minTotalUSD',               weight: 1.0 },
+      { key: 'requireDistinctRecipients', weight: 0.9 },
+      { key: 'maxGapHours',               weight: 1.1, inverted: true },
     ],
   },
 
   code_software_delivery: {
     maxMultiplier: 1.4,
     metrics: [
-      { key: 'minMergedPRs',  weight: 1.2 },
-      { key: 'minCommits',    weight: 0.9 },
-      // ciPassing is binary/required — not scored numerically
+      { key: 'minMergedPRs', weight: 1.2 },
+      { key: 'minCommits',   weight: 0.9 },
     ],
   },
 
@@ -104,27 +112,21 @@ export const CLAIM_CONFIGS: Record<string, ClaimConfig> = {
     metrics: [
       { key: 'minTradeCount',  weight: 1.0 },
       { key: 'minVolumeUSD',   weight: 1.1 },
-      { key: 'minPnlPercent',  weight: 1.3 }, // hardest to commit to reliably
+      { key: 'minPnlPercent',  weight: 1.3 },
     ],
   },
 
   social_media_growth: {
     maxMultiplier: 1.4,
     metrics: [
-      { key: 'minFollowerGrowth',   weight: 1.0 },
-      { key: 'minEngagementRate',   weight: 1.1 },
+      { key: 'minFollowerGrowth',  weight: 1.0 },
+      { key: 'minEngagementRate',  weight: 1.1 },
     ],
   },
 
 };
 
 // ── Bootstrap distributions ───────────────────────────────────────────────────
-// Derived from real-world research (see session notes for sources).
-// Format: { p50, p90 } — we fit a simple log-normal to these two points
-// and compute percentiles from that approximation.
-//
-// For inverted metrics, p50 and p90 represent the "easier" (higher) end —
-// the algorithm handles the flip automatically.
 
 interface Distribution {
   p50: number;
@@ -134,79 +136,55 @@ interface Distribution {
 export const BOOTSTRAP_DISTRIBUTIONS: Record<string, Record<string, Distribution>> = {
 
   x402_payment_reliability: {
-    minSuccessRate:            { p50: 92,    p90: 98    }, // %
-    minTotalUSD:               { p50: 500,   p90: 10000 }, // USD
-    requireDistinctRecipients: { p50: 8,     p90: 50    }, // count
-    maxGapHours:               { p50: 96,    p90: 24    }, // hours (inverted: lower = harder)
+    minSuccessRate:            { p50: 92,    p90: 98    },
+    minTotalUSD:               { p50: 500,   p90: 10000 },
+    requireDistinctRecipients: { p50: 8,     p90: 50    },
+    maxGapHours:               { p50: 96,    p90: 24    },
   },
 
   code_software_delivery: {
-    minMergedPRs: { p50: 4,   p90: 20  }, // PRs per window
-    minCommits:   { p50: 25,  p90: 120 }, // commits per window
+    minMergedPRs: { p50: 4,   p90: 20  },
+    minCommits:   { p50: 25,  p90: 120 },
   },
 
   website_app_delivery: {
-    minPerformanceScore: { p50: 55, p90: 88 }, // PageSpeed 0–100
+    minPerformanceScore: { p50: 55, p90: 88 },
   },
 
   defi_trading_performance: {
-    minTradeCount:  { p50: 15,    p90: 100   }, // trades per window
-    minVolumeUSD:   { p50: 2000,  p90: 30000 }, // USD
-    minPnlPercent:  { p50: 0,     p90: 15    }, // %
+    minTradeCount:  { p50: 15,    p90: 100   },
+    minVolumeUSD:   { p50: 2000,  p90: 30000 },
+    minPnlPercent:  { p50: 0,     p90: 15    },
   },
 
   social_media_growth: {
-    minFollowerGrowth:  { p50: 3,   p90: 25 }, // % growth
-    minEngagementRate:  { p50: 1.5, p90: 6  }, // %
+    minFollowerGrowth:  { p50: 3,   p90: 25 },
+    minEngagementRate:  { p50: 1.5, p90: 6  },
   },
 
 };
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
 
-/**
- * Fit a log-normal distribution from two percentile points (p50, p90)
- * and return the percentile of a given value.
- *
- * Log-normal CDF: Φ((ln(x) - μ) / σ)
- * From p50 and p90:
- *   μ = ln(p50)
- *   σ = (ln(p90) - ln(p50)) / 1.2816   (z-score of 90th percentile)
- */
 function lognormalPercentile(value: number, dist: Distribution): number {
   const { p50, p90 } = dist;
-
-  // Edge cases
   if (p50 <= 0 || p90 <= 0 || value <= 0) {
-    // Fall back to linear interpolation for zero/negative domains
     return linearPercentile(value, dist);
   }
-
   const mu    = Math.log(p50);
   const sigma = (Math.log(p90) - Math.log(p50)) / 1.2816;
-
   if (sigma <= 0) return value >= p50 ? 75 : 25;
-
   const z = (Math.log(value) - mu) / sigma;
   return normalCDF(z) * 100;
 }
 
-/**
- * Linear percentile fallback for metrics that can be zero or negative (e.g. minPnlPercent).
- * Maps linearly between p50 → 50th and p90 → 90th percentile,
- * extrapolating beyond those bounds.
- */
 function linearPercentile(value: number, dist: Distribution): number {
   const { p50, p90 } = dist;
   if (p90 === p50) return 50;
-  // Slope: 40 percentile points over the p50→p90 range
   const slope = 40 / (p90 - p50);
   return clamp(50 + slope * (value - p50), 1, 99);
 }
 
-/**
- * Standard normal CDF approximation (Abramowitz & Stegun, max error 7.5e-8).
- */
 function normalCDF(z: number): number {
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const poly =
@@ -225,10 +203,6 @@ function clamp(value: number, min: number, max: number): number {
 
 // ── Percentile from real data ─────────────────────────────────────────────────
 
-/**
- * Compute empirical percentile of a value within a sorted array of historical values.
- * Uses linear interpolation between ranks.
- */
 function empiricalPercentile(value: number, sortedValues: number[]): number {
   if (sortedValues.length === 0) return 50;
   const n = sortedValues.length;
@@ -242,12 +216,6 @@ function empiricalPercentile(value: number, sortedValues: number[]): number {
 
 // ── Breadth multiplier ────────────────────────────────────────────────────────
 
-/**
- * How many of the possible metrics for this claim type did the agent commit to?
- * More metrics = harder = higher multiplier.
- *
- * Scales linearly from 1.0 (1 metric) to maxMultiplier (all metrics).
- */
 function computeBreadthMultiplier(
   committedMetricKeys: string[],
   config: ClaimConfig,
@@ -256,26 +224,13 @@ function computeBreadthMultiplier(
   const committed     = committedMetricKeys.filter(k =>
     config.metrics.some(m => m.key === k)
   ).length;
-
   if (totalPossible <= 1 || committed <= 1) return 1.0;
-
-  const fraction = (committed - 1) / (totalPossible - 1); // 0 → 1
+  const fraction = (committed - 1) / (totalPossible - 1);
   return 1.0 + fraction * (config.maxMultiplier - 1.0);
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── computeDifficulty ─────────────────────────────────────────────────────────
 
-/**
- * Compute difficulty score for an achievement.
- *
- * @param claimType        e.g. 'x402_payment_reliability'
- * @param thresholds       The numeric thresholds the agent committed to
- *                         (only keys present here are scored)
- * @param historicalData   All verified achievement records for this claim type
- *                         from EAS. Pass [] to force bootstrap mode.
- *
- * @returns DifficultyResult with score 0–100 and breakdown for transparency
- */
 export function computeDifficulty(
   claimType: string,
   thresholds: CommitmentThresholds,
@@ -284,7 +239,6 @@ export function computeDifficulty(
 
   const config = CLAIM_CONFIGS[claimType];
   if (!config) {
-    // Unknown claim type — return neutral difficulty
     return {
       difficulty: 50,
       difficultyVersion: DIFFICULTY_VERSION,
@@ -296,7 +250,6 @@ export function computeDifficulty(
   const bootstrapped = historicalData.length < MIN_SAMPLE_SIZE;
   const metricsScored: string[] = [];
 
-  // Pre-sort historical values per metric key (ascending) for empirical percentile
   const sortedHistorical: Record<string, number[]> = {};
   if (!bootstrapped) {
     for (const mc of config.metrics) {
@@ -307,23 +260,20 @@ export function computeDifficulty(
     }
   }
 
-  // Score each metric the agent committed to
   let weightedPercentileSum = 0;
   let totalWeight = 0;
 
   for (const mc of config.metrics) {
     const value = thresholds[mc.key];
-    if (typeof value !== 'number') continue; // agent didn't commit to this metric
+    if (typeof value !== 'number') continue;
 
     metricsScored.push(mc.key);
     const weight = mc.weight ?? 1.0;
 
     let rawPercentile: number;
-
     if (bootstrapped) {
       const dist = BOOTSTRAP_DISTRIBUTIONS[claimType]?.[mc.key];
       if (!dist) continue;
-      // Use log-normal for positive domains, linear for mixed/zero
       rawPercentile = value >= 0 && dist.p50 > 0
         ? lognormalPercentile(value, dist)
         : linearPercentile(value, dist);
@@ -331,15 +281,12 @@ export function computeDifficulty(
       rawPercentile = empiricalPercentile(value, sortedHistorical[mc.key] ?? []);
     }
 
-    // Flip inverted metrics — lower threshold = harder commitment
     const percentile = mc.inverted ? 100 - rawPercentile : rawPercentile;
-
     weightedPercentileSum += percentile * weight;
     totalWeight += weight;
   }
 
   if (metricsScored.length === 0 || totalWeight === 0) {
-    // No scoreable metrics found — return neutral
     return {
       difficulty: 50,
       difficultyVersion: DIFFICULTY_VERSION,
@@ -348,36 +295,119 @@ export function computeDifficulty(
     };
   }
 
-  const percentileScore    = weightedPercentileSum / totalWeight;
-  const breadthMultiplier  = computeBreadthMultiplier(metricsScored, config);
-  const raw                = percentileScore * breadthMultiplier;
-  const difficulty         = clamp(Math.round(raw), 0, 100);
+  const percentileScore   = weightedPercentileSum / totalWeight;
+  const breadthMultiplier = computeBreadthMultiplier(metricsScored, config);
+  const raw               = percentileScore * breadthMultiplier;
+  const difficulty        = clamp(Math.round(raw), 0, 100);
 
   return {
     difficulty,
     difficultyVersion: DIFFICULTY_VERSION,
     bootstrapped,
     breakdown: {
-      percentileScore: Math.round(percentileScore),
-      breadthMultiplier: Math.round(breadthMultiplier * 100) / 100,
+      percentileScore:    Math.round(percentileScore),
+      breadthMultiplier:  Math.round(breadthMultiplier * 100) / 100,
       metricsScored,
     },
   };
 }
 
-// ── Usage in attest-achievement.ts ───────────────────────────────────────────
+// ── computeExecution ──────────────────────────────────────────────────────────
 //
-// import { computeDifficulty } from '@/lib/difficulty';
+// Measures how far above the committed thresholds the agent actually landed.
+// Pure metric headroom — independent of difficulty, independent of speed.
 //
-// // Fetch historical records for this claim type from EAS before attesting
-// const history = await fetchAchievementsByClaimType(claimType); // your EAS query
+// Formula per metric:
+//   normal:   headroom = clamp((actual - threshold) / |threshold|, 0, 1) × 100
+//   inverted: headroom = clamp((threshold - actual) / |threshold|, 0, 1) × 100
 //
-// const result = computeDifficulty(claimType, commitmentThresholds, history);
+// Final score = weighted average of headrooms, clamped 0–100.
 //
-// // Pass to EAS schema fields:
-// //   difficulty:        result.difficulty
-// //   difficultyVersion: result.difficultyVersion
-// //   bootstrapped:      result.bootstrapped
+// Notes:
+//   - Only metrics present in BOTH thresholds and actuals are scored.
+//   - A headroom of 0 means the agent just barely met the threshold.
+//   - A headroom of 100 means the agent doubled (or better) their threshold.
+//   - Score is display-only for now — add to EAS schema once schema v2 is deployed.
+
+export function computeExecution(
+  claimType: string,
+  thresholds: CommitmentThresholds,
+  actuals: ActualValues,
+): ExecutionResult {
+
+  const config = CLAIM_CONFIGS[claimType];
+  if (!config) {
+    return {
+      executionScore: 0,
+      breakdown: { metricsScored: [], headrooms: {}, weightedAverage: 0 },
+    };
+  }
+
+  const metricsScored: string[] = [];
+  const headrooms: Record<string, number> = {};
+  let weightedSum  = 0;
+  let totalWeight  = 0;
+
+  for (const mc of config.metrics) {
+    const threshold = thresholds[mc.key];
+    const actual    = actuals[mc.key];
+
+    // Both must be present and numeric
+    if (typeof threshold !== 'number' || typeof actual !== 'number') continue;
+
+    // Avoid division by zero — use absolute value of threshold as denominator
+    const denom = Math.abs(threshold);
+    if (denom === 0) continue;
+
+    let headroom: number;
+    if (mc.inverted) {
+      // Lower is better — how much below the threshold did we land?
+      // e.g. threshold = maxGapHours 48, actual = 24 → headroom = (48-24)/48 = 50
+      headroom = clamp((threshold - actual) / denom, 0, 1) * 100;
+    } else {
+      // Higher is better — how far above threshold did we land?
+      // e.g. threshold = minMergedPRs 5, actual = 8 → headroom = (8-5)/5 = 60
+      headroom = clamp((actual - threshold) / denom, 0, 1) * 100;
+    }
+
+    const weight = mc.weight ?? 1.0;
+    headrooms[mc.key] = Math.round(headroom);
+    metricsScored.push(mc.key);
+    weightedSum  += headroom * weight;
+    totalWeight  += weight;
+  }
+
+  if (metricsScored.length === 0 || totalWeight === 0) {
+    return {
+      executionScore: 0,
+      breakdown: { metricsScored: [], headrooms: {}, weightedAverage: 0 },
+    };
+  }
+
+  const weightedAverage = weightedSum / totalWeight;
+  const executionScore  = clamp(Math.round(weightedAverage), 0, 100);
+
+  return {
+    executionScore,
+    breakdown: {
+      metricsScored,
+      headrooms,
+      weightedAverage: Math.round(weightedAverage * 10) / 10,
+    },
+  };
+}
+
+// ── Usage ─────────────────────────────────────────────────────────────────────
 //
-// // Optionally store breakdown in a metadata field for transparency:
-// //   difficultyBreakdown: JSON.stringify(result.breakdown)
+// import { computeDifficulty, computeExecution } from '@/lib/difficulty';
+//
+// // Difficulty — at commitment verification time:
+// const diffResult = computeDifficulty(claimType, commitmentThresholds, history);
+//
+// // Execution — at achievement verification time, after verifier runs:
+// const execResult = computeExecution(claimType, commitmentThresholds, verifierActuals);
+//
+// // Both are display-only on certificate until schema v2 is deployed.
+// // Then wire in:
+// //   difficulty:      diffResult.difficulty
+// //   executionScore:  execResult.executionScore

@@ -2,12 +2,16 @@
 const EAS_GRAPHQL = 'https://base.easscan.org/graphql';
 
 export interface AttestationData {
-  uid: string;
-  txHash: string;
+  uid:       string;
+  txHash:    string;
   statement: string;
-  attester: string;
+  attester:  string;
   recipient: string;
-  time: number;
+  time:      number;
+  // Achievement schema fields (present when attestation is an achievement)
+  claimType?:  string;
+  difficulty?: number;
+  daysEarly?:  number | null;
 }
 
 async function queryEAS(query: string, variables: Record<string, string>) {
@@ -20,14 +24,33 @@ async function queryEAS(query: string, variables: Record<string, string>) {
   return res.json();
 }
 
+function getField(decoded: any[], name: string): any {
+  return decoded.find((f: any) => f.name === name)?.value?.value ?? undefined;
+}
+
 function parseAttestation(a: any): AttestationData | null {
   if (!a) return null;
-  let statement = 'Verified Statement';
+
+  let statement  = 'Verified Statement';
+  let claimType: string | undefined;
+  let difficulty: number | undefined;
+  let daysEarly:  number | null | undefined;
+
   try {
     const decoded = JSON.parse(a.decodedDataJson);
-    const field = decoded.find((f: any) => f.name === 'statement');
-    if (field?.value?.value) statement = field.value.value;
+
+    const statField = decoded.find((f: any) => f.name === 'statement');
+    if (statField?.value?.value) statement = statField.value.value;
+
+    claimType = getField(decoded, 'claimType');
+
+    const rawDiff = getField(decoded, 'difficulty');
+    if (rawDiff != null) difficulty = Number(rawDiff);
+
+    const rawDaysEarly = getField(decoded, 'daysEarly');
+    if (rawDaysEarly != null) daysEarly = Number(rawDaysEarly);
   } catch {}
+
   return {
     uid:       a.id,
     txHash:    a.txid,
@@ -35,6 +58,9 @@ function parseAttestation(a: any): AttestationData | null {
     attester:  a.attester,
     recipient: a.recipient,
     time:      Number(a.time),
+    claimType,
+    difficulty,
+    daysEarly,
   };
 }
 
