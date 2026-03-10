@@ -264,21 +264,26 @@ export async function GET(req: NextRequest) {
   // ── Stamp over commitment ID ──
   const stampSize = 80;
   const stampX    = 360 - stampSize + 20;
-  const stampY    = bottomY - stampSize + 18;
+  const stampY    = bottomY - stampSize + 28;  // moved down
   const stampImg  = `<image href="${STAMP_COMMITTED}" x="${stampX}" y="${stampY}"
     width="${stampSize}" height="${stampSize}" opacity="0.90"
     transform="rotate(8, ${stampX + stampSize / 2}, ${stampY + stampSize / 2})"/>`;
 
   // ── MARK_WHITE — logo in header top-right, above TX ──
-  const markImg = `<image href="${MARK_WHITE}" x="350" y="7" width="16" height="16" opacity="0.80"/>`;
+  // Logo: 22px, x=340 (a bit left of edge), y=6 — TX aligns to category row y=37
+  const markImg = `<image href="${MARK_WHITE}" x="338" y="6" width="22" height="22" opacity="0.82"/>`;
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="380" height="${totalH}" viewBox="0 0 380 ${totalH}"
   xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 
-  <!-- Card shell -->
+  <!-- Card shell — stroke only top+bottom, sides via explicit lines -->
   <rect width="380" height="${totalH}" rx="8" ry="8"
-    fill="${t.pageBg}" stroke="${t.border}" stroke-width="1"/>
+    fill="${t.pageBg}"/>
+
+  <!-- Outer border — full rect so corners round correctly -->
+  <rect width="380" height="${totalH}" rx="8" ry="8"
+    fill="none" stroke="${t.border}" stroke-width="1"/>
 
   <!-- Accent top bar -->
   <rect x="0" y="0" width="380" height="4" rx="4" fill="${t.accent}" opacity="0.95"/>
@@ -290,7 +295,8 @@ export async function GET(req: NextRequest) {
   <text x="22" y="37" font-family="monospace" font-size="5.5" letter-spacing="2"
     fill="${t.headerSub}">CATEGORY: ${claimLabel.toUpperCase()}</text>
   ${markImg}
-  <text x="358" y="41" font-family="monospace" font-size="5" letter-spacing="1"
+  <!-- TX aligned to category row -->
+  <text x="358" y="37" font-family="monospace" font-size="5" letter-spacing="1"
     fill="${t.headerSub}" text-anchor="end">TX: ${txShort}</text>
 
   <!-- Header bottom rule -->
@@ -321,11 +327,19 @@ export async function GET(req: NextRequest) {
 
   <!-- Footer -->
   <rect x="0" y="${footerY}" width="380" height="22"
-    fill="${t.footerBg}" rx="0 0 8 8"/>
+    fill="${t.footerBg}"/>
+  <!-- Footer top border -->
   <line x1="0" y1="${footerY}" x2="380" y2="${footerY}"
     stroke="${t.border}" stroke-width="0.8"/>
-  <line x1="0" y1="${totalH - 1}" x2="380" y2="${totalH - 1}"
-    stroke="${t.border}" stroke-width="0.8"/>
+  <!-- Left side border — full height -->
+  <line x1="0.5" y1="4" x2="0.5" y2="${totalH}"
+    stroke="${t.border}" stroke-width="1"/>
+  <!-- Right side border — full height -->
+  <line x1="379.5" y1="4" x2="379.5" y2="${totalH}"
+    stroke="${t.border}" stroke-width="1"/>
+  <!-- Bottom border -->
+  <line x1="0" y1="${totalH - 0.5}" x2="380" y2="${totalH - 0.5}"
+    stroke="${t.border}" stroke-width="1"/>
   <text x="22" y="${footerY + 14}" font-family="monospace" font-size="5"
     letter-spacing="1.5" fill="${t.accentDim}" opacity="0.8">THESEALER.XYZ</text>
   <text x="358" y="${footerY + 14}" font-family="monospace" font-size="5"
