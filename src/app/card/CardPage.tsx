@@ -323,13 +323,6 @@ export default function CardPage() {
             </div>
           </div>
 
-          <div className="footer-verified">
-            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
-            <div className="basescan-link">
-              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
-            </div>
-          </div>
-
           <div className="bottom-band">
             <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
