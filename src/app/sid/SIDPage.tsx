@@ -154,7 +154,7 @@ export default function SIDPage() {
           margin-left: auto; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 1px; white-space: nowrap;
         }
         .sid-title-row {
-          display: flex; align-items: center; justify-content: space-between;
+          display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
         }
         .sid-title {
           font-family: Georgia, serif; font-size: 24px; color: #fff; letter-spacing: 3px;
@@ -213,14 +213,15 @@ export default function SIDPage() {
           font-size: 7px; letter-spacing: 0.8px;
         }
 
-        /* Serial + stamp row */
+        /* Serial + stamp — stacked, right-aligned */
         .sid-serial-row {
-          display: flex; align-items: flex-end; justify-content: space-between;
+          display: flex; flex-direction: column; align-items: flex-end;
           padding: 8px 20px 16px;
           position: relative; z-index: 1;
         }
         .sid-serial {
           font-size: 9px; color: ${accent}; letter-spacing: 2px;
+          margin-bottom: 6px;
         }
         /* Stamp container — matches route's rotate(-12) */
         .stamp-wrap {
