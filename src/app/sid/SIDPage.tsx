@@ -2,7 +2,7 @@
 // src/app/sid/SIDPage.tsx
 import { useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { MARK_BLACK } from '@/lib/assets';
+import { MARK_BLACK, LOGO_B64, STAMP_BLUE_B64, STAMP_B64 } from '@/lib/assets';
 
 function truncateAddr(a: string) {
   if (!a || a === '????') return '—';
@@ -14,6 +14,31 @@ function formatDate(d: Date) {
 function makeSerial(id: string, yr: string) {
   const f = id.startsWith('0x') ? id.slice(2, 6).toUpperCase() : '????';
   return 'SID-' + yr + '-' + f;
+}
+
+// Inline SVG logos — identical to the route
+function SolanaLogo() {
+  return (
+    <svg width="20" height="18" viewBox="0 0 102 88" fill="none">
+      <defs>
+        <linearGradient id="solGrad" x1="8.5" y1="90" x2="89" y2="-3" gradientUnits="userSpaceOnUse">
+          <stop offset="0.08" stopColor="#9945FF"/>
+          <stop offset="0.5" stopColor="#5497D5"/>
+          <stop offset="0.97" stopColor="#19FB9B"/>
+        </linearGradient>
+      </defs>
+      <path d="M100.48 69.38L83.81 86.8c-.36.38-.8.68-1.29.89-.49.21-1.01.31-1.54.31H1.94c-.38 0-.75-.11-1.06-.31-.32-.2-.56-.49-.71-.83-.15-.34-.18-.71-.11-1.07.06-.36.23-.7.48-.97L17.21 67.41c.36-.38.8-.68 1.29-.89.49-.21 1.01-.31 1.54-.31h79.03c.38 0 .75.11 1.06.31.32.2.56.49.71.83.15.34.18.71.11 1.07-.06.36-.23.7-.48.97zM83.81 34.3c-.36-.38-.8-.68-1.29-.89-.49-.21-1.01-.31-1.54-.31H1.94c-.38 0-.75.11-1.06.31-.32.2-.56.49-.71.83-.15.34-.18.71-.11 1.07.06.36.23.7.48.97l16.69 17.42c.36.38.8.68 1.29.89.49.21 1.01.31 1.54.31h79.03c.38 0 .75-.11 1.06-.31.32-.2.56-.49.71-.83.15-.34.18-.71.11-1.07-.06-.36-.23-.7-.48-.97L83.81 34.3zM1.94 21.79h79.03c.53 0 1.05-.11 1.54-.31.49-.21.93-.51 1.29-.89L100.48 3.17c.26-.27.43-.61.49-.97.06-.36.02-.73-.11-1.07-.15-.34-.39-.62-.71-.83C99.82.11 99.44 0 99.06 0H20.03c-.53 0-1.05.11-1.54.31-.49.21-.93.51-1.29.89L.52 18.62c-.26.27-.43.61-.49.97-.06.36-.02.73.11 1.07.15.34.39.62.71.83.32.2.69.31 1.09.31z" fill="url(#solGrad)"/>
+    </svg>
+  );
+}
+
+function BaseLogo() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 111 111" fill="none">
+      <rect width="111" height="111" rx="20" fill="#0052FF"/>
+      <path d="M55.5 24C38.1 24 24 38.1 24 55.5S38.1 87 55.5 87c16 0 29.2-11.7 31.1-27.2H64v9.3h-8.4V55.5h31.6C87.1 38.7 73 24 55.5 24z" fill="white"/>
+    </svg>
+  );
 }
 
 export default function SIDPage() {
@@ -38,21 +63,16 @@ export default function SIDPage() {
   const ENTITY_LBL  = entityType === 'AI_AGENT' ? 'AI AGENT' : entityType === 'HUMAN' ? 'HUMAN' : 'UNKNOWN';
   const isDark      = themeName === 'dark';
 
-  // Local file import state (overrides imageUrl param when set)
   const [localImage, setLocalImage] = useState<string>('');
   const [copied, setCopied]         = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const displayImage = localImage || imageUrl;
 
-  // Build SVG API URL — if localImage is a data: URL it's too long for a GET param,
-  // so we only pass imageUrl param when it's a remote URL
   const svgImageParam = (!localImage && imageUrl) ? `&imageUrl=${encodeURIComponent(imageUrl)}` : '';
   const svgUrl = `/api/sid?agentId=${encodeURIComponent(agentId)}&name=${encodeURIComponent(name)}&chain=${encodeURIComponent(chain)}&entityType=${encodeURIComponent(entityType)}&theme=${themeName}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}${firstSeen !== '-' ? `&firstSeen=${encodeURIComponent(firstSeen)}` : ''}${llm ? `&llm=${encodeURIComponent(llm)}` : ''}${socials.length ? `&social=${encodeURIComponent(socials.join(','))}` : ''}${tags.length ? `&tags=${encodeURIComponent(tags.join(','))}` : ''}${svgImageParam}`;
 
-  function handleImport() {
-    fileRef.current?.click();
-  }
+  function handleImport() { fileRef.current?.click(); }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -69,19 +89,21 @@ export default function SIDPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const bg        = isDark ? '#0d1117' : '#f5f0e8';
-  const hdrBg     = isDark ? '#0a0f1e' : '#1a1f3a';
-  const ink       = isDark ? '#c8d8f0' : '#1a1f3a';
-  const inkDim    = isDark ? '#5a7090' : '#6b7280';
-  const accent    = isDark ? '#3b82f6' : '#2563eb';
-  const eAccent   = entityType === 'AI_AGENT' ? accent : entityType === 'HUMAN' ? '#9ca3af' : '#f59e0b';
-  const mrzBg     = isDark ? '#070c14' : '#e8e0cc';
-  const faint     = isDark ? '#1e2d4a' : '#d4c9a8';
+  const bg      = isDark ? '#0d1117' : '#f5f0e8';
+  const hdrBg   = isDark ? '#0a0f1e' : '#1a1f3a';
+  const ink     = isDark ? '#c8d8f0' : '#1a1f3a';
+  const inkDim  = isDark ? '#5a7090' : '#6b7280';
+  const accent  = isDark ? '#3b82f6' : '#2563eb';
+  const eAccent = entityType === 'AI_AGENT' ? accent : entityType === 'HUMAN' ? '#9ca3af' : '#f59e0b';
+  const mrzBg   = isDark ? '#070c14' : '#e8e0cc';
+  const faint   = isDark ? '#1e2d4a' : '#d4c9a8';
+  // Stamp: blue version for dark theme, standard for light
+  const stampSrc = `data:image/png;base64,${isDark ? STAMP_BLUE_B64 : STAMP_B64}`;
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Georgia&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
           background: ${isDark ? '#060a12' : '#d8d0c0'};
@@ -92,7 +114,6 @@ export default function SIDPage() {
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 460px; }
 
-        /* ── SID Card ── */
         .sid-card {
           width: 428px;
           border-radius: 12px;
@@ -100,22 +121,40 @@ export default function SIDPage() {
           background: ${bg};
           border: 1px solid ${faint};
           box-shadow: 0 24px 60px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
+          position: relative;
         }
 
-        /* Header */
+        /* Guilloche background */
+        .sid-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: repeating-linear-gradient(
+            0deg, transparent, transparent 19px, ${faint}40 20px
+          ), repeating-linear-gradient(
+            90deg, transparent, transparent 19px, ${faint}20 20px
+          );
+          pointer-events: none;
+          z-index: 0;
+        }
+
         .sid-header {
           background: ${hdrBg};
           padding: 12px 20px 10px;
           position: relative;
+          z-index: 1;
         }
         .sid-header-top {
           display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
         }
-        .sid-header-top span {
+        .sid-header-meta {
           font-size: 7px; color: rgba(255,255,255,0.6); letter-spacing: 1.2px;
         }
         .sid-header-date {
-          margin-left: auto; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 1px;
+          margin-left: auto; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 1px; white-space: nowrap;
+        }
+        .sid-title-row {
+          display: flex; align-items: center; justify-content: space-between;
         }
         .sid-title {
           font-family: Georgia, serif; font-size: 24px; color: #fff; letter-spacing: 3px;
@@ -124,13 +163,14 @@ export default function SIDPage() {
           font-size: 6.5px; color: rgba(255,255,255,0.3); letter-spacing: 2px; margin-top: 2px;
         }
         .sid-accent-bar {
-          height: 2.5px; background: ${accent}; opacity: 0.9;
+          height: 2.5px; background: ${accent}; opacity: 0.9; position: relative; z-index: 1;
         }
 
-        /* Body */
-        .sid-body { display: flex; padding: 20px 20px 0; gap: 28px; }
+        .sid-body {
+          display: flex; padding: 20px 20px 0; gap: 28px;
+          position: relative; z-index: 1;
+        }
 
-        /* Photo column */
         .photo-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
         .photo-frame {
           width: 110px; height: 134px; border-radius: 4px; overflow: hidden;
@@ -138,11 +178,14 @@ export default function SIDPage() {
           border: 0.8px solid ${faint};
           display: flex; align-items: center; justify-content: center;
         }
-        .photo-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .no-photo {
-          text-align: center;
+        .photo-frame img.photo { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .photo-placeholder {
+          display: flex; align-items: center; justify-content: center;
+          width: 100%; height: 100%;
         }
-        .no-photo p { font-size: 7px; color: ${inkDim}; letter-spacing: 2px; }
+        .photo-placeholder img {
+          width: 60px; height: 60px; opacity: 0.15;
+        }
         .entity-pill {
           width: 110px; height: 18px; border-radius: 3px;
           display: flex; align-items: center; justify-content: center;
@@ -152,27 +195,17 @@ export default function SIDPage() {
           font-size: 7.5px; color: ${eAccent}; letter-spacing: 2px;
         }
 
-        /* Fields column */
         .fields-col { flex: 1; display: flex; flex-direction: column; gap: 14px; }
-        .field-lbl {
-          font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; line-height: 1;
-        }
-        .field-val {
-          font-size: 9px; color: ${ink}; letter-spacing: 0.5px; line-height: 1.4;
-          margin-top: 3px;
-        }
-        .field-val-name {
-          font-family: Georgia, serif; font-size: 13px; color: ${ink};
-          margin-top: 3px;
-        }
+        .field-lbl { font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; line-height: 1; }
+        .field-val { font-size: 9px; color: ${ink}; letter-spacing: 0.5px; line-height: 1.4; margin-top: 3px; }
+        .field-val-name { font-family: Georgia, serif; font-size: 13px; color: ${ink}; margin-top: 3px; }
 
-        /* Divider */
-        .sid-div {
-          height: 1px; background: ${faint}; opacity: 0.6; margin: 16px 20px 0;
-        }
+        .sid-div { height: 1px; background: ${faint}; opacity: 0.6; margin: 16px 20px 0; position: relative; z-index: 1; }
 
-        /* Tags section */
-        .sid-tags { padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+        .sid-tags {
+          padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
+          position: relative; z-index: 1;
+        }
         .tag-lbl { font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; width: 100%; }
         .pill {
           height: 16px; padding: 0 8px; border-radius: 8px;
@@ -180,27 +213,38 @@ export default function SIDPage() {
           font-size: 7px; letter-spacing: 0.8px;
         }
 
-        /* Serial */
+        /* Serial + stamp row */
+        .sid-serial-row {
+          display: flex; align-items: flex-end; justify-content: space-between;
+          padding: 8px 20px 16px;
+          position: relative; z-index: 1;
+        }
         .sid-serial {
-          text-align: right; padding: 8px 20px 0;
           font-size: 9px; color: ${accent}; letter-spacing: 2px;
         }
+        /* Stamp container — matches route's rotate(-12) */
+        .stamp-wrap {
+          width: 90px; height: 90px;
+          display: flex; align-items: center; justify-content: center;
+          transform: rotate(-12deg);
+          flex-shrink: 0;
+        }
+        .stamp-wrap img {
+          width: 90px; height: 90px; object-fit: contain;
+        }
 
-        /* MRZ */
         .sid-mrz {
-          margin-top: 16px;
           background: ${mrzBg};
           border-top: 0.8px solid ${faint};
           padding: 10px 20px 14px;
+          position: relative; z-index: 1;
         }
         .mrz-lbl { font-size: 5.5px; color: ${inkDim}; letter-spacing: 1px; margin-bottom: 6px; }
         .mrz-line {
           font-size: 9px; color: ${ink}; letter-spacing: 1.8px;
-          font-family: monospace; line-height: 1.6;
-          word-break: break-all;
+          font-family: monospace; line-height: 1.6; word-break: break-all;
         }
 
-        /* Actions */
         .actions { display: flex; gap: 10px; width: 428px; }
         .btn {
           flex: 1; padding: 11px 10px; border-radius: 8px;
@@ -237,13 +281,22 @@ export default function SIDPage() {
           {/* Header */}
           <div className="sid-header">
             <div className="sid-header-top">
+              {/* Sealer logo — white version for dark header */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={MARK_BLACK} alt="" width={14} height={14} style={{opacity: 0.85, filter: 'invert(1)'}}/>
-              <span>THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</span>
+              <img src={`data:image/png;base64,${LOGO_B64}`} alt="" width={14} height={14} style={{ opacity: 0.85 }}/>
+              <span className="sid-header-meta">THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</span>
               <span className="sid-header-date">ISSUED {issueDate}</span>
             </div>
-            <div className="sid-title">SEALER ID</div>
-            <div className="sid-subtitle">AGENT IDENTITY DOCUMENT · ERC-8004</div>
+            <div className="sid-title-row">
+              <div>
+                <div className="sid-title">SEALER ID</div>
+                <div className="sid-subtitle">AGENT IDENTITY DOCUMENT · ERC-8004</div>
+              </div>
+              {/* Chain logo — inline SVG matches route exactly */}
+              <div style={{ flexShrink: 0 }}>
+                {chain === 'Solana' ? <SolanaLogo /> : <BaseLogo />}
+              </div>
+            </div>
           </div>
           <div className="sid-accent-bar"/>
 
@@ -253,10 +306,11 @@ export default function SIDPage() {
               <div className="photo-frame">
                 {displayImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={displayImage} alt={name}/>
+                  <img className="photo" src={displayImage} alt={name}/>
                 ) : (
-                  <div className="no-photo">
-                    <p>NO<br/>PHOTO</p>
+                  <div className="photo-placeholder">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`data:image/png;base64,${LOGO_B64}`} alt="" />
                   </div>
                 )}
               </div>
@@ -272,12 +326,7 @@ export default function SIDPage() {
               </div>
               <div>
                 <div className="field-lbl">AGENT ID</div>
-                <div
-                  className="field-val"
-                  style={{cursor: 'pointer'}}
-                  onClick={handleCopyId}
-                  title={agentId}
-                >
+                <div className="field-val" style={{cursor:'pointer'}} onClick={handleCopyId} title={agentId}>
                   {copied ? '✓ Copied!' : truncateAddr(agentId)}
                 </div>
               </div>
@@ -305,7 +354,7 @@ export default function SIDPage() {
                 <>
                   <div className="tag-lbl">SOCIAL</div>
                   {socials.map((s, i) => (
-                    <div key={i} className="pill" style={{background: `${accent}1e`, border: `0.8px solid ${accent}99`, color: accent}}>
+                    <div key={i} className="pill" style={{background:`${accent}1e`, border:`0.8px solid ${accent}99`, color: accent}}>
                       {s.slice(0, 16)}
                     </div>
                   ))}
@@ -315,7 +364,7 @@ export default function SIDPage() {
                 <>
                   <div className="tag-lbl" style={{width:'100%', marginTop: socials.length ? 8 : 0}}>SPECIALIZATION</div>
                   {tags.map((t, i) => (
-                    <div key={i} className="pill" style={{background: '#14b8a61e', border: '0.8px solid #14b8a699', color: '#14b8a6'}}>
+                    <div key={i} className="pill" style={{background:'#14b8a61e', border:'0.8px solid #14b8a699', color:'#14b8a6'}}>
                       {t.slice(0, 14)}
                     </div>
                   ))}
@@ -324,7 +373,7 @@ export default function SIDPage() {
               {llm && (
                 <>
                   <div className="tag-lbl" style={{width:'100%', marginTop: 8}}>PREFERRED MODEL</div>
-                  <div className="pill" style={{background: '#a855f71e', border: '0.8px solid #a855f799', color: '#a855f7'}}>
+                  <div className="pill" style={{background:'#a855f71e', border:'0.8px solid #a855f799', color:'#a855f7'}}>
                     {llm.slice(0, 22)}
                   </div>
                 </>
@@ -332,8 +381,14 @@ export default function SIDPage() {
             </div>
           )}
 
-          {/* Serial */}
-          <div className="sid-serial">{ser}</div>
+          {/* Serial + Stamp */}
+          <div className="sid-serial-row">
+            <div className="sid-serial">{ser}</div>
+            <div className="stamp-wrap">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={stampSrc} alt="seal stamp" />
+            </div>
+          </div>
 
           {/* MRZ */}
           <div className="sid-mrz">
@@ -342,9 +397,10 @@ export default function SIDPage() {
               {'AGENT<' + name.replace(/[^A-Z0-9]/gi, '<').toUpperCase().padEnd(19, '<').slice(0, 19) + '<<<<<<<<<<<<<<<<<<<<'}
             </div>
             <div className="mrz-line">
-              {(agentId.replace('0x', '').replace(/[^A-Z0-9]/gi, '<').toUpperCase().padEnd(20, '<').slice(0, 20)) + '<<' + chain.replace(/[^A-Z0-9]/gi, '<').toUpperCase().padEnd(5, '<').slice(0, 5) + '<' + entityType.replace('_', '').toUpperCase().padEnd(8, '<').slice(0, 8) + '<' + year + '<<'}
+              {agentId.replace('0x', '').replace(/[^A-Z0-9]/gi, '<').toUpperCase().padEnd(20, '<').slice(0, 20) + '<<' + chain.replace(/[^A-Z0-9]/gi, '<').toUpperCase().padEnd(5, '<').slice(0, 5) + '<' + entityType.replace('_', '').toUpperCase().padEnd(8, '<').slice(0, 8) + '<' + year + '<<'}
             </div>
           </div>
+
         </div>
 
         <div className="actions">
