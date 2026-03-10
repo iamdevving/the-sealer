@@ -1,6 +1,6 @@
 'use client';
 // src/app/statement/StatementPage.tsx
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { STAMP_STATEMENT_WHITE, STAMP_STATEMENT_BLACK, MARK_WHITE, MARK_BLACK } from '@/lib/assets';
 
@@ -42,14 +42,21 @@ export default function StatementPage() {
   const dateStr     = formatDate(new Date());
   const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
 
-  const [copied, setCopied]       = useState(false);
-  const [uidCopied, setUidCopied] = useState(false);
+  const [localImage, setLocalImage] = useState<string>('');
+  const [uidCopied, setUidCopied]   = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  function handleImport() { fileRef.current?.click(); }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setLocalImage(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   }
+
   function handleCopyUid() {
     navigator.clipboard.writeText(txHash || uid);
     setUidCopied(true);
@@ -78,7 +85,6 @@ export default function StatementPage() {
           box-shadow: 0 0 60px rgba(${t.accentRgb},.08), 0 20px 60px rgba(0,0,0,.4);
         }
 
-        /* Circuit animation */
         ${theme === 'circuit-anim' ? `
         .trace { stroke-dasharray: 300; stroke-dashoffset: 300; animation: drawTrace 1.8s ease forwards; }
         .trace:nth-child(2){animation-delay:.15s} .trace:nth-child(3){animation-delay:.3s}
@@ -106,24 +112,26 @@ export default function StatementPage() {
         .header-uid:hover { color: ${t.accent}; }
         .dashes { height: 3px; background: repeating-linear-gradient(90deg,${t.accent} 0,${t.accent} 7px,transparent 7px,transparent 11px); opacity:.5; }
 
-        /* Stamp area — smaller, tighter */
         .stamp-area {
-          background: ${t.statBg};
-          opacity: 0.95;
+          background: ${t.statBg}; opacity: 0.95;
           border-bottom: 1px solid ${t.statBorder};
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          padding: 16px 22px 14px;
-          gap: 0; position: relative; overflow: hidden;
+          padding: 16px 22px 14px; gap: 0; position: relative; overflow: hidden;
         }
         .stamp-preview {
           width: 110px; height: 110px;
           filter: drop-shadow(0 4px 18px rgba(${t.accentRgb},.22));
         }
 
-        /* Remove old divider, just use a thin line */
-        .divider { display: none; }
+        /* Image import area — shown below stamp when image imported */
+        .import-preview {
+          width: 100%; max-height: 200px; overflow: hidden;
+          border-top: 1px solid ${t.statBorder};
+          display: flex; align-items: center; justify-content: center;
+          background: ${t.bg};
+        }
+        .import-preview img { width: 100%; object-fit: cover; max-height: 200px; }
 
-        /* Statement text — more room */
         .statement-section { padding: 16px 22px 20px; text-align: center; }
         .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 14px; }
         .statement-text {
@@ -132,7 +140,6 @@ export default function StatementPage() {
           line-height: 1.6; max-width: 480px; margin: 0 auto;
         }
 
-        /* Stats */
         .stats-bar {
           margin: 0 22px 16px; border: 1px solid ${t.statBorder}; border-radius: 4px;
           background: ${t.statBg}; display: grid; grid-template-columns: 1fr 1fr 1fr; overflow: hidden;
@@ -144,7 +151,6 @@ export default function StatementPage() {
         .stat-value.mono { font-family: 'Space Mono', monospace; font-size: 10px; cursor: pointer; transition: color .2s; }
         .stat-value.mono:hover { color: ${t.accent}; }
 
-        /* Footer */
         .footer-verified {
           padding: 10px 22px; border-top: 1px solid ${t.statBorder};
           display: flex; justify-content: space-between; align-items: center;
@@ -158,7 +164,6 @@ export default function StatementPage() {
         }
         .band-text { font-size: 7.5px; color: ${t.accent}; opacity: .3; letter-spacing: 2px; }
 
-        /* Actions */
         .actions { display: flex; gap: 10px; width: 100%; max-width: 560px; }
         .btn {
           flex: 1; padding: 11px 16px; border-radius: 8px;
@@ -175,16 +180,18 @@ export default function StatementPage() {
 
         @media (max-width: 520px) {
           body { padding: 12px; }
-          .stamp-preview { width: 110px; height: 110px; }
+          .stamp-preview { width: 90px; height: 90px; }
           .statement-text { font-size: 17px; }
           .actions { flex-wrap: wrap; }
         }
       `}</style>
 
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif"
+        style={{display:'none'}} onChange={handleFileChange}/>
+
       <div className="page-wrap">
         <div className="card">
 
-          {/* Bitcoin background deco */}
           {theme === 'bitcoin' && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 500" preserveAspectRatio="none">
@@ -198,19 +205,16 @@ export default function StatementPage() {
             </svg>
           )}
 
-          {/* Circuit overlay */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 500" preserveAspectRatio="none">
               <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.9" fill="none"
                 opacity={theme==='circuit-anim'?'0.28':'0.18'}>
-                {/* Left — 5 traces at different heights */}
                 <polyline className="trace" points="0,68 44,68 58,82 58,148"/>
                 <polyline className="trace" points="0,96 34,96 48,110"/>
                 <polyline className="trace" points="0,126 26,126"/>
                 <polyline className="trace" points="0,248 40,248 54,234"/>
                 <polyline className="trace" points="0,336 36,336 50,350"/>
-                {/* Right — 5 traces mirrored */}
                 <polyline className="trace" points="560,68 516,68 502,82 502,148"/>
                 <polyline className="trace" points="560,96 526,96 512,110"/>
                 <polyline className="trace" points="560,126 534,126"/>
@@ -230,7 +234,6 @@ export default function StatementPage() {
             </svg>
           )}
 
-          {/* Header */}
           <div className="card-header">
             <span className="header-title">THE SEALER PROTOCOL · ONCHAIN STATEMENT</span>
             <span className="header-uid" onClick={handleCopyUid}>
@@ -239,22 +242,27 @@ export default function StatementPage() {
           </div>
           <div className="dashes"/>
 
-          {/* Stamp area — stamp PNG from assets.ts, no upload */}
           <div className="stamp-area">
-            <img
-              className="stamp-preview"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="stamp-preview"
               src={t.dark ? STAMP_STATEMENT_WHITE : STAMP_STATEMENT_BLACK}
               alt="Registered Statement stamp"
             />
           </div>
 
-          {/* Statement text — no divider */}
+          {/* Imported image preview — shown below stamp when set */}
+          {localImage && (
+            <div className="import-preview">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={localImage} alt="Imported"/>
+            </div>
+          )}
+
           <div className="statement-section">
             <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>
           </div>
 
-          {/* Stats */}
           <div className="stats-bar">
             <div className="stat-cell">
               <div className="stat-label">DATE ISSUED</div>
@@ -270,7 +278,6 @@ export default function StatementPage() {
             </div>
           </div>
 
-          {/* Footer */}
           <div className="footer-verified">
             <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
             <div className="basescan-link">
@@ -280,20 +287,20 @@ export default function StatementPage() {
 
           <div className="bottom-band">
             <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:18,height:18,opacity:0.55}}/>
           </div>
         </div>
 
-        {/* Actions */}
         <div className="actions">
-          <button className="btn btn-primary" onClick={handleShare}>
-            {copied ? '✓ Link Copied!' : '⇧ Share Statement'}
+          <button className="btn btn-primary" onClick={handleImport}>
+            ↑ Import Image
           </button>
           <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
-            ⬡ View on Basescan
+            ⬡ Basescan
           </a>
           <a className="btn btn-ghost" href={svgUrl} target="_blank" rel="noopener noreferrer">
-            ↓ Download SVG
+            ↓ SVG
           </a>
         </div>
       </div>

@@ -37,13 +37,12 @@ export default function CardPage() {
   const txHash     = searchParams.get('txHash') || '';
   const chain      = searchParams.get('chain') || 'Base';
 
-  const t          = THEMES[theme] ?? THEMES['circuit-anim'];
-  const uid        = truncateHash(txHash);
-  const dateStr    = formatDate(new Date());
+  const t           = THEMES[theme] ?? THEMES['circuit-anim'];
+  const uid         = truncateHash(txHash);
+  const dateStr     = formatDate(new Date());
   const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
 
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [copied, setCopied]       = useState(false);
   const [uidCopied, setUidCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,6 +56,10 @@ export default function CardPage() {
     }
   }, [txHash]);
 
+  function handleImport() {
+    fileInputRef.current?.click();
+  }
+
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -69,12 +72,7 @@ export default function CardPage() {
       }
     };
     reader.readAsDataURL(file);
-  }
-
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    e.target.value = '';
   }
 
   function handleCopyUid() {
@@ -83,8 +81,6 @@ export default function CardPage() {
     setTimeout(() => setUidCopied(false), 2000);
   }
 
-  // SVG download URL — passes imageUrl if we have one uploaded (can't pass base64 in URL,
-  // so for downloaded SVG we omit the image; the interactive page shows it instead)
   const svgUrl = `/api/card?theme=${theme}&statement=${encodeURIComponent(statement)}&agentId=${agentId}&txHash=${txHash}&chain=${chain}`;
 
   return (
@@ -101,7 +97,6 @@ export default function CardPage() {
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 600px; }
 
-        /* Card shell */
         .card {
           width: 100%; max-width: 560px;
           background: ${t.bg}; border: 1px solid ${t.border}; border-radius: 14px;
@@ -109,7 +104,6 @@ export default function CardPage() {
           box-shadow: 0 0 60px rgba(${t.accentRgb},0.08), 0 20px 60px rgba(0,0,0,0.4);
         }
 
-        /* Circuit animation */
         ${theme === 'circuit-anim' ? `
         .trace { stroke-dasharray: 400; stroke-dashoffset: 400; animation: drawTrace 1.8s ease forwards; }
         .trace:nth-child(2){animation-delay:.15s} .trace:nth-child(3){animation-delay:.3s}
@@ -127,7 +121,6 @@ export default function CardPage() {
         @keyframes fadeNode { to { opacity: 0.65; } }
         ` : ''}
 
-        /* Header */
         .card-header {
           background: ${t.headerBg}; padding: 10px 22px;
           display: flex; justify-content: space-between; align-items: center;
@@ -138,7 +131,6 @@ export default function CardPage() {
         .header-uid:hover { color: ${t.accent}; }
         .dashes { height: 3px; background: repeating-linear-gradient(90deg,${t.accent} 0,${t.accent} 7px,transparent 7px,transparent 11px); opacity:.5; }
 
-        /* Upper: stamp col + upload */
         .upper { display: flex; min-height: 216px; }
         .stamp-col {
           width: 150px; flex-shrink: 0;
@@ -152,7 +144,6 @@ export default function CardPage() {
           padding: 3px 10px; font-size: 7px; font-weight: 700; color: ${t.accent}; letter-spacing: 1px;
         }
 
-        /* Upload zone */
         .upload-zone {
           flex: 1; margin: 12px 12px 12px 0;
           border: 1.2px dashed ${t.accentDim}; border-radius: 8px;
@@ -172,12 +163,6 @@ export default function CardPage() {
         .upload-zone:hover .upload-overlay { opacity: 1; }
         .upload-overlay span { font-size: 8px; color: #fff; letter-spacing: 1.5px; font-weight: 700; }
 
-        /* Divider */
-        .divider { padding: 0 22px; display: flex; align-items: center; gap: 12px; }
-        .div-line { flex: 1; height: 1px; background: linear-gradient(90deg,transparent,${t.accentDim},transparent); opacity:.5; }
-        .div-ornament { font-size: 10px; color: ${t.accentDim}; letter-spacing: 10px; opacity:.6; padding: 8px 0; }
-
-        /* Statement text */
         .statement-section { padding: 16px 22px 24px; text-align: center; }
         .statement-label { font-size: 8px; font-weight: 700; color: ${t.accent}; letter-spacing: 4px; margin-bottom: 14px; }
         .statement-text {
@@ -186,7 +171,6 @@ export default function CardPage() {
           line-height: 1.6; max-width: 480px; margin: 0 auto;
         }
 
-        /* Stats row */
         .stats-bar {
           margin: 0 22px 16px; border: 1px solid ${t.statBorder}; border-radius: 4px;
           background: ${t.statBg}; display: grid; grid-template-columns: 1fr 1fr 1fr; overflow: hidden;
@@ -198,7 +182,6 @@ export default function CardPage() {
         .stat-value.mono { font-family: 'Space Mono', monospace; font-size: 10px; cursor: pointer; transition: color .2s; }
         .stat-value.mono:hover { color: ${t.accent}; }
 
-        /* Footer */
         .footer-verified {
           padding: 10px 22px; border-top: 1px solid ${t.statBorder};
           display: flex; justify-content: space-between; align-items: center;
@@ -212,7 +195,6 @@ export default function CardPage() {
         }
         .band-text { font-size: 7.5px; color: ${t.accent}; opacity: .3; letter-spacing: 2px; }
 
-        /* Actions */
         .actions { display: flex; gap: 10px; width: 100%; max-width: 560px; }
         .btn {
           flex: 1; padding: 11px 16px; border-radius: 8px;
@@ -236,10 +218,12 @@ export default function CardPage() {
         }
       `}</style>
 
+      <input ref={fileInputRef} type="file" accept="image/*"
+        style={{display:'none'}} onChange={handleUpload}/>
+
       <div className="page-wrap">
         <div className="card">
 
-          {/* Bitcoin background deco */}
           {theme === 'bitcoin' && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 500" preserveAspectRatio="none">
@@ -253,19 +237,16 @@ export default function CardPage() {
             </svg>
           )}
 
-          {/* Circuit animation overlay — starts below header (y>50) */}
           {(theme === 'circuit-anim' || theme === 'circuit') && (
             <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',overflow:'hidden'}}
               viewBox="0 0 560 500" preserveAspectRatio="none">
               <g stroke={theme==='circuit-anim'?'#00e5ff':'#00bcd4'} strokeWidth="0.9" fill="none"
                 opacity={theme==='circuit-anim'?'0.28':'0.18'}>
-                {/* Left — all start from x=0, y > 50 (below header) */}
                 <polyline className="trace" points="0,80 40,80 54,94 54,200"/>
                 <polyline className="trace" points="54,200 54,240 72,240"/>
                 <polyline className="trace" points="0,120 30,120 44,134"/>
                 <polyline className="trace" points="0,290 36,290 50,276"/>
                 <polyline className="trace" points="0,370 30,370 44,384"/>
-                {/* Right — all start from x=560, y > 50 */}
                 <polyline className="trace" points="560,80 520,80 506,94 506,200"/>
                 <polyline className="trace" points="506,200 506,240 488,240"/>
                 <polyline className="trace" points="560,120 530,120 516,134"/>
@@ -287,7 +268,6 @@ export default function CardPage() {
             </svg>
           )}
 
-          {/* Header */}
           <div className="card-header">
             <span className="header-title">THE SEALER PROTOCOL · ONCHAIN STATEMENT</span>
             <span className="header-uid" onClick={handleCopyUid}>
@@ -296,7 +276,6 @@ export default function CardPage() {
           </div>
           <div className="dashes"/>
 
-          {/* Upper: stamp + upload */}
           <div className="upper">
             <div className="stamp-col">
               <div style={{
@@ -311,6 +290,7 @@ export default function CardPage() {
             <div className="upload-zone" onClick={() => fileInputRef.current?.click()}>
               {uploadedImage ? (
                 <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={uploadedImage} alt="Attachment"/>
                   <div className="upload-overlay"><span>Change Image</span></div>
                 </>
@@ -321,17 +301,13 @@ export default function CardPage() {
                 </div>
               )}
             </div>
-            <input ref={fileInputRef} type="file" accept="image/*"
-              style={{display:'none'}} onChange={handleUpload}/>
           </div>
 
-          {/* Statement — no divider, label sits directly above text */}
           <div className="statement-section">
             <div className="statement-label">STATEMENT</div>
             <div className="statement-text">{statement}</div>
           </div>
 
-          {/* Stats */}
           <div className="stats-bar">
             <div className="stat-cell">
               <div className="stat-label">Date Issued</div>
@@ -347,23 +323,29 @@ export default function CardPage() {
             </div>
           </div>
 
-          {/* Footer band only */}
+          <div className="footer-verified">
+            <span className="verified-text">CRYPTOGRAPHICALLY VERIFIED</span>
+            <div className="basescan-link">
+              <a href={basescanUrl} target="_blank" rel="noopener noreferrer">EAS Attestation · basescan.org ↗</a>
+            </div>
+          </div>
+
           <div className="bottom-band">
             <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:18,height:18,opacity:0.55}}/>
           </div>
         </div>
 
-        {/* Actions */}
         <div className="actions">
-          <button className="btn btn-primary" onClick={handleShare}>
-            {copied ? '✓ Link Copied!' : '⇧ Share Card'}
+          <button className="btn btn-primary" onClick={handleImport}>
+            ↑ Import Image
           </button>
           <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
-            ⬡ View on Basescan
+            ⬡ Basescan
           </a>
           <a className="btn btn-ghost" href={svgUrl} target="_blank" rel="noopener noreferrer">
-            ↓ Download SVG
+            ↓ SVG
           </a>
         </div>
       </div>
