@@ -116,10 +116,10 @@ export default function StatementPage() {
           background: ${t.statBg}; opacity: 0.95;
           border-bottom: 1px solid ${t.statBorder};
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          padding: 16px 22px 14px; gap: 0; position: relative; overflow: hidden;
+          padding: 10px 22px 8px; gap: 0; position: relative; overflow: hidden;
         }
         .stamp-preview {
-          width: 110px; height: 110px;
+          width: 80px; height: 80px;
           filter: drop-shadow(0 4px 18px rgba(${t.accentRgb},.22));
         }
 
@@ -180,7 +180,7 @@ export default function StatementPage() {
 
         @media (max-width: 520px) {
           body { padding: 12px; }
-          .stamp-preview { width: 90px; height: 90px; }
+          .stamp-preview { width: 70px; height: 70px; }
           .statement-text { font-size: 17px; }
           .actions { flex-wrap: wrap; }
         }
