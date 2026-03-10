@@ -233,7 +233,7 @@ export async function GET(req: NextRequest) {
   const deadlineGroup = deadline ? `
     <text x="28" y="${DEAD_Y + 10}" font-family="monospace" font-size="5.5"
       letter-spacing="3.5" fill="${t.accentDim}">DEADLINE</text>
-    <text x="96" y="${DEAD_Y + 10}" font-family="Georgia,serif" font-size="11"
+    <text x="96" y="${DEAD_Y + 10}" font-family="Georgia,serif" font-size="9.5"
       font-weight="600" fill="${t.bodyText}">${esc(deadline)}</text>
   ` : '';
 
@@ -264,7 +264,7 @@ export async function GET(req: NextRequest) {
   // ── Stamp over commitment ID ──
   const stampSize = 80;
   const stampX    = 360 - stampSize + 20;
-  const stampY    = bottomY - stampSize + 28;  // moved down
+  const stampY    = bottomY - stampSize + 23;  // was 28, up 5px
   const stampImg  = `<image href="${STAMP_COMMITTED}" x="${stampX}" y="${stampY}"
     width="${stampSize}" height="${stampSize}" opacity="0.90"
     transform="rotate(8, ${stampX + stampSize / 2}, ${stampY + stampSize / 2})"/>`;
