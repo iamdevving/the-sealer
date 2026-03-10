@@ -1,6 +1,6 @@
 'use client';
 // src/app/sleeve/SleevePage.tsx
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MARK_BLACK } from '@/lib/assets';
 
@@ -21,24 +21,32 @@ export default function SleevePage() {
   const dateStr = formatDate(new Date());
   const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
 
-  const [copied, setCopied]       = useState(false);
-  const [uidCopied, setUidCopied] = useState(false);
+  // Local file import state (overrides imageUrl param when set)
+  const [localImage, setLocalImage] = useState<string>('');
+  const [uidCopied, setUidCopied]   = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const displayImage = localImage || imageUrl;
+  const svgUrl = `/api/sleeve?chain=${encodeURIComponent(chain)}&txHash=${txHash}${displayImage ? `&imageUrl=${encodeURIComponent(displayImage)}` : ''}`;
+
+  function handleImport() {
+    fileRef.current?.click();
   }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setLocalImage(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
   function handleCopyUid() {
     navigator.clipboard.writeText(txHash || uid);
     setUidCopied(true);
     setTimeout(() => setUidCopied(false), 2000);
   }
-
-  const svgUrl = `/api/sleeve?chain=${encodeURIComponent(chain)}&txHash=${txHash}${imageUrl ? `&imageUrl=${encodeURIComponent(imageUrl)}` : ''}`;
-
-  // Base logo inline SVG path
-  const BASE_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 111 111" width="14" height="14"><rect width="111" height="111" rx="20" fill="#0052FF"/><path d="M55.5 24C38.103 24 24 38.103 24 55.5S38.103 87 55.5 87c15.977 0 29.2-11.714 31.145-27.158H63.931v9.272h-8.43V55.5h31.644C87.145 38.714 72.977 24 55.5 24z" fill="white"/></svg>`;
 
   return (
     <>
@@ -54,7 +62,6 @@ export default function SleevePage() {
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 400px; }
 
-        /* ── Sleeve card shell ── */
         .sleeve {
           width: 315px;
           background: rgba(255,255,255,0.04);
@@ -67,86 +74,50 @@ export default function SleevePage() {
             inset -1px -1px 4px rgba(0,0,0,0.08),
             0 20px 60px rgba(0,0,0,0.25),
             0 4px 16px rgba(0,0,0,0.15);
-          /* Plastic sheen overlay via pseudo would need :before, using inner div instead */
         }
-
-        /* Plastic texture overlay */
         .sleeve-sheen {
           position: absolute; inset: 0; border-radius: 10px; pointer-events: none; z-index: 2;
           background: linear-gradient(135deg,
-            rgba(232,240,255,0.18) 0%,
-            rgba(255,255,255,0.08) 30%,
-            rgba(192,208,240,0.06) 60%,
-            rgba(255,255,255,0.14) 100%);
-        }
-
-        /* Edge refractions */
-        .sleeve-edge-left {
-          position: absolute; top: 12px; left: 8px; width: 6px; pointer-events: none; z-index: 3;
-          background: linear-gradient(90deg, rgba(255,255,255,0.35), transparent);
-          opacity: 0.4;
+            rgba(232,240,255,0.18) 0%, rgba(255,255,255,0.08) 30%,
+            rgba(192,208,240,0.06) 60%, rgba(255,255,255,0.14) 100%);
         }
         .sleeve-edge-top {
           position: absolute; left: 12px; right: 12px; top: 8px; height: 6px; pointer-events: none; z-index: 3;
           background: linear-gradient(180deg, rgba(255,255,255,0.3), transparent);
           opacity: 0.5;
         }
-
-        /* Image area */
         .image-area {
-          margin: 12px 12px 0;
-          border-radius: 3px;
-          overflow: hidden;
-          position: relative;
-          background: #f0f2f5;
-          /* aspect ratio set inline based on image */
-          min-height: 200px;
+          margin: 12px 12px 0; border-radius: 3px; overflow: hidden; position: relative;
+          background: #f0f2f5; min-height: 200px;
           display: flex; align-items: center; justify-content: center;
         }
-        .image-area img {
-          width: 100%; display: block; border-radius: 3px;
-        }
+        .image-area img { width: 100%; display: block; border-radius: 3px; }
         .image-vignette {
-          position: absolute; inset: 0; border-radius: 3px;
+          position: absolute; inset: 0; border-radius: 3px; pointer-events: none;
           background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0,0,0,0.4) 100%);
-          pointer-events: none;
         }
-        .no-image {
-          text-align: center; padding: 60px 20px;
-        }
+        .no-image { text-align: center; padding: 60px 20px; }
         .no-image p { font-size: 10px; color: #aaa; letter-spacing: 2px; }
         .no-image small { font-size: 8px; color: #bbb; letter-spacing: 1px; display: block; margin-top: 6px; }
 
-        /* Footer bar */
         .sleeve-footer {
           margin: 0 12px; height: 28px;
           background: linear-gradient(180deg, #f8f9fc 0%, #eef0f5 100%);
           display: flex; align-items: center;
           border-top: 1px solid rgba(0,0,0,0.08);
           padding: 0 8px;
-          gap: 0;
         }
-
-        /* Chain logo in footer */
         .footer-chain { display: flex; align-items: center; flex-shrink: 0; }
-
-        /* TX + date labels */
-        .footer-meta { display: flex; flex-direction: column; justify-content: center; margin-left: 4px; flex: 1; }
+        .footer-meta { display: flex; flex-direction: column; justify-content: center; margin-left: 8px; flex: 1; }
         .footer-label { font-size: 6px; color: #999; letter-spacing: 1px; line-height: 1; }
         .footer-value { font-size: 6.5px; color: #555; letter-spacing: 0.5px; line-height: 1.4; cursor: pointer; transition: color .2s; }
         .footer-value:hover { color: #0052ff; }
-
         .footer-date { text-align: right; flex-shrink: 0; }
-        .footer-date .footer-label { letter-spacing: 1px; }
         .footer-date .footer-value { cursor: default; font-size: 7px; }
         .footer-date .footer-value:hover { color: #555; }
-
         .footer-mark { flex-shrink: 0; margin-left: 8px; opacity: 0.65; }
+        .sleeve-bottom { height: 12px; }
 
-        /* Sleeve bottom edge */
-        .sleeve-bottom { height: 12px; margin: 0 12px 0; }
-
-        /* Actions */
         .actions { display: flex; gap: 10px; width: 315px; }
         .btn {
           flex: 1; padding: 11px 10px; border-radius: 8px;
@@ -155,44 +126,45 @@ export default function SleevePage() {
           border: 1px solid #0052ff; transition: all .2s;
           text-decoration: none; text-align: center;
           display: flex; align-items: center; justify-content: center; gap: 6px;
+          background: transparent;
         }
-        .btn-primary { background: #0052ff; color: #fff; }
+        .btn-primary { background: #0052ff; color: #fff; border-color: #0052ff; }
         .btn-primary:hover { box-shadow: 0 0 20px rgba(0,82,255,0.4); transform: translateY(-1px); }
-        .btn-ghost { background: transparent; color: #0052ff; }
+        .btn-ghost { color: #0052ff; }
         .btn-ghost:hover { background: rgba(0,82,255,0.06); transform: translateY(-1px); }
 
-        @media (max-width: 380px) {
-          body { padding: 12px; }
-          .actions { flex-wrap: wrap; }
-        }
+        @media (max-width: 380px) { body { padding: 12px; } .actions { flex-wrap: wrap; } }
       `}</style>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
 
       <div className="page-wrap">
         <div className="sleeve">
-
-          {/* Plastic sheen */}
           <div className="sleeve-sheen"/>
-          <div className="sleeve-edge-top" style={{bottom: 'auto'}}/>
+          <div className="sleeve-edge-top"/>
 
-          {/* Image */}
           <div className="image-area">
-            {imageUrl ? (
+            {displayImage ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt="NFT"/>
+                <img src={displayImage} alt="NFT"/>
                 <div className="image-vignette"/>
               </>
             ) : (
               <div className="no-image">
                 <p>NO IMAGE</p>
-                <small>?imageUrl=https://...</small>
+                <small>Import an image below</small>
               </div>
             )}
           </div>
 
-          {/* Footer bar */}
           <div className="sleeve-footer">
-            {/* Chain logo */}
             <div className="footer-chain">
               {chain === 'Solana' ? (
                 <svg width="14" height="10" viewBox="0 0 101 88" style={{display:'block'}}>
@@ -216,35 +188,30 @@ export default function SleevePage() {
               )}
             </div>
 
-            {/* TX meta */}
-            <div className="footer-meta" style={{marginLeft: 8}}>
+            <div className="footer-meta">
               <div className="footer-label">TX HASH</div>
               <div className="footer-value" onClick={handleCopyUid}>
                 {uidCopied ? '✓ Copied!' : uid}
               </div>
             </div>
 
-            {/* Date */}
             <div className="footer-date">
               <div className="footer-label">ISSUE DATE</div>
               <div className="footer-value">{dateStr}</div>
             </div>
 
-            {/* Seal mark */}
             <div className="footer-mark">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={MARK_BLACK} alt="" width={18} height={18}/>
             </div>
           </div>
 
-          {/* Bottom sleeve padding */}
           <div className="sleeve-bottom"/>
         </div>
 
-        {/* Actions */}
         <div className="actions">
-          <button className="btn btn-primary" onClick={handleShare}>
-            {copied ? '✓ Link Copied!' : '⇧ Share Sleeve'}
+          <button className="btn btn-primary" onClick={handleImport}>
+            ↑ Import Image
           </button>
           <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
             ⬡ Basescan

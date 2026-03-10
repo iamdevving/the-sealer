@@ -1,6 +1,6 @@
 'use client';
 // src/app/mirror/MirrorPage.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { MARK_BLACK } from '@/lib/assets';
 
@@ -18,7 +18,6 @@ export default function MirrorPage() {
   const txHash           = searchParams.get('txHash') || '';
   const chain            = searchParams.get('chain') || 'Base';
   const originalChain    = searchParams.get('originalChain') || 'ethereum';
-  const originalContract = searchParams.get('originalContract') || '';
   const originalTokenId  = searchParams.get('originalTokenId') || '';
   const nftName          = searchParams.get('nftName') || (originalTokenId ? `#${originalTokenId}` : 'Mirror NFT');
   const mirrorTokenId    = searchParams.get('mirrorTokenId') || '';
@@ -30,31 +29,41 @@ export default function MirrorPage() {
   const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
 
   const [invalidated, setInvalidated] = useState(forceInvalidated);
-  const [copied, setCopied]           = useState(false);
   const [uidCopied, setUidCopied]     = useState(false);
   const [imgError, setImgError]       = useState(false);
 
-  // Check Redis invalidation state via the card API response headers (server does it)
-  // We just trust the forceInvalidated param for the interactive page;
-  // the SVG API route checks Redis directly.
-  useEffect(() => {
-    setInvalidated(forceInvalidated);
-  }, [forceInvalidated]);
+  // Local file import state (overrides imageUrl param when set)
+  const [localImage, setLocalImage] = useState<string>('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  useEffect(() => { setInvalidated(forceInvalidated); }, [forceInvalidated]);
+
+  const displayImage = localImage || imageUrl;
+  const svgUrl = `/api/mirror/card?chain=${encodeURIComponent(chain)}&originalChain=${encodeURIComponent(originalChain)}&nftName=${encodeURIComponent(nftName)}&txHash=${txHash}${displayImage ? `&imageUrl=${encodeURIComponent(displayImage)}` : ''}${mirrorTokenId ? `&mirrorTokenId=${mirrorTokenId}` : ''}`;
+
+  function handleImport() {
+    fileRef.current?.click();
   }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setLocalImage(ev.target?.result as string);
+      setImgError(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
   function handleCopyUid() {
     navigator.clipboard.writeText(txHash || uid);
     setUidCopied(true);
     setTimeout(() => setUidCopied(false), 2000);
   }
 
-  const svgUrl = `/api/mirror/card?chain=${encodeURIComponent(chain)}&originalChain=${encodeURIComponent(originalChain)}&nftName=${encodeURIComponent(nftName)}&txHash=${txHash}${imageUrl ? `&imageUrl=${encodeURIComponent(imageUrl)}` : ''}${mirrorTokenId ? `&mirrorTokenId=${mirrorTokenId}` : ''}`;
-
-  const showImage = imageUrl && !invalidated && !imgError;
+  const showImage = displayImage && !invalidated && !imgError;
 
   return (
     <>
@@ -70,7 +79,6 @@ export default function MirrorPage() {
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 400px; }
 
-        /* ── Mirror card shell — frosted glass ── */
         .mirror-card {
           width: 315px;
           background: linear-gradient(160deg, rgba(240,244,255,0.92) 0%, rgba(232,238,255,0.88) 50%, rgba(221,228,248,0.94) 100%);
@@ -84,71 +92,47 @@ export default function MirrorPage() {
             inset 0 -1px 0 rgba(100,120,180,0.12);
           border: 1px solid rgba(180,195,230,0.7);
         }
-
-        /* Double border inner highlight */
         .mirror-card::before {
           content: '';
           position: absolute; inset: 1.5px; border-radius: 14.5px;
           border: 0.5px solid rgba(255,255,255,0.5);
           pointer-events: none; z-index: 10;
         }
-
-        /* Frosted noise overlay */
         .frost-overlay {
           position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 1;
           opacity: 0.4;
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
         }
-
-        /* Top sheen */
         .sheen {
           position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 16px 16px 0 0;
           pointer-events: none; z-index: 2;
           background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%);
         }
 
-        /* ── Image area ── */
         .image-wrap {
-          margin: 8px 8px 0;
-          border-radius: 6px;
-          overflow: hidden;
-          position: relative;
-          background: rgba(255,255,255,0.18);
-          min-height: 180px;
-          display: flex; align-items: center; justify-content: center;
-          z-index: 3;
+          margin: 8px 8px 0; border-radius: 6px; overflow: hidden; position: relative;
+          background: rgba(255,255,255,0.18); min-height: 180px;
+          display: flex; align-items: center; justify-content: center; z-index: 3;
         }
-        .image-wrap img {
-          width: 100%; display: block; border-radius: 6px;
-        }
+        .image-wrap img { width: 100%; display: block; border-radius: 6px; }
         .image-vignette {
           position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
           background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0,0,20,0.25) 100%);
         }
-
-        /* Glass stripes over image */
         .glass-stripe1 {
           position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(135deg,
-            rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.35) 18%,
-            rgba(255,255,255,0.02) 32%, rgba(255,255,255,0) 100%);
+          background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.35) 18%, rgba(255,255,255,0.02) 32%, rgba(255,255,255,0) 100%);
           opacity: 0.9;
         }
         .glass-stripe2 {
           position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(145deg,
-            rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%,
-            rgba(255,255,255,1) 36%, rgba(255,255,255,1) 39%,
-            rgba(255,255,255,0) 45%, rgba(255,255,255,0) 100%);
+          background: linear-gradient(145deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,1) 36%, rgba(255,255,255,1) 39%, rgba(255,255,255,0) 45%, rgba(255,255,255,0) 100%);
           opacity: 0.35;
         }
         .glass-stripe3 {
           position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(315deg,
-            rgba(26,26,58,0.22) 0%, rgba(26,26,58,0.06) 30%, rgba(26,26,58,0) 100%);
+          background: linear-gradient(315deg, rgba(26,26,58,0.22) 0%, rgba(26,26,58,0.06) 30%, rgba(26,26,58,0) 100%);
         }
-
-        /* Crisp border around image */
         .image-border {
           position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
           border: 1px solid rgba(255,255,255,0.75); box-sizing: border-box;
@@ -157,53 +141,35 @@ export default function MirrorPage() {
           position: absolute; inset: 1px; border-radius: 5px; pointer-events: none;
           border: 1px solid rgba(20,20,60,0.12); box-sizing: border-box;
         }
-
-        /* MIRROR watermark */
         .mirror-watermark {
           position: absolute; top: 13px; right: 8px;
           font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 2px;
           pointer-events: none; z-index: 4;
         }
 
-        /* ── Invalidated state ── */
         .void-area {
           position: absolute; inset: 0; border-radius: 6px;
           background: rgba(8,8,18,0.92);
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 6px; z-index: 4;
         }
-        .void-title {
-          font-size: 7px; color: rgba(255,255,255,0.22); letter-spacing: 4px;
-        }
-        .void-sub {
-          font-size: 5.5px; color: rgba(255,255,255,0.12); letter-spacing: 1.5px;
-        }
+        .void-title { font-size: 7px; color: rgba(255,255,255,0.22); letter-spacing: 4px; }
+        .void-sub { font-size: 5.5px; color: rgba(255,255,255,0.12); letter-spacing: 1.5px; }
         .void-cta {
-          margin-top: 8px;
-          padding: 5px 16px;
-          border: 0.5px solid rgba(255,255,255,0.12);
-          border-radius: 3px;
+          margin-top: 8px; padding: 5px 16px;
+          border: 0.5px solid rgba(255,255,255,0.12); border-radius: 3px;
           background: rgba(255,255,255,0.04);
           font-size: 5.5px; color: rgba(255,255,255,0.28); letter-spacing: 1.5px;
           cursor: pointer; transition: all .2s;
         }
         .void-cta:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
-        /* Crack lines */
-        .crack-svg {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-        }
-
-        /* No image placeholder */
-        .no-image {
-          text-align: center; padding: 60px 20px;
-        }
+        .crack-svg { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; }
+        .no-image { text-align: center; padding: 60px 20px; }
         .no-image p { font-size: 8px; color: rgba(100,120,180,0.4); letter-spacing: 3px; }
         .no-image small { font-size: 6.5px; color: rgba(100,120,180,0.25); display: block; margin-top: 6px; }
 
-        /* ── Name bar ── */
         .name-bar {
-          margin: 0 8px;
-          height: 30px;
+          margin: 0 8px; height: 30px;
           background: rgba(255,255,255,0.22);
           border-top: 0.5px solid rgba(255,255,255,0.5);
           display: flex; align-items: center; padding: 0 12px;
@@ -215,31 +181,22 @@ export default function MirrorPage() {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
-        /* ── Footer ── */
         .mirror-footer {
-          margin: 0 8px 6px;
-          height: 26px;
+          margin: 0 8px 6px; height: 26px;
           background: rgba(255,255,255,0.1);
           border-top: 0.5px solid rgba(255,255,255,0.2);
           display: flex; align-items: center;
-          padding: 0 6px;
-          z-index: 3; position: relative; gap: 4px;
+          padding: 0 6px; z-index: 3; position: relative; gap: 4px;
         }
-
         .footer-chain { display: flex; align-items: center; flex-shrink: 0; opacity: 0.45; }
         .footer-tx {
           font-size: 5.5px; color: rgba(40,60,120,0.4); letter-spacing: 0.5px;
-          flex: 1; margin-left: 4px; cursor: pointer; transition: color .2s;
-          white-space: nowrap;
+          flex: 1; margin-left: 4px; cursor: pointer; transition: color .2s; white-space: nowrap;
         }
         .footer-tx:hover { color: rgba(40,60,120,0.7); }
-        .footer-right {
-          font-size: 5.5px; color: rgba(40,60,120,0.38); letter-spacing: 0.3px;
-          text-align: right; flex-shrink: 0;
-        }
+        .footer-right { font-size: 5.5px; color: rgba(40,60,120,0.38); letter-spacing: 0.3px; text-align: right; flex-shrink: 0; }
         .footer-mark { flex-shrink: 0; margin-left: 6px; opacity: 0.65; }
 
-        /* ── Actions ── */
         .actions { display: flex; gap: 10px; width: 315px; }
         .btn {
           flex: 1; padding: 11px 10px; border-radius: 8px;
@@ -248,70 +205,70 @@ export default function MirrorPage() {
           border: 1px solid rgba(100,130,220,0.6); transition: all .2s;
           text-decoration: none; text-align: center;
           display: flex; align-items: center; justify-content: center; gap: 6px;
+          background: transparent;
         }
-        .btn-primary { background: rgba(80,110,200,0.85); color: #fff; }
+        .btn-primary { background: rgba(80,110,200,0.85); color: #fff; border-color: rgba(80,110,200,0.85); }
         .btn-primary:hover { box-shadow: 0 0 20px rgba(80,110,200,0.4); transform: translateY(-1px); }
-        .btn-ghost { background: rgba(255,255,255,0.4); color: rgba(40,60,140,0.8); backdrop-filter: blur(4px); }
+        .btn-ghost { color: rgba(40,60,140,0.8); background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); }
         .btn-ghost:hover { background: rgba(255,255,255,0.6); transform: translateY(-1px); }
         .btn-warn { background: rgba(220,60,60,0.15); color: rgba(200,40,40,0.9); border-color: rgba(200,40,40,0.3); }
         .btn-warn:hover { background: rgba(220,60,60,0.25); transform: translateY(-1px); }
 
-        @media (max-width: 380px) {
-          body { padding: 12px; }
-          .actions { flex-wrap: wrap; }
-        }
+        @media (max-width: 380px) { body { padding: 12px; } .actions { flex-wrap: wrap; } }
       `}</style>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
 
       <div className="page-wrap">
         <div className="mirror-card">
           <div className="frost-overlay"/>
           <div className="sheen"/>
 
-          {/* Image area */}
           <div className="image-wrap" style={{minHeight: showImage ? 'auto' : 220}}>
-
             {invalidated ? (
-              <>
-                {/* Dark void with cracks */}
-                <div className="void-area">
-                  <svg className="crack-svg" viewBox="0 0 299 220" preserveAspectRatio="none">
-                    <g stroke="rgba(255,255,255,0.18)" strokeWidth="0.75" fill="none">
-                      <line x1="149" y1="110" x2="20" y2="10"/>
-                      <line x1="149" y1="110" x2="284" y2="8"/>
-                      <line x1="149" y1="110" x2="8" y2="200"/>
-                      <line x1="149" y1="110" x2="289" y2="205"/>
-                      <line x1="149" y1="110" x2="109" y2="220"/>
-                      <line x1="149" y1="110" x2="199" y2="220"/>
-                      <line x1="149" y1="110" x2="8" y2="130"/>
-                      <line x1="149" y1="110" x2="289" y2="80"/>
-                    </g>
-                    <g stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" fill="none">
-                      <line x1="20" y1="10" x2="5" y2="35"/>
-                      <line x1="284" y1="8" x2="294" y2="40"/>
-                      <line x1="109" y1="220" x2="30" y2="190"/>
-                    </g>
-                    <circle cx="149" cy="110" r="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
-                    <circle cx="149" cy="110" r="8" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5"/>
-                  </svg>
-                  <div className="void-title">MIRROR VOID</div>
-                  <div className="void-sub">original nft transferred</div>
-                  <div className="void-cta">FIX MIRROR →</div>
-                </div>
-              </>
+              <div className="void-area">
+                <svg className="crack-svg" viewBox="0 0 299 220" preserveAspectRatio="none">
+                  <g stroke="rgba(255,255,255,0.18)" strokeWidth="0.75" fill="none">
+                    <line x1="149" y1="110" x2="20" y2="10"/>
+                    <line x1="149" y1="110" x2="284" y2="8"/>
+                    <line x1="149" y1="110" x2="8" y2="200"/>
+                    <line x1="149" y1="110" x2="289" y2="205"/>
+                    <line x1="149" y1="110" x2="109" y2="220"/>
+                    <line x1="149" y1="110" x2="199" y2="220"/>
+                    <line x1="149" y1="110" x2="8" y2="130"/>
+                    <line x1="149" y1="110" x2="289" y2="80"/>
+                  </g>
+                  <g stroke="rgba(255,255,255,0.09)" strokeWidth="0.5" fill="none">
+                    <line x1="20" y1="10" x2="5" y2="35"/>
+                    <line x1="284" y1="8" x2="294" y2="40"/>
+                    <line x1="109" y1="220" x2="30" y2="190"/>
+                  </g>
+                  <circle cx="149" cy="110" r="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5"/>
+                  <circle cx="149" cy="110" r="8" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5"/>
+                </svg>
+                <div className="void-title">MIRROR VOID</div>
+                <div className="void-sub">original nft transferred</div>
+                <div className="void-cta">FIX MIRROR →</div>
+              </div>
             ) : showImage ? (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt={nftName} onError={() => setImgError(true)}/>
+                <img src={displayImage} alt={nftName} onError={() => setImgError(true)}/>
                 <div className="image-vignette"/>
               </>
             ) : (
               <div className="no-image">
                 <p>NO IMAGE</p>
-                <small>?imageUrl=https://...</small>
+                <small>Import an image below</small>
               </div>
             )}
 
-            {/* Glass stripes always on top of image */}
             {!invalidated && (
               <>
                 <div className="glass-stripe1"/>
@@ -324,12 +281,10 @@ export default function MirrorPage() {
             <div className="mirror-watermark">MIRROR</div>
           </div>
 
-          {/* Name bar */}
           <div className="name-bar">
             <span className="name-text">{nftName}</span>
           </div>
 
-          {/* Footer */}
           <div className="mirror-footer">
             <div className="footer-chain">
               {chain === 'Solana' ? (
@@ -366,10 +321,9 @@ export default function MirrorPage() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="actions">
-          <button className="btn btn-primary" onClick={handleShare}>
-            {copied ? '✓ Copied!' : '⇧ Share Mirror'}
+          <button className="btn btn-primary" onClick={handleImport}>
+            ↑ Import Image
           </button>
           <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
             ⬡ Basescan
