@@ -1,57 +1,48 @@
 // src/app/api/commitment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { STAMP_COMMITTED } from '@/lib/assets';
+import { STAMP_COMMITTED, MARK_BLACK } from '@/lib/assets';
 export const runtime = 'nodejs';
 
 const THEMES: Record<string, {
   bg: string; pageBg: string; border: string; accent: string; accentDim: string;
-  headerBg: string; headerText: string; bodyText: string; bodyTextDim: string;
-  ruleLine: string; dark: boolean;
+  headerBg: string; headerText: string; headerSub: string; bodyText: string;
+  bodyTextDim: string; ruleLine: string; metricBg: string; metricBorder: string;
+  diffBg: string; diffBorder: string; footerBg: string; dark: boolean;
 }> = {
+  'parchment': {
+    bg: '#d4c5a0', pageBg: '#faf8f2', border: '#ddd0b0', accent: '#c9a84c',
+    accentDim: '#9a8050', headerBg: '#2d1f0e', headerText: '#c9a84c',
+    headerSub: '#6a5030', bodyText: '#1a1208', bodyTextDim: '#6a5030',
+    ruleLine: '#ddd0b0', metricBg: '#f0ebe0', metricBorder: '#ddd0b0',
+    diffBg: '#f5f0e4', diffBorder: '#ddd0b0', footerBg: '#f0ebe0', dark: false,
+  },
   'circuit-anim': {
     bg: '#04090f', pageBg: '#06111e', border: '#0d3040', accent: '#00e5ff',
     accentDim: '#1a5060', headerBg: '#04090f', headerText: '#00e5ff',
-    bodyText: '#d0eef5', bodyTextDim: '#5a9aaa', ruleLine: '#0d3545', dark: true,
-  },
-  'circuit': {
-    bg: '#030a12', pageBg: '#05101c', border: '#0d3040', accent: '#00bcd4',
-    accentDim: '#0d3a42', headerBg: '#030a12', headerText: '#00bcd4',
-    bodyText: '#cce8ee', bodyTextDim: '#4a8a98', ruleLine: '#0d3040', dark: true,
-  },
-  'parchment': {
-    bg: '#d4c5a0', pageBg: '#f5f0e8', border: '#c9b882', accent: '#8b1a1a',
-    accentDim: '#6b3a1a', headerBg: '#8b1a1a', headerText: '#ffffff',
-    bodyText: '#0d0a07', bodyTextDim: '#3a2a20', ruleLine: '#c9b882', dark: false,
-  },
-  'aurora': {
-    bg: '#04030e', pageBg: '#080c1a', border: '#201840', accent: '#a78bfa',
-    accentDim: '#3a2a70', headerBg: '#04030e', headerText: '#a78bfa',
-    bodyText: '#ddd6fe', bodyTextDim: '#6050a0', ruleLine: '#201840', dark: true,
+    headerSub: '#1a5060', bodyText: '#d0eef5', bodyTextDim: '#5a9aaa',
+    ruleLine: '#0d3545', metricBg: '#04111e', metricBorder: '#0d3040',
+    diffBg: '#04111e', diffBorder: '#0d3040', footerBg: '#04090f', dark: true,
   },
   'base': {
-    bg: '#0042cc', pageBg: '#eef2ff', border: '#b0c8ff', accent: '#0052ff',
+    bg: '#0042cc', pageBg: '#fafbff', border: '#c0d0ff', accent: '#0052ff',
     accentDim: '#4d88ff', headerBg: '#0052ff', headerText: '#ffffff',
-    bodyText: '#0a1a3a', bodyTextDim: '#2a4a8a', ruleLine: '#b0c8ff', dark: false,
+    headerSub: '#a0c0ff', bodyText: '#0a1a3a', bodyTextDim: '#4a6aaa',
+    ruleLine: '#c0d0ff', metricBg: '#f0f4ff', metricBorder: '#c0d0ff',
+    diffBg: '#f0f4ff', diffBorder: '#c0d0ff', footerBg: '#e8eeff', dark: false,
   },
   'gold': {
-    bg: '#0a0800', pageBg: '#0d0a04', border: '#3a2a08', accent: '#d4af37',
+    bg: '#0a0800', pageBg: '#faf8f0', border: '#3a2a08', accent: '#d4af37',
     accentDim: '#8b6914', headerBg: '#1a1200', headerText: '#d4af37',
-    bodyText: '#f0e0a0', bodyTextDim: '#8a7020', ruleLine: '#3a2a08', dark: true,
+    headerSub: '#6a5010', bodyText: '#1a1000', bodyTextDim: '#6a5010',
+    ruleLine: '#e0d0a0', metricBg: '#f5f0e0', metricBorder: '#e0d0a0',
+    diffBg: '#f5f0e0', diffBorder: '#e0d0a0', footerBg: '#f0ebe0', dark: false,
   },
-  'silver': {
-    bg: '#080a0e', pageBg: '#0a0c10', border: '#2a3448', accent: '#c0c8d8',
-    accentDim: '#4a5a80', headerBg: '#0d1018', headerText: '#c0c8d8',
-    bodyText: '#e8ecf4', bodyTextDim: '#6070a0', ruleLine: '#2a3448', dark: true,
-  },
-  'bronze': {
-    bg: '#080502', pageBg: '#0c0804', border: '#3a1e08', accent: '#cd7f32',
-    accentDim: '#8b4513', headerBg: '#120a02', headerText: '#cd7f32',
-    bodyText: '#f0c890', bodyTextDim: '#7a5020', ruleLine: '#3a1e08', dark: true,
-  },
-  'bitcoin': {
-    bg: '#b85800', pageBg: '#f7931a', border: '#c46000', accent: '#ffffff',
-    accentDim: '#ffe8c0', headerBg: '#d4720a', headerText: '#ffffff',
-    bodyText: '#1a0a00', bodyTextDim: '#5a3000', ruleLine: '#c46000', dark: true,
+  'aurora': {
+    bg: '#04030e', pageBg: '#fdfcff', border: '#e0d8f8', accent: '#7c3aed',
+    accentDim: '#a78bfa', headerBg: '#04030e', headerText: '#a78bfa',
+    headerSub: '#4a3a80', bodyText: '#1a1030', bodyTextDim: '#6050a0',
+    ruleLine: '#e0d8f8', metricBg: '#f8f6ff', metricBorder: '#e0d8f8',
+    diffBg: '#f8f6ff', diffBorder: '#e0d8f8', footerBg: '#f0ecff', dark: false,
   },
 };
 
@@ -79,16 +70,33 @@ function wrapText(text: string, maxChars: number, maxLines: number): string[] {
 function formatDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
+function formatDateShort(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Claim type display labels
+const CLAIM_LABELS: Record<string, string> = {
+  x402_payment_reliability:  'x402 Payment Reliability',
+  defi_trading_performance:  'DeFi Trading Performance',
+  code_software_delivery:    'Code / Software Delivery',
+  website_app_delivery:      'Website / App Delivery',
+  social_media_growth:       'Social Media Growth',
+};
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const uid_param = searchParams.get('uid');
+
   let commitment: string;
   let themeKey: string;
   let agentId: string;
   let txHash: string;
   let deadline: string;
-  let metric: string;
+  let claimType: string;
+  let metrics: Array<{label: string; value: string}>;
+  let difficultyScore: number;
+  let difficultyTier: string;
+  let issuedDate: string;
 
   if (uid_param) {
     const { fetchAttestation, fetchAttestationByTx } = await import('@/lib/eas');
@@ -96,92 +104,213 @@ export async function GET(req: NextRequest) {
     if (!data) return new NextResponse('Attestation not found', { status: 404 });
     let parsed: Record<string, string> = {};
     try { parsed = JSON.parse(data.statement); } catch { parsed = { commitment: data.statement }; }
-    commitment = truncate(parsed.commitment || parsed.statement || 'No commitment text', 200);
-    themeKey   = searchParams.get('theme') || 'circuit-anim';
-    agentId    = esc(data.recipient.slice(0, 8));
-    txHash     = data.txHash;
-    deadline   = parsed.deadline || '';
-    metric     = parsed.metric || '';
+    commitment   = truncate(parsed.commitment || parsed.statement || 'No commitment text', 200);
+    themeKey     = searchParams.get('theme') || 'parchment';
+    agentId      = esc(data.recipient.slice(0, 8));
+    txHash       = data.txHash;
+    deadline     = parsed.deadline || '';
+    claimType    = parsed.claimType || searchParams.get('claimType') || '';
+    metrics      = parsed.metrics ? JSON.parse(parsed.metrics) : [];
+    difficultyScore = parseInt(parsed.difficultyScore || '0', 10);
+    difficultyTier  = parsed.difficultyTier || 'bronze';
+    issuedDate   = formatDate(new Date(data.time * 1000));
   } else {
-    commitment = truncate(searchParams.get('commitment') || searchParams.get('statement') || 'I commit to achieving this goal', 200);
-    themeKey   = searchParams.get('theme') || 'circuit-anim';
-    const rawId = searchParams.get('agentId') || '????';
-    agentId    = esc(rawId.startsWith('0x') ? rawId.slice(0, 8) : rawId);
-    txHash     = searchParams.get('txHash') || '';
-    deadline   = esc(searchParams.get('deadline') || '');
-    metric     = esc(searchParams.get('metric') || '');
+    commitment   = truncate(searchParams.get('commitment') || searchParams.get('statement') || 'I commit to achieving this goal', 200);
+    themeKey     = searchParams.get('theme') || 'parchment';
+    const rawId  = searchParams.get('agentId') || '????';
+    agentId      = esc(rawId.startsWith('0x') ? rawId.slice(2, 10) : rawId);
+    txHash       = searchParams.get('txHash') || '';
+    deadline     = esc(searchParams.get('deadline') || '');
+    claimType    = searchParams.get('claimType') || '';
+    const rawMetrics = searchParams.get('metrics') || '';
+    metrics      = rawMetrics ? JSON.parse(decodeURIComponent(rawMetrics)) : [];
+    difficultyScore = parseInt(searchParams.get('difficulty') || '0', 10);
+    difficultyTier  = searchParams.get('tier') || 'bronze';
+    issuedDate   = formatDate(new Date());
   }
 
-  const t       = THEMES[themeKey] ?? THEMES['circuit-anim'];
-  const uid     = txHash ? '0x' + txHash.slice(2,6) + '\u2026' + txHash.slice(-4) : '0x\u2026pending';
-  const dateStr = formatDate(new Date());
+  const t = THEMES[themeKey] ?? THEMES['parchment'];
+  const txShort = txHash
+    ? '0x' + txHash.slice(2, 6) + '\u2026' + txHash.slice(-4)
+    : '0x\u2026pending';
+  const claimLabel = CLAIM_LABELS[claimType] || esc(claimType) || 'General Commitment';
 
+  // ── Text wrapping for commitment statement ──
   const charCount  = commitment.length;
   const fontSize   = charCount <= 80 ? 13.5 : charCount <= 140 ? 12 : 10.5;
-  const lineH      = fontSize + 9;
+  const lineH      = fontSize + 8;
   const maxChars   = charCount <= 80 ? 44 : charCount <= 140 ? 50 : 56;
-  const lines      = wrapText(esc(commitment), maxChars, 6);
-  const totalTextH = lines.length * lineH;
-  const textStartY = Math.round(95 + (185 - totalTextH) / 2);
+  const lines      = wrapText(esc(commitment), maxChars, 5);
+  const textH      = lines.length * lineH;
 
-  const ruleLines = Array.from({ length: 8 }, (_, i) =>
-    `<line x1="28" y1="${88 + i * 26}" x2="332" y2="${88 + i * 26}" stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.5"/>`
-  ).join('');
+  // ── Metrics grid (up to 3) ──
+  const displayMetrics = metrics.slice(0, 3);
+  const metricCellW = displayMetrics.length > 0 ? Math.floor(332 / Math.max(displayMetrics.length, 3)) : 110;
 
-  const commitmentLines = lines.map((line, i) =>
-    `<text x="28" y="${textStartY + i * lineH}" font-family="Georgia,serif" font-size="${fontSize}" fill="${t.bodyText}">${line}</text>`
-  ).join('');
+  const metricsGroup = displayMetrics.length > 0 ? `
+    <!-- Metrics section label -->
+    <text x="28" y="200" font-family="monospace" font-size="5.5" letter-spacing="3.5"
+      fill="${t.accentDim}" text-anchor="start">VERIFICATION THRESHOLDS</text>
+    <!-- Metric cells -->
+    ${displayMetrics.map((m, i) => `
+    <rect x="${28 + i * (metricCellW + 4)}" y="206" width="${metricCellW}" height="36"
+      rx="2" fill="${t.metricBg}" stroke="${t.metricBorder}" stroke-width="0.8"/>
+    <text x="${28 + i * (metricCellW + 4) + 8}" y="218" font-family="monospace" font-size="5"
+      letter-spacing="2" fill="${t.accentDim}" text-transform="uppercase">${esc(m.label).toUpperCase()}</text>
+    <text x="${28 + i * (metricCellW + 4) + 8}" y="233" font-family="Georgia,serif" font-size="13"
+      font-weight="bold" fill="${t.bodyText}">${esc(m.value)}</text>
+    `).join('')}
+  ` : '';
 
-  const sigLine = [
-    `<line x1="28" y1="292" x2="180" y2="292" stroke="${t.ruleLine}" stroke-width="0.8" opacity="0.7"/>`,
-    `<text x="28" y="304" font-family="monospace" font-size="6.5" fill="${t.accentDim}" letter-spacing="1">AGENT SIGNATURE</text>`,
-    `<text x="28" y="316" font-family="monospace" font-size="6" fill="${t.accentDim}" opacity="0.6">#${agentId}</text>`,
-  ].join('');
+  const metricsBottom = displayMetrics.length > 0 ? 248 : 210;
 
-  const metaRow = (deadline || metric) ? [
-    deadline ? `<text x="28" y="334" font-family="monospace" font-size="6.5" fill="${t.accentDim}">DEADLINE: <tspan fill="${t.accent}" font-weight="bold">${deadline}</tspan></text>` : '',
-    metric   ? `<text x="28" y="346" font-family="monospace" font-size="6.5" fill="${t.accentDim}">METRIC: <tspan fill="${t.accent}" font-weight="bold">${metric}</tspan></text>` : '',
-  ].join('') : '';
+  // ── Difficulty score ──
+  const diffPct      = Math.min(Math.max(difficultyScore, 0), 100);
+  const diffBarW     = Math.round(diffPct * 140 / 100);
+  const diffTierCol  = difficultyTier === 'gold' ? '#c9a84c'
+                     : difficultyTier === 'silver' ? '#8a9aaa'
+                     : '#cd7f32';
+  const diffTierLabel = difficultyTier.charAt(0).toUpperCase() + difficultyTier.slice(1) + ' Tier';
 
-  const cornerNotch = `<polyline points="360,18 360,36 342,36" stroke="${t.accentDim}" stroke-width="0.8" fill="none" opacity="0.4"/>`;
+  const difficultyGroup = `
+    <!-- Difficulty section label -->
+    <text x="28" y="${metricsBottom + 6}" font-family="monospace" font-size="5.5" letter-spacing="3.5"
+      fill="${t.accentDim}">DIFFICULTY SCORE</text>
+    <!-- Difficulty row -->
+    <rect x="28" y="${metricsBottom + 12}" width="332" height="42"
+      rx="2" fill="${t.diffBg}" stroke="${t.diffBorder}" stroke-width="0.8"/>
+    <!-- Score number -->
+    <text x="42" y="${metricsBottom + 36}" font-family="Georgia,serif" font-size="22"
+      font-weight="bold" fill="${t.bodyText}">${difficultyScore}</text>
+    <!-- Tier label -->
+    <text x="42" y="${metricsBottom + 48}" font-family="monospace" font-size="6"
+      letter-spacing="1.5" fill="${diffTierCol}">${diffTierLabel}</text>
+    <!-- Desc -->
+    <text x="90" y="${metricsBottom + 30}" font-family="monospace" font-size="6"
+      fill="${t.bodyTextDim}" font-style="italic">Top ${100 - diffPct}% of ${claimLabel} commitments</text>
+    <!-- Bar track -->
+    <rect x="90" y="${metricsBottom + 36}" width="140" height="4"
+      rx="2" fill="${t.ruleLine}"/>
+    <!-- Bar fill -->
+    <rect x="90" y="${metricsBottom + 36}" width="${diffBarW}" height="4"
+      rx="2" fill="${diffTierCol}" opacity="0.85"/>
+    <!-- 0 / 100 labels -->
+    <text x="90" y="${metricsBottom + 47}" font-family="monospace" font-size="5"
+      fill="${t.accentDim}" opacity="0.6">0</text>
+    <text x="226" y="${metricsBottom + 47}" font-family="monospace" font-size="5"
+      fill="${t.accentDim}" opacity="0.6" text-anchor="end">100</text>
+  `;
 
-  // Real "COMMITTED" ink stamp PNG from assets.ts
-  // 114×114px, right column, vertically centred in the page body (y 128–242)
-  const stampImg = `<image href="${STAMP_COMMITTED}" x="242" y="128" width="114" height="114" opacity="0.92"/>`;
+  const diffBottom = metricsBottom + 60;
+
+  // ── Deadline ──
+  const deadlineGroup = deadline ? `
+    <line x1="28" y1="${diffBottom + 2}" x2="360" y2="${diffBottom + 2}"
+      stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.6"/>
+    <text x="28" y="${diffBottom + 14}" font-family="monospace" font-size="5.5"
+      letter-spacing="3.5" fill="${t.accentDim}">DEADLINE</text>
+    <text x="96" y="${diffBottom + 14}" font-family="Georgia,serif" font-size="11"
+      font-weight="bold" fill="${t.bodyText}">${esc(deadline)}</text>
+  ` : '';
+
+  const deadlineH  = deadline ? 22 : 8;
+  const bottomY    = diffBottom + deadlineH + 10;
+
+  // ── Bottom row: Agent ID | Issued | Commitment ID + stamp ──
+  const bottomRow = `
+    <line x1="28" y1="${bottomY}" x2="360" y2="${bottomY}"
+      stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.6"/>
+    <!-- Agent ID -->
+    <text x="28" y="${bottomY + 12}" font-family="monospace" font-size="5"
+      letter-spacing="2.5" fill="${t.accentDim}">AGENT ID</text>
+    <text x="28" y="${bottomY + 22}" font-family="monospace" font-size="7"
+      fill="${t.bodyText}">#${agentId}</text>
+    <!-- Issued — centred -->
+    <text x="190" y="${bottomY + 12}" font-family="monospace" font-size="5"
+      letter-spacing="2.5" fill="${t.accentDim}" text-anchor="middle">ISSUED</text>
+    <text x="190" y="${bottomY + 22}" font-family="monospace" font-size="7"
+      fill="${t.bodyText}" text-anchor="middle">${issuedDate}</text>
+    <!-- Commitment ID — right, stamp sits on top -->
+    <text x="360" y="${bottomY + 12}" font-family="monospace" font-size="5"
+      letter-spacing="2.5" fill="${t.accentDim}" text-anchor="end">COMMITMENT ID</text>
+    <text x="360" y="${bottomY + 22}" font-family="monospace" font-size="6.5"
+      fill="${t.bodyTextDim}" text-anchor="end">${txShort}</text>
+  `;
+
+  const bottomRowH = 32;
+  const footerY    = bottomY + bottomRowH + 10;
+  const totalH     = footerY + 22;
+
+  // ── Stamp over commitment ID ──
+  const stampSize = 80;
+  const stampX    = 360 - stampSize + 20;
+  const stampY    = bottomY - stampSize + 14;
+  const stampImg  = `<image href="${STAMP_COMMITTED}" x="${stampX}" y="${stampY}"
+    width="${stampSize}" height="${stampSize}" opacity="0.90"
+    transform="rotate(8, ${stampX + stampSize/2}, ${stampY + stampSize/2})"/>`;
+
+  // ── Mark logo top-right ──
+  const markImg = `<image href="${MARK_BLACK}" x="330" y="18" width="22" height="22" opacity="0.55"/>`;
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="380" height="420" viewBox="0 0 380 420" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="380" height="${totalH}" viewBox="0 0 380 ${totalH}"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
   <defs>
-    <clipPath id="outer"><rect width="380" height="420" rx="10" ry="10"/></clipPath>
+    <clipPath id="card"><rect width="380" height="${totalH}" rx="8" ry="8"/></clipPath>
   </defs>
 
-  <rect width="380" height="420" rx="10" ry="10" fill="${t.bg}" stroke="${t.border}" stroke-width="1"/>
-  <rect x="14" y="14" width="352" height="392" rx="6" ry="6" fill="${t.pageBg}" stroke="${t.border}" stroke-width="0.8"/>
-  ${cornerNotch}
+  <!-- Card shell -->
+  <rect width="380" height="${totalH}" rx="8" ry="8"
+    fill="${t.pageBg}" stroke="${t.border}" stroke-width="1"/>
+
+  <!-- Gold top border -->
+  <rect x="0" y="0" width="380" height="4" rx="8" ry="8" fill="${t.accent}" opacity="0.9"/>
+  <rect x="0" y="2" width="380" height="2" fill="${t.accent}" opacity="0.9"/>
 
   <!-- Header -->
-  <rect x="14" y="14" width="352" height="30" rx="6" ry="6" fill="${t.headerBg}"/>
-  <rect x="14" y="32" width="352" height="12" fill="${t.headerBg}"/>
-  <text x="28" y="33" font-family="monospace" font-size="8" font-weight="bold"
-    fill="${t.headerText}" letter-spacing="2">COMMITMENT DOCUMENT · THE SEALER</text>
+  <rect x="0" y="4" width="380" height="34" fill="${t.headerBg}"/>
+  <text x="22" y="21" font-family="monospace" font-size="7.5" font-weight="bold"
+    letter-spacing="3" fill="${t.headerText}">REGISTERED COMMITMENT</text>
+  <text x="22" y="32" font-family="monospace" font-size="5.5" letter-spacing="2"
+    fill="${t.headerSub}">CATEGORY: ${claimLabel.toUpperCase()}</text>
+  <!-- Mark logo -->
+  ${markImg}
+  <!-- TX -->
+  <text x="356" y="26" font-family="monospace" font-size="5.5" letter-spacing="1"
+    fill="${t.headerSub}" text-anchor="end">TX: ${txShort}</text>
 
-  <text x="28" y="68" font-family="monospace" font-size="7" font-weight="bold"
-    fill="${t.accent}" letter-spacing="3" opacity="0.7">STATEMENT OF INTENT</text>
-  <line x1="28" y1="73" x2="352" y2="73" stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.4"/>
+  <!-- Divider -->
+  <line x1="0" y1="38" x2="380" y2="38" stroke="${t.border}" stroke-width="0.6"/>
 
-  ${ruleLines}
-  ${commitmentLines}
+  <!-- Commitment label -->
+  <text x="28" y="58" font-family="monospace" font-size="5.5" letter-spacing="3.5"
+    fill="${t.accentDim}">COMMITMENT STATEMENT</text>
+
+  <!-- Goal box — left accent border -->
+  <rect x="28" y="64" width="3" height="${textH + 16}" rx="1" fill="${t.accent}" opacity="0.8"/>
+  <rect x="31" y="64" width="321" height="${textH + 16}" rx="0 2 2 0"
+    fill="${t.metricBg}" stroke="${t.metricBorder}" stroke-width="0.8"/>
+
+  <!-- Commitment text -->
+  ${lines.map((line, i) =>
+    `<text x="44" y="${82 + i * lineH}" font-family="Georgia,serif" font-size="${fontSize}"
+      font-style="italic" fill="${t.bodyText}">${line}</text>`
+  ).join('\n  ')}
+
+  ${metricsGroup}
+  ${difficultyGroup}
+  ${deadlineGroup}
+  ${bottomRow}
   ${stampImg}
 
-  <line x1="14" y1="282" x2="366" y2="282" stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.3"/>
-  ${sigLine}
-  ${metaRow}
-
   <!-- Footer -->
-  <rect x="14" y="390" width="352" height="16" fill="${t.headerBg}" opacity="0.6"/>
-  <rect x="14" y="390" width="352" height="1" fill="${t.ruleLine}" opacity="0.5"/>
-  <text x="28" y="401" font-family="monospace" font-size="5.5" fill="${t.accentDim}" letter-spacing="1.5" opacity="0.7">ISSUED ${dateStr.toUpperCase()} · TX ${uid}</text>
-  <text x="352" y="401" font-family="monospace" font-size="5.5" fill="${t.accentDim}" text-anchor="end" opacity="0.5">UNVERIFIED</text>
+  <rect x="0" y="${footerY}" width="380" height="22" fill="${t.footerBg}"/>
+  <line x1="0" y1="${footerY}" x2="380" y2="${footerY}"
+    stroke="${t.border}" stroke-width="0.6"/>
+  <text x="22" y="${footerY + 14}" font-family="monospace" font-size="5"
+    letter-spacing="1.5" fill="${t.accentDim}" opacity="0.8">THESEALER.XYZ</text>
+  <text x="358" y="${footerY + 14}" font-family="monospace" font-size="5"
+    letter-spacing="1.5" fill="${t.accentDim}" opacity="0.8" text-anchor="end">EAS · BASE</text>
 </svg>`;
 
   return new NextResponse(svg, {
