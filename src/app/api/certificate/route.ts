@@ -18,10 +18,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MARK_WHITE } from '@/lib/assets';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.thesealer.xyz';
-const SEAL_URLS = {
-  full:    `${BASE_URL}/seals/fully-achieved.png`,
-  partial: `${BASE_URL}/seals/partially-achieved.png`,
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,6 +47,12 @@ interface CertificateParams {
 
 type BadgeTier = 'gold' | 'silver' | 'bronze' | 'none';
 type CertState = 'full' | 'partial' | 'failed';
+
+const SEAL_URLS: Record<CertState, string> = {
+  full:    `${BASE_URL}/seals/fully-achieved.png`,
+  partial: `${BASE_URL}/seals/partially-achieved.png`,
+  failed:  '',
+};
 
 interface PerMetricResult extends MetricResult {
   ratio:     number;
@@ -177,7 +179,6 @@ const SAD_SEAL = `<svg width="32" height="32" viewBox="0 0 40 40" xmlns="http://
 const THEME = {
   full: {
     hdr:       '#2d1f0e',
-    // accent colour used for issuer, category, sub-title
     accent:    '#c9a84c',
     accentDim: '#b8964a',
     titleCol:  '#f0e8d0',
@@ -185,9 +186,9 @@ const THEME = {
     agentBg:   '#f5f0e4', agentBdr: '#e0d8c0', agentTxt: '#3a2a10',
     footBg:    '#f0ebe0', footBdr:  '#e0d8c0',
     gradL:     '#1a1200', gradM:    '#c9a84c', frameBdr: '#c9a84c',
-    // score dark block
     scoreBg:   '#2d1f0e', scoreBdr: '#c9a84c', scoreNum: '#c9a84c', scoreLbl: '#c9a84c',
     metaStatus:'VERIFIED',
+    subCol:    '#c9a84c',
   },
   partial: {
     hdr:       '#2d1f0e',
@@ -213,8 +214,9 @@ const THEME = {
     gradL:     '#1a0808', gradM:    '#8a2020', frameBdr: '#8a2020',
     scoreBg:   '#1a0808', scoreBdr: '#8a2020', scoreNum: '#e05050', scoreLbl: '#c04040',
     metaStatus:'CLOSED',
+    subCol:    '#c04040',
   },
-} as const;
+};
 
 const BADGE_COLOR: Record<BadgeTier, string> = {
   gold: '#c9a84c', silver: '#a0a8b0', bronze: '#cd9060', none: '#888',
@@ -398,7 +400,7 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       fill="${t.titleCol}">${s.state === 'failed' ? 'Commitment Record' : 'Certificate of Achievement'}</text>
 
 <!-- Wax seal — FULL/PARTIAL only -->
-${HAS_SEAL ? `<image href="${SEAL_URLS[s.state as 'full' | 'partial']}" x="${SEAL_X}" y="${SEAL_Y}" width="${SEAL_W}" height="${SEAL_W}" opacity="0.93" preserveAspectRatio="xMidYMid meet"/>` : ''}
+${HAS_SEAL ? `<image href="${SEAL_URLS[s.state]}" x="${SEAL_X}" y="${SEAL_Y}" width="${SEAL_W}" height="${SEAL_W}" opacity="0.93" preserveAspectRatio="xMidYMid meet"/>` : ''}
 
 <!-- Category — accent dim colour -->
 <text x="${M}" y="58" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2.5"
