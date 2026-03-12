@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.thesealer.xyz';
-const MARK_URL = `${BASE_URL}/mark_whiter.png`;
+const MARK_URL = `${BASE_URL}/mark_white.png`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
