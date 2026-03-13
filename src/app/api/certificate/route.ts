@@ -270,17 +270,21 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   //   y=51: issue date
   //   y=63: UID
 
-  // Header tall enough to hold: THE SEALER (y=23) + gap + title (y=48) + pill (y=60, h=16 → y=76) + 8px pad
-  const HDR_H   = 86;
+  // Header tall enough for 138px seal (y=5 → y=143): HDR_H=138
+  // Left text: THE SEALER (y=24), Title (y=58), pill (y=72, h=16)
+  // Right text: CATEGORY (y=24), VERIFIED pill (y=43–57), date (y=74), UID (y=88)
+  const HDR_H   = 142;
   const META_X  = W - M;
 
-  // Seal: 138×138, top at y=-8 so it overlaps the accent bar upward — prominent stamp effect
+  // Seal top at y=14 — aligns visually with THE SEALER PROTOCOL line (y=26 baseline)
+  // Seal bottom = 14+138 = 152, header bottom = 5+142 = 147 → seal slightly overflows bottom
+  // Clip path handles the overflow cleanly
   const HAS_SEAL   = s.state !== 'failed';
   const SEAL_W     = 138;
   const SEAL_X     = 276;
-  const SEAL_TOP   = -8;
+  const SEAL_TOP   = 12;
   const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 345
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 61
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 81
 
   // State subtitle pill
   const subTitle =
@@ -288,13 +292,13 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
     s.state === 'partial' ? `\u25D1  PARTIALLY ACHIEVED  \u00B7  ${s.perMetric.filter(m => m.met).length} OF ${s.perMetric.length} METRICS MET` :
                             '\u2717  FAILED  \u00B7  NO METRICS MET AT DEADLINE';
   const PILL_W = pillWidth(subTitle);
-  const PILL_Y = 60;   // under title with visible gap
+  const PILL_Y = 78;
   const PILL_H = 16;
 
   const CAT_TEXT = `CATEGORY: ${p.claimType.replace(/_/g, ' ').toUpperCase()}`;
 
   // ── Vertical layout ──────────────────────────────────────────────────────────
-  const AGENT_Y   = HDR_H + 5 + 5;   // 5 accent bar + 5 gap = 82
+  const AGENT_Y   = 5 + HDR_H + 4;   // accent bar + header + gap
   const AGENT_H   = 46;
   const TABLE_Y   = AGENT_Y + AGENT_H;
   const COL_HDR_H = 22;
@@ -322,8 +326,8 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const SX3   = SX2 + SW23 + GAP;
   const SX4   = SX3 + SW23 + GAP;
   const SH    = 84;
-  // Icon centre aligns with right edge of score/badge block row (W-M), inset 14px
-  const ICON_X = W - M - 14;   // = 618 — inside last metric row, aligns with badge block right
+  // Icon X: centred over the badge column so it aligns visually with the badge block
+  const ICON_X = SX4 + SW4 / 2;   // centre of badge column ≈ 559
 
   const scoresY = ROWS_TOP + s.perMetric.length * ROW_H + 14;
   const svgH    = scoresY + SH + 10 + 41;
@@ -473,35 +477,41 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 <rect x="0" y="5" width="${W}" height="${HDR_H}" fill="${t.hdr}"/>
 
 <!-- Left header: THE SEALER PROTOCOL | Title | Pill -->
-<text x="${M}" y="23"
+<text x="${M}" y="26"
       font-family="Courier Prime,monospace" font-size="7" font-weight="700" letter-spacing="4"
       fill="${t.accent}">THE SEALER PROTOCOL</text>
 
-<text x="${M}" y="48"
+<text x="${M}" y="62"
       font-family="Cormorant Garamond,serif" font-size="22" font-weight="600" letter-spacing="0.5"
       fill="${t.titleCol}">${s.state === 'failed' ? 'Commitment Record' : 'Certificate of Achievement'}</text>
 
-<!-- Pill: under title with clear gap -->
+<!-- State subtitle pill -->
 <rect x="${M}" y="${PILL_Y}" width="${PILL_W}" height="${PILL_H}" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.6"/>
 <text x="${M+11}" y="${PILL_Y+11}"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2"
       fill="${t.accent}">${subTitle}</text>
 
-<!-- Right header: CATEGORY (top, same Y as THE SEALER PROTOCOL) | status | date | UID -->
-<text x="${META_X}" y="23"
-      font-family="Courier Prime,monospace" font-size="5.5" font-weight="700" letter-spacing="2"
-      fill="${t.accentDim}" text-anchor="end">${esc(CAT_TEXT)}</text>
+<!-- Right header top: CATEGORY — bold, accent colour, underline sized to text -->
+<text x="${META_X}" y="26"
+      font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2.5"
+      fill="${t.accent}" text-anchor="end">${esc(CAT_TEXT)}</text>
+<line x1="${META_X - Math.ceil(CAT_TEXT.length * 7.2)}" y1="30" x2="${META_X}" y2="30"
+      stroke="${t.accent}" stroke-width="0.8" opacity="0.45"/>
 
-<text x="${META_X}" y="42"
-      font-family="Courier Prime,monospace" font-size="5" letter-spacing="2.5"
-      fill="${t.metaLabel}" text-anchor="end" opacity="0.8">${t.metaStatus}</text>
+<!-- VERIFIED / CLOSED pill — right-aligned, below category -->
+<rect x="${META_X - 72}" y="37" width="72" height="16" rx="3"
+      fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.7"/>
+<text x="${META_X - 36}" y="48"
+      font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3"
+      fill="${t.accent}" text-anchor="middle">${t.metaStatus}</text>
 
-<text x="${META_X}" y="56"
-      font-family="Courier Prime,monospace" font-size="6.5" font-weight="700"
+<!-- Date + UID — lower in taller header -->
+<text x="${META_X}" y="72"
+      font-family="Courier Prime,monospace" font-size="7" font-weight="700"
       fill="${t.metaDate}" text-anchor="end">${esc(p.issuedAt)}</text>
 
-<text x="${META_X}" y="70"
+<text x="${META_X}" y="88"
       font-family="Courier Prime,monospace" font-size="5.5" font-weight="700"
       fill="${t.uidCol}" text-anchor="end">UID: ${p.uid.slice(0,8)}\u2026${p.uid.slice(-6)}</text>
 
