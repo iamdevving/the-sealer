@@ -439,10 +439,9 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   // ── Footer logo ───────────────────────────────────────────────────────────────
   const LOGO_SZ     = 16;
   const LOGO_FT_X   = M;
-  const LOGO_FT_Y   = svgH - 46 + 13;
+  // Align logo vertically with the label row (svgH-29 baseline = label top ~svgH-38)
+  const LOGO_FT_Y   = svgH - 38;
   const SITE_X      = LOGO_FT_X + LOGO_SZ + 7;
-  // Footer columns: logo+site on left, then ISSUED, COMMITMENT PERIOD, VERIFIER
-  // ISSUED starts at 260 — well clear of the ~140px logo+text block
   const FT_ISSUED   = 260;
   const FT_PERIOD   = 430;
 
@@ -592,8 +591,8 @@ ${s.badgeTier !== 'none' ? `
 <image href="${MARK_WHITE}"
        x="${LOGO_FT_X}" y="${LOGO_FT_Y}" width="${LOGO_SZ}" height="${LOGO_SZ}"
        preserveAspectRatio="xMidYMid meet" opacity="0.55"/>
-<text x="${SITE_X}" y="${svgH-27}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">THESEALER.XYZ</text>
-<text x="${SITE_X}" y="${svgH-14}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">EAS \u00B7 BASE</text>
+<text x="${SITE_X}" y="${svgH-29}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" font-weight="700" fill="#9a8050">THESEALER.XYZ</text>
+<text x="${SITE_X}" y="${svgH-15}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">EAS \u00B7 BASE</text>
 
 <text x="${FT_ISSUED}"  y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050">${s.state === 'failed' ? 'CLOSED' : 'ISSUED'}</text>
 <text x="${FT_ISSUED}"  y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10">${esc(p.issuedAt)}</text>
