@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
       paymentChain:     paymentChain || 'base',
       easExplorer:      `https://base.easscan.org/attestation/view/${commitmentUid}`,
       message:          'Commitment sealed onchain. Certificate will be issued after verification.',
-      verifyEndpoint:   `/api/verify/${claimType.replace(/_/g, '/')}`,
+      verifyEndpoint: `/api/verify/${claimType}`,
     });
   }, COMMITMENT_PRICE);
 }
