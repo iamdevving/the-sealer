@@ -274,14 +274,13 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const HDR_H   = 86;
   const META_X  = W - M;
 
-  // Seal: 120×120, anchored top of header (y=5), pushed left into the centre zone
-  // Left edge at x=290 → cx=350, visually between title text and right meta
+  // Seal: 130×130, anchored top of header (y=2, slightly above accent bar), left edge at x=280
   const HAS_SEAL   = s.state !== 'failed';
-  const SEAL_W     = 120;
-  const SEAL_X     = 290;
-  const SEAL_TOP   = 5;   // flush with top of header (accent bar bottom)
-  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 350
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 65
+  const SEAL_W     = 130;
+  const SEAL_X     = 280;
+  const SEAL_TOP   = 2;   // slightly above accent bar — overlaps upward for prominence
+  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 345
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 67
 
   // State subtitle pill
   const subTitle =
@@ -440,7 +439,7 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const tierFrame = TIER_FRAME_COLOR[s.badgeTier !== 'none' ? s.badgeTier : 'none'];
 
   // ── Footer logo ───────────────────────────────────────────────────────────────
-  const LOGO_SZ     = 14;
+  const LOGO_SZ     = 18;
   const LOGO_FT_X   = M;                    // left margin
   const LOGO_FT_Y   = svgH - 46 + 14;       // centred in footer stripe
   const SITE_X      = LOGO_FT_X + LOGO_SZ + 8;   // text starts right of logo
@@ -462,13 +461,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 
 <!-- Background -->
 <rect width="${W}" height="${svgH}" fill="#faf8f0"/>
-
-<!-- Full-height side accent lines (tier colour) -->
-<line x1="1"     y1="0" x2="1"     y2="${svgH}" stroke="${tierFrame}" stroke-width="2.5" opacity="0.5"/>
-<line x1="${W-1}" y1="0" x2="${W-1}" y2="${svgH}" stroke="${tierFrame}" stroke-width="2.5" opacity="0.5"/>
-<!-- Inner side lines, slightly transparent -->
-<line x1="4"     y1="0" x2="4"     y2="${svgH}" stroke="${tierFrame}" stroke-width="0.5" opacity="0.2"/>
-<line x1="${W-4}" y1="0" x2="${W-4}" y2="${svgH}" stroke="${tierFrame}" stroke-width="0.5" opacity="0.2"/>
 
 <!-- Top + bottom accent bars -->
 <rect x="0" y="0"         width="${W}" height="5" fill="url(#${gradId})"/>
@@ -603,6 +595,11 @@ ${s.badgeTier !== 'none' ? `
 
 <text x="${W-M}" y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050" text-anchor="end">${s.state === 'failed' ? 'RECORD' : 'VERIFIER'}</text>
 <text x="${W-M}" y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10" text-anchor="end">${s.state === 'failed' ? 'Permanent \u00B7 EAS onchain' : p.claimType.includes('x402') ? 'x402 on-chain \u00B7 auto' : 'automated \u00B7 api'}</text>
+<!-- Full-height side accent lines drawn LAST so they sit above all content -->
+<line x1="2"     y1="0" x2="2"     y2="${svgH}" stroke="${tierFrame}" stroke-width="3" opacity="0.55"/>
+<line x1="${W-2}" y1="0" x2="${W-2}" y2="${svgH}" stroke="${tierFrame}" stroke-width="3" opacity="0.55"/>
+<line x1="5"     y1="0" x2="5"     y2="${svgH}" stroke="${tierFrame}" stroke-width="0.6" opacity="0.2"/>
+<line x1="${W-5}" y1="0" x2="${W-5}" y2="${svgH}" stroke="${tierFrame}" stroke-width="0.6" opacity="0.2"/>
 
 </svg>`;
 }
