@@ -32,20 +32,4 @@ export const STAMP_STATEMENT_BLACK = '/assets/stamp-statement-black.png';
 
 export const STAMP_STATEMENT_WHITE = '/assets/stamp-statement-white.png';
 
-export const STAMP_COMMITTED = '/assets/stamp-committed.png';base64,${STAMP_COMMITTED_PARTS.join("")}`;
-
-
-
-
-
-
-
-
-
-
-
-
-// Future stamps — add here when ready:
-// export const STAMP_HOMEPAGE   = 'data:image/png;base64,...';
-// export const STAMP_COMMITTED  = 'data:image/png;base64,...';
-// export const STAMP_CARD       = 'data:image/png;base64,...';
+export const STAMP_COMMITTED = '/assets/stamp-committed.png';
