@@ -23,18 +23,18 @@ const PAYMENT_CONFIG = {
   solanaRecipient: '6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj',
 };
 
-const EAS_ADDRESS             = '0x4200000000000000000000000000000000000021';
-const SCHEMA_UID              = process.env.EAS_SCHEMA_UID!;
-const IDENTITY_SCHEMA_UID     = process.env.EAS_IDENTITY_SCHEMA_UID!;
-const COMMITMENT_SCHEMA_UID   = process.env.EAS_COMMITMENT_SCHEMA_UID!;
-const eas                     = new EAS(EAS_ADDRESS);
+const EAS_ADDRESS           = '0x4200000000000000000000000000000000000021';
+const SCHEMA_UID            = process.env.EAS_SCHEMA_UID!;
+const IDENTITY_SCHEMA_UID   = process.env.EAS_IDENTITY_SCHEMA_UID!;
+const COMMITMENT_SCHEMA_UID = process.env.EAS_COMMITMENT_SCHEMA_UID!;
+const eas                   = new EAS(EAS_ADDRESS);
 
 // ── Shared attestation helper ─────────────────────────────────────────────────
-// Returns { transactionHash, uid } — uid is the EAS attestation UID
+
 async function sendAttestation(
-  schemaUid:    string,
-  encodedData:  string,
-  recipient:    `0x${string}`,
+  schemaUid:   string,
+  encodedData: string,
+  recipient:   `0x${string}`,
 ): Promise<{ transactionHash: string; uid: string }> {
   const account      = privateKeyToAccount(privateKey as `0x${string}`);
   const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
@@ -52,24 +52,24 @@ async function sendAttestation(
     },
   });
 
-  // EAS SDK v2 returns the UID directly; v1 returns a tx object
-  let uid: string;
+  // Always use viem directly — avoid EAS SDK .wait() which is unreliable across versions
   let txHash: string;
 
-  if (typeof txResponse === 'object' && 'wait' in txResponse) {
-    // SDK v2 — wait() resolves to the UID
-    uid    = await (txResponse as any).wait();
-    txHash = (txResponse as any).tx?.hash ?? '';
+  if (typeof txResponse === 'string' && (txResponse as string).startsWith('0x')) {
+    // Already a tx hash string
+    txHash = txResponse;
   } else {
-    // SDK v1-style — send raw tx
-    const preparedTx = (txResponse as any).data || txResponse;
-    txHash           = await walletClient.sendTransaction(preparedTx as any);
-    const receipt    = await client.waitForTransactionReceipt({
-      hash: txHash as Hash, pollingInterval: 1000, timeout: 90000,
-    });
-    txHash = receipt.transactionHash;
-    uid    = txHash; // fallback — real UID requires log parsing
+    const preparedTx = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
+    txHash = await walletClient.sendTransaction(preparedTx as any);
   }
+
+  const receipt = await client.waitForTransactionReceipt({
+    hash: txHash as Hash, pollingInterval: 1000, timeout: 90_000,
+  });
+  txHash = receipt.transactionHash;
+
+  // EAS emits Attested event — UID is in topics[1] of the first matching log
+  const uid = (receipt.logs?.[0]?.topics?.[1] as string) ?? txHash;
 
   console.log(`[The Sealer] ✅ Attestation mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
@@ -92,7 +92,6 @@ async function verifyPaymentProof(
       return { valid: true };
     }
 
-    // ── Base EVM tx hash ──────────────────────────────────────────────────
     if (cleanProof.startsWith('0x') && cleanProof.length === 66) {
       const txHash = cleanProof as Hash;
       const [receipt, tx] = await Promise.all([
@@ -111,7 +110,6 @@ async function verifyPaymentProof(
       }
     }
 
-    // ── Solana tx signature ───────────────────────────────────────────────
     if (isSolanaSignature(cleanProof)) {
       const tx = await solanaConnection.getTransaction(cleanProof, {
         maxSupportedTransactionVersion: 0,
@@ -128,7 +126,7 @@ async function verifyPaymentProof(
         );
 
         if (recipientFound) {
-          console.log('[The Sealer] ✅ Solana verification OK — recipient confirmed');
+          console.log('[The Sealer] ✅ Solana verification OK');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
         console.log('[The Sealer] ❌ Solana TX recipient mismatch');
@@ -136,7 +134,7 @@ async function verifyPaymentProof(
       }
     }
 
-    console.log('[The Sealer] ❌ Unrecognized proof format — rejecting');
+    console.log('[The Sealer] ❌ Unrecognized proof format');
     return { valid: false };
   } catch (e) {
     console.error('[The Sealer] Verification failed:', e);
@@ -151,13 +149,10 @@ export async function issueSealAttestation(
   agentId?: `0x${string}`,
 ) {
   console.log(`[The Sealer] Issuing statement attestation: "${statement}"`);
-
   const schemaEncoder = new SchemaEncoder('string statement');
   const encodedData   = schemaEncoder.encodeData([
     { name: 'statement', value: statement, type: 'string' },
   ]);
-
-  // recipient = agent wallet (the entity being attested), not payment wallet
   const recipient = agentId ?? '0x0000000000000000000000000000000000000000';
   return sendAttestation(SCHEMA_UID, encodedData, recipient);
 }
@@ -170,7 +165,6 @@ export async function issueIdentityAttestation(
   agentId?:   `0x${string}`,
 ) {
   console.log(`[The Sealer] Issuing identity attestation for: "${name}"`);
-
   const schemaEncoder = new SchemaEncoder('string name,string entityType,string chain,string imageUrl');
   const encodedData   = schemaEncoder.encodeData([
     { name: 'name',       value: name,       type: 'string' },
@@ -178,7 +172,6 @@ export async function issueIdentityAttestation(
     { name: 'chain',      value: chain,      type: 'string' },
     { name: 'imageUrl',   value: imageUrl,   type: 'string' },
   ]);
-
   const recipient = agentId ?? '0x0000000000000000000000000000000000000000';
   return sendAttestation(IDENTITY_SCHEMA_UID, encodedData, recipient);
 }
@@ -188,24 +181,22 @@ export async function issueCommitmentAttestation(params: {
   claimType:         ClaimType;
   metric:            string;
   evidence:          string;
-  deadline:          bigint;         // unix timestamp
+  deadline:          bigint;
   difficultyVersion: number;
 }): Promise<{ transactionHash: string; uid: string }> {
   console.log(`[The Sealer] Issuing commitment attestation — claimType: ${params.claimType}`);
 
-  // Schema: string claimType,string metric,string evidence,uint64 deadline,uint8 difficultyVersion
   const schemaEncoder = new SchemaEncoder(
     'string claimType,string metric,string evidence,uint64 deadline,uint8 difficultyVersion',
   );
   const encodedData = schemaEncoder.encodeData([
-    { name: 'claimType',         value: params.claimType,                      type: 'string' },
-    { name: 'metric',            value: params.metric,                          type: 'string' },
-    { name: 'evidence',          value: params.evidence || '',                  type: 'string' },
-    { name: 'deadline',          value: params.deadline,                        type: 'uint64' },
-    { name: 'difficultyVersion', value: params.difficultyVersion,               type: 'uint8'  },
+    { name: 'claimType',         value: params.claimType,         type: 'string' },
+    { name: 'metric',            value: params.metric,            type: 'string' },
+    { name: 'evidence',          value: params.evidence || '',    type: 'string' },
+    { name: 'deadline',          value: params.deadline,          type: 'uint64' },
+    { name: 'difficultyVersion', value: params.difficultyVersion, type: 'uint8'  },
   ]);
 
-  // recipient = the agent making the commitment
   return sendAttestation(COMMITMENT_SCHEMA_UID, encodedData, params.agentId);
 }
 
