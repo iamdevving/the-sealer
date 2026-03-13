@@ -270,21 +270,17 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   //   y=51: issue date
   //   y=63: UID
 
-  // Header tall enough for 138px seal (y=5 → y=143): HDR_H=138
-  // Left text: THE SEALER (y=24), Title (y=58), pill (y=72, h=16)
-  // Right text: CATEGORY (y=24), VERIFIED pill (y=43–57), date (y=74), UID (y=88)
-  const HDR_H   = 142;
+  // Header: compact at 96px — seal fits centred, text stacked tightly
+  const HDR_H   = 96;
   const META_X  = W - M;
 
-  // Seal top at y=14 — aligns visually with THE SEALER PROTOCOL line (y=26 baseline)
-  // Seal bottom = 14+138 = 152, header bottom = 5+142 = 147 → seal slightly overflows bottom
-  // Clip path handles the overflow cleanly
+  // Seal: 116×116, vertically centred in header (y = 5 + (96-116)/2 → clamp to 5)
   const HAS_SEAL   = s.state !== 'failed';
-  const SEAL_W     = 138;
+  const SEAL_W     = 116;
   const SEAL_X     = 276;
-  const SEAL_TOP   = 12;
-  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 345
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 81
+  const SEAL_TOP   = 5;   // top of header, slightly overflows bottom — clip handles it
+  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 334
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 63
 
   // State subtitle pill
   const subTitle =
@@ -477,41 +473,41 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 <rect x="0" y="5" width="${W}" height="${HDR_H}" fill="${t.hdr}"/>
 
 <!-- Left header: THE SEALER PROTOCOL | Title | Pill -->
-<text x="${M}" y="26"
+<text x="${M}" y="20"
       font-family="Courier Prime,monospace" font-size="7" font-weight="700" letter-spacing="4"
       fill="${t.accent}">THE SEALER PROTOCOL</text>
 
-<text x="${M}" y="62"
+<text x="${M}" y="46"
       font-family="Cormorant Garamond,serif" font-size="22" font-weight="600" letter-spacing="0.5"
       fill="${t.titleCol}">${s.state === 'failed' ? 'Commitment Record' : 'Certificate of Achievement'}</text>
 
 <!-- State subtitle pill -->
-<rect x="${M}" y="${PILL_Y}" width="${PILL_W}" height="${PILL_H}" rx="3"
+<rect x="${M}" y="60" width="${PILL_W}" height="${PILL_H}" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.6"/>
-<text x="${M+11}" y="${PILL_Y+11}"
+<text x="${M+11}" y="71"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2"
       fill="${t.accent}">${subTitle}</text>
 
-<!-- Right header top: CATEGORY — bold, accent colour, underline sized to text -->
-<text x="${META_X}" y="26"
+<!-- Right header: CATEGORY bold + underline -->
+<text x="${META_X}" y="20"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2.5"
       fill="${t.accent}" text-anchor="end">${esc(CAT_TEXT)}</text>
-<line x1="${META_X - Math.ceil(CAT_TEXT.length * 7.2)}" y1="30" x2="${META_X}" y2="30"
+<line x1="${META_X - Math.ceil(CAT_TEXT.length * 5.8)}" y1="24" x2="${META_X}" y2="24"
       stroke="${t.accent}" stroke-width="0.8" opacity="0.45"/>
 
-<!-- VERIFIED / CLOSED pill — right-aligned, below category -->
-<rect x="${META_X - 72}" y="37" width="72" height="16" rx="3"
+<!-- VERIFIED / CLOSED pill -->
+<rect x="${META_X - 72}" y="31" width="72" height="16" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.7"/>
-<text x="${META_X - 36}" y="48"
+<text x="${META_X - 36}" y="42"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3"
       fill="${t.accent}" text-anchor="middle">${t.metaStatus}</text>
 
-<!-- Date + UID — lower in taller header -->
-<text x="${META_X}" y="72"
+<!-- Date + UID -->
+<text x="${META_X}" y="60"
       font-family="Courier Prime,monospace" font-size="7" font-weight="700"
       fill="${t.metaDate}" text-anchor="end">${esc(p.issuedAt)}</text>
 
-<text x="${META_X}" y="88"
+<text x="${META_X}" y="75"
       font-family="Courier Prime,monospace" font-size="5.5" font-weight="700"
       fill="${t.uidCol}" text-anchor="end">UID: ${p.uid.slice(0,8)}\u2026${p.uid.slice(-6)}</text>
 
