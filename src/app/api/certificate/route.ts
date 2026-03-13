@@ -274,13 +274,13 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const HDR_H   = 86;
   const META_X  = W - M;
 
-  // Seal: 130×130, anchored top of header (y=2, slightly above accent bar), left edge at x=280
+  // Seal: 138×138, top at y=-8 so it overlaps the accent bar upward — prominent stamp effect
   const HAS_SEAL   = s.state !== 'failed';
-  const SEAL_W     = 130;
-  const SEAL_X     = 280;
-  const SEAL_TOP   = 2;   // slightly above accent bar — overlaps upward for prominence
+  const SEAL_W     = 138;
+  const SEAL_X     = 276;
+  const SEAL_TOP   = -8;
   const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 345
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 67
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 61
 
   // State subtitle pill
   const subTitle =
@@ -303,7 +303,8 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 
   // ── Metric columns ────────────────────────────────────────────────────────────
   const ROW_W  = W - M - M;   // 604
-  const ICON_X = W - M - 14;
+  // Icon aligned with right edge of score/badge block (SX4+SW4 = W-M = 632, icon 18px from that)
+  // Computed after score block constants so we use W-M-14 but clamp to inside badge block
   const CW = 196;
   const CT = 290;
   const CA = 386;
@@ -321,6 +322,8 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const SX3   = SX2 + SW23 + GAP;
   const SX4   = SX3 + SW23 + GAP;
   const SH    = 84;
+  // Icon centre aligns with right edge of score/badge block row (W-M), inset 14px
+  const ICON_X = W - M - 14;   // = 618 — inside last metric row, aligns with badge block right
 
   const scoresY = ROWS_TOP + s.perMetric.length * ROW_H + 14;
   const svgH    = scoresY + SH + 10 + 41;
@@ -595,11 +598,11 @@ ${s.badgeTier !== 'none' ? `
 
 <text x="${W-M}" y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050" text-anchor="end">${s.state === 'failed' ? 'RECORD' : 'VERIFIER'}</text>
 <text x="${W-M}" y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10" text-anchor="end">${s.state === 'failed' ? 'Permanent \u00B7 EAS onchain' : p.claimType.includes('x402') ? 'x402 on-chain \u00B7 auto' : 'automated \u00B7 api'}</text>
-<!-- Full-height side accent lines drawn LAST so they sit above all content -->
-<line x1="2"     y1="0" x2="2"     y2="${svgH}" stroke="${tierFrame}" stroke-width="3" opacity="0.55"/>
-<line x1="${W-2}" y1="0" x2="${W-2}" y2="${svgH}" stroke="${tierFrame}" stroke-width="3" opacity="0.55"/>
-<line x1="5"     y1="0" x2="5"     y2="${svgH}" stroke="${tierFrame}" stroke-width="0.6" opacity="0.2"/>
-<line x1="${W-5}" y1="0" x2="${W-5}" y2="${svgH}" stroke="${tierFrame}" stroke-width="0.6" opacity="0.2"/>
+<!-- Professional border frame drawn last — sits on top of all content, full perimeter -->
+<rect x="0" y="0" width="${W}" height="${svgH}"
+      fill="none" stroke="${tierFrame}" stroke-width="4" opacity="0.55"/>
+<rect x="3" y="3" width="${W-6}" height="${svgH-6}"
+      fill="none" stroke="${tierFrame}" stroke-width="0.8" opacity="0.2"/>
 
 </svg>`;
 }
