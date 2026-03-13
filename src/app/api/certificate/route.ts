@@ -437,10 +437,10 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const tierFrame = TIER_FRAME_COLOR[s.badgeTier !== 'none' ? s.badgeTier : 'none'];
 
   // ── Footer logo ───────────────────────────────────────────────────────────────
-  const LOGO_SZ     = 16;
+  const LOGO_SZ     = 24;
   const LOGO_FT_X   = M;
-  // Align logo vertically with the label row (svgH-29 baseline = label top ~svgH-38)
-  const LOGO_FT_Y   = svgH - 38;
+  // Centre logo to span both text lines: top line at svgH-29, bottom at svgH-15 → centre at svgH-22
+  const LOGO_FT_Y   = svgH - 22 - LOGO_SZ / 2;
   const SITE_X      = LOGO_FT_X + LOGO_SZ + 7;
   const FT_ISSUED   = 260;
   const FT_PERIOD   = 430;
