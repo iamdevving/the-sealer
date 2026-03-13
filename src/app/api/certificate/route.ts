@@ -15,9 +15,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server';
+import { MARK_WHITE } from '@/lib/assets';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.thesealer.xyz';
-const MARK_URL = `${BASE_URL}/mark_white.png`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -270,19 +270,18 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   //   y=51: issue date
   //   y=63: UID
 
-  const HDR_H   = 72;
+  // Header tall enough to hold: THE SEALER (y=23) + gap + title (y=48) + pill (y=60, h=16 → y=76) + 8px pad
+  const HDR_H   = 86;
   const META_X  = W - M;
 
-  // Seal: 104×104, centred + 18px right to sit between left text and right meta
+  // Seal: 120×120, anchored top of header (y=5), pushed left into the centre zone
+  // Left edge at x=290 → cx=350, visually between title text and right meta
   const HAS_SEAL   = s.state !== 'failed';
-  const SEAL_W     = 104;
-  // Seal left edge sits right of the title text (~340px wide), with padding
-  // Centre it between x=320 and x=W-160=500 → cx≈410, so x=410-52=358
-  const SEAL_X     = 348;
-  const SEAL_ABS_Y = 5 + (HDR_H - SEAL_W) / 2;   // vertically centred, may be negative clamp → use 5
-  const SEAL_TOP   = Math.max(5, 5 + Math.floor((HDR_H - SEAL_W) / 2));
-  const SEAL_CX    = SEAL_X + SEAL_W / 2;
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2;
+  const SEAL_W     = 120;
+  const SEAL_X     = 290;
+  const SEAL_TOP   = 5;   // flush with top of header (accent bar bottom)
+  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 350
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 65
 
   // State subtitle pill
   const subTitle =
@@ -290,7 +289,7 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
     s.state === 'partial' ? `\u25D1  PARTIALLY ACHIEVED  \u00B7  ${s.perMetric.filter(m => m.met).length} OF ${s.perMetric.length} METRICS MET` :
                             '\u2717  FAILED  \u00B7  NO METRICS MET AT DEADLINE';
   const PILL_W = pillWidth(subTitle);
-  const PILL_Y = 48;   // tight under title
+  const PILL_Y = 60;   // under title with visible gap
   const PILL_H = 16;
 
   const CAT_TEXT = `CATEGORY: ${p.claimType.replace(/_/g, ' ').toUpperCase()}`;
@@ -483,11 +482,11 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       font-family="Courier Prime,monospace" font-size="7" font-weight="700" letter-spacing="4"
       fill="${t.accent}">THE SEALER PROTOCOL</text>
 
-<text x="${M}" y="40"
+<text x="${M}" y="48"
       font-family="Cormorant Garamond,serif" font-size="22" font-weight="600" letter-spacing="0.5"
       fill="${t.titleCol}">${s.state === 'failed' ? 'Commitment Record' : 'Certificate of Achievement'}</text>
 
-<!-- Pill: tight fit, directly under title -->
+<!-- Pill: under title with clear gap -->
 <rect x="${M}" y="${PILL_Y}" width="${PILL_W}" height="${PILL_H}" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.6"/>
 <text x="${M+11}" y="${PILL_Y+11}"
@@ -499,15 +498,15 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       font-family="Courier Prime,monospace" font-size="5.5" font-weight="700" letter-spacing="2"
       fill="${t.accentDim}" text-anchor="end">${esc(CAT_TEXT)}</text>
 
-<text x="${META_X}" y="38"
+<text x="${META_X}" y="42"
       font-family="Courier Prime,monospace" font-size="5" letter-spacing="2.5"
       fill="${t.metaLabel}" text-anchor="end" opacity="0.8">${t.metaStatus}</text>
 
-<text x="${META_X}" y="51"
+<text x="${META_X}" y="56"
       font-family="Courier Prime,monospace" font-size="6.5" font-weight="700"
       fill="${t.metaDate}" text-anchor="end">${esc(p.issuedAt)}</text>
 
-<text x="${META_X}" y="64"
+<text x="${META_X}" y="70"
       font-family="Courier Prime,monospace" font-size="5.5" font-weight="700"
       fill="${t.uidCol}" text-anchor="end">UID: ${p.uid.slice(0,8)}\u2026${p.uid.slice(-6)}</text>
 
@@ -589,10 +588,10 @@ ${s.badgeTier !== 'none' ? `
 <rect x="0" y="${svgH-46}" width="${W}" height="41" fill="${t.footBg}"/>
 <line x1="0" y1="${svgH-46}" x2="${W}" y2="${svgH-46}" stroke="${t.footBdr}" stroke-width="0.6"/>
 
-<!-- Logo: left side, inline with THESEALER.XYZ to its right -->
-<image href="${MARK_URL}" crossorigin="anonymous"
+<!-- Logo: left side, inline with THESEALER.XYZ to its right — uses base64 asset, always renders -->
+<image href="${MARK_WHITE}"
        x="${LOGO_FT_X}" y="${LOGO_FT_Y}" width="${LOGO_SZ}" height="${LOGO_SZ}"
-       preserveAspectRatio="xMidYMid meet" opacity="0.6"/>
+       preserveAspectRatio="xMidYMid meet" opacity="0.55"/>
 <text x="${SITE_X}" y="${svgH-27}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">THESEALER.XYZ</text>
 <text x="${SITE_X}" y="${svgH-14}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">EAS \u00B7 BASE</text>
 
