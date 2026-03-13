@@ -270,17 +270,17 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   //   y=51: issue date
   //   y=63: UID
 
-  // Header: compact at 96px — seal fits centred, text stacked tightly
-  const HDR_H   = 96;
+  // Header: 86px — seal overflows top intentionally for stamp effect
+  const HDR_H   = 86;
   const META_X  = W - M;
 
-  // Seal: 116×116, vertically centred in header (y = 5 + (96-116)/2 → clamp to 5)
+  // Seal: 116×116, top at y=-10 — sits above accent bar, prominent stamp overlapping the frame
   const HAS_SEAL   = s.state !== 'failed';
   const SEAL_W     = 116;
   const SEAL_X     = 276;
-  const SEAL_TOP   = 5;   // top of header, slightly overflows bottom — clip handles it
+  const SEAL_TOP   = -10;
   const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 334
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 63
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 48
 
   // State subtitle pill
   const subTitle =
@@ -492,7 +492,7 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 <text x="${META_X}" y="20"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2.5"
       fill="${t.accent}" text-anchor="end">${esc(CAT_TEXT)}</text>
-<line x1="${META_X - Math.ceil(CAT_TEXT.length * 5.8)}" y1="24" x2="${META_X}" y2="24"
+<line x1="${META_X - Math.ceil(CAT_TEXT.length * 7.0)}" y1="24" x2="${META_X}" y2="24"
       stroke="${t.accent}" stroke-width="0.8" opacity="0.45"/>
 
 <!-- VERIFIED / CLOSED pill -->
