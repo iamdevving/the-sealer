@@ -254,8 +254,8 @@ const BADGE_COLOR: Record<BadgeTier, string> = {
 
 function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const t  = THEME[s.state];
-  const W  = 660;
-  const M  = 28;
+  const W  = 880;
+  const M  = 36;
 
   // ── Header ────────────────────────────────────────────────────────────────────
   // Layout (all Y from SVG top, header starts at y=5 after accent bar):
@@ -277,18 +277,18 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   // Seal: 116×116, top at y=-10 — sits above accent bar, prominent stamp overlapping the frame
   const HAS_SEAL   = s.state !== 'failed';
   const SEAL_W     = 116;
-  const SEAL_X     = 276;
+  const SEAL_X     = 368;   // ~same relative position scaled to 880
   const SEAL_TOP   = -10;
-  const SEAL_CX    = SEAL_X + SEAL_W / 2;   // 334
-  const SEAL_CY    = SEAL_TOP + SEAL_W / 2; // 48
+  const SEAL_CX    = SEAL_X + SEAL_W / 2;
+  const SEAL_CY    = SEAL_TOP + SEAL_W / 2;
 
   // State subtitle pill
   const subTitle =
     s.state === 'full'    ? '\u2605  FULLY ACHIEVED  \u00B7  ALL METRICS MET' :
     s.state === 'partial' ? `\u25D1  PARTIALLY ACHIEVED  \u00B7  ${s.perMetric.filter(m => m.met).length} OF ${s.perMetric.length} METRICS MET` :
                             '\u2717  FAILED  \u00B7  NO METRICS MET AT DEADLINE';
-  const PILL_W = pillWidth(subTitle);
-  const PILL_Y = 78;
+  const PILL_W = Math.min(pillWidth(subTitle), SEAL_X - M - 16);   // never overlaps seal
+  const PILL_Y = 60;
   const PILL_H = 16;
 
   const CAT_TEXT = `CATEGORY: ${p.claimType.replace(/_/g, ' ').toUpperCase()}`;
@@ -302,28 +302,24 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const ROWS_TOP  = TABLE_Y + COL_HDR_H;
 
   // ── Metric columns ────────────────────────────────────────────────────────────
-  const ROW_W  = W - M - M;   // 604
-  // Icon aligned with right edge of score/badge block (SX4+SW4 = W-M = 632, icon 18px from that)
-  // Computed after score block constants so we use W-M-14 but clamp to inside badge block
-  const CW = 196;
-  const CT = 290;
-  const CA = 386;
-  const CD = 474;
+  const ROW_W  = W - M - M;   // 808
+  const CW = 260;   // WEIGHT col centre
+  const CT = 390;   // TARGET col centre
+  const CA = 518;   // ACHIEVED col centre
+  const CD = 634;   // DELTA col centre
 
   // ── Score blocks ──────────────────────────────────────────────────────────────
-  // ALL blocks share IDENTICAL label/number/sub Y positions.
-  // No per-block offsets — uniform spacing across every block.
-  const GAP   = 6;
-  const SW1   = 212;
-  const SW23  = 114;
-  const SW4   = W - M - M - SW1 - SW23 * 2 - GAP * 3;   // ≈ 136
+  const GAP   = 8;
+  const SW1   = 284;   // achievement score block (wider)
+  const SW23  = 152;   // difficulty + proof points
+  const SW4   = W - M - M - SW1 - SW23 * 2 - GAP * 3;   // badge block
   const SX1   = M;
   const SX2   = SX1 + SW1 + GAP;
   const SX3   = SX2 + SW23 + GAP;
   const SX4   = SX3 + SW23 + GAP;
-  const SH    = 84;
-  // Icon X: centred over the badge column so it aligns visually with the badge block
-  const ICON_X = SX4 + SW4 / 2;   // centre of badge column ≈ 559
+  const SH    = 90;
+  // Icon X: centred over the badge column
+  const ICON_X = SX4 + SW4 / 2;
 
   const scoresY = ROWS_TOP + s.perMetric.length * ROW_H + 14;
   const svgH    = scoresY + SH + 10 + 41;
@@ -419,8 +415,8 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   // ── Commitment text ───────────────────────────────────────────────────────────
   const commitDisplay = truncateCommitment(p.commitmentText);
   const commitFontSz  = commitFontSize(commitDisplay.length);
-  const DIVIDER_X     = 230;
-  const COMMIT_X      = DIVIDER_X + 16;
+  const DIVIDER_X     = 310;   // matches agent strip second divider
+  const COMMIT_X      = DIVIDER_X + 20;
   const COMMIT_W      = W - COMMIT_X - M;
   const COMMIT_CX     = COMMIT_X + COMMIT_W / 2;
   const COMMIT_MID    = AGENT_Y + AGENT_H / 2 + commitFontSz * 0.38;
@@ -443,9 +439,11 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
 
   // ── Footer logo ───────────────────────────────────────────────────────────────
   const LOGO_SZ     = 18;
-  const LOGO_FT_X   = M;                    // left margin
-  const LOGO_FT_Y   = svgH - 46 + 14;       // centred in footer stripe
-  const SITE_X      = LOGO_FT_X + LOGO_SZ + 8;   // text starts right of logo
+  const LOGO_FT_X   = M;
+  const LOGO_FT_Y   = svgH - 46 + 13;
+  // ISSUED starts right after the logo+sitename block (~120px wide)
+  const ISSUED_X    = M + LOGO_SZ + 8 + 80;   // ≈ 178 — aligns visually below logo+text
+  const SITE_X      = LOGO_FT_X + LOGO_SZ + 8;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${W}" height="${svgH}" viewBox="0 0 ${W} ${svgH}" xmlns="http://www.w3.org/2000/svg">
@@ -526,12 +524,12 @@ ${HAS_SEAL ? `
 <text x="${M}"  y="${AGENT_Y+15}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2.5" font-weight="700" fill="#9a8050">AGENT ID</text>
 <text x="${M}"  y="${AGENT_Y+33}" font-family="Courier Prime,monospace" font-size="8.5" font-weight="700" fill="#1a1000">${esc(p.agentId.slice(0,6))}\u2026${esc(p.agentId.slice(-4))}</text>
 
-<line x1="130" y1="${AGENT_Y+7}" x2="130" y2="${AGENT_Y+AGENT_H-7}" stroke="${t.agentBdr}" stroke-width="0.6"/>
+<line x1="174" y1="${AGENT_Y+7}" x2="174" y2="${AGENT_Y+AGENT_H-7}" stroke="${t.agentBdr}" stroke-width="0.6"/>
 
-<text x="142" y="${AGENT_Y+15}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2.5" font-weight="700" fill="#9a8050">COMMITMENT ID</text>
-<text x="142" y="${AGENT_Y+33}" font-family="Courier Prime,monospace" font-size="8" font-weight="700" fill="#1a1000">${esc(p.commitmentId.slice(0,6))}\u2026${esc(p.commitmentId.slice(-4))}</text>
+<text x="186" y="${AGENT_Y+15}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2.5" font-weight="700" fill="#9a8050">COMMITMENT ID</text>
+<text x="186" y="${AGENT_Y+33}" font-family="Courier Prime,monospace" font-size="8" font-weight="700" fill="#1a1000">${esc(p.commitmentId.slice(0,6))}\u2026${esc(p.commitmentId.slice(-4))}</text>
 
-<line x1="${DIVIDER_X}" y1="${AGENT_Y+7}" x2="${DIVIDER_X}" y2="${AGENT_Y+AGENT_H-7}" stroke="${t.agentBdr}" stroke-width="0.6"/>
+<line x1="310" y1="${AGENT_Y+7}" x2="310" y2="${AGENT_Y+AGENT_H-7}" stroke="${t.agentBdr}" stroke-width="0.6"/>
 
 <text x="${COMMIT_CX}" y="${COMMIT_MID}" text-anchor="middle"
       font-family="IM Fell English,Georgia,serif" font-size="${commitFontSz}" font-style="italic"
@@ -596,11 +594,11 @@ ${s.badgeTier !== 'none' ? `
 <text x="${SITE_X}" y="${svgH-27}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">THESEALER.XYZ</text>
 <text x="${SITE_X}" y="${svgH-14}" font-family="Courier Prime,monospace" font-size="6" letter-spacing="2" fill="#9a8050">EAS \u00B7 BASE</text>
 
-<text x="160"  y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050">${s.state === 'failed' ? 'CLOSED' : 'ISSUED'}</text>
-<text x="160"  y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10">${esc(p.issuedAt)}</text>
+<text x="${ISSUED_X}"  y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050">${s.state === 'failed' ? 'CLOSED' : 'ISSUED'}</text>
+<text x="${ISSUED_X}"  y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10">${esc(p.issuedAt)}</text>
 
-<text x="310"  y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050">COMMITMENT PERIOD</text>
-<text x="310"  y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10">${esc(p.periodStart)} \u2014 ${esc(p.periodEnd)}</text>
+<text x="420"  y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050">COMMITMENT PERIOD</text>
+<text x="420"  y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10">${esc(p.periodStart)} \u2014 ${esc(p.periodEnd)}</text>
 
 <text x="${W-M}" y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050" text-anchor="end">${s.state === 'failed' ? 'RECORD' : 'VERIFIER'}</text>
 <text x="${W-M}" y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10" text-anchor="end">${s.state === 'failed' ? 'Permanent \u00B7 EAS onchain' : p.claimType.includes('x402') ? 'x402 on-chain \u00B7 auto' : 'automated \u00B7 api'}</text>
