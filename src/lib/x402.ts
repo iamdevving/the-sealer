@@ -68,8 +68,15 @@ async function sendAttestation(
   });
   txHash = receipt.transactionHash;
 
-  // EAS emits Attested event — UID is in topics[1] of the first matching log
-  const uid = (receipt.logs?.[0]?.topics?.[1] as string) ?? txHash;
+  // EAS Attested event: Attested(address indexed recipient, address indexed attester, bytes32 uid, bytes32 indexed schema)
+  // UID is non-indexed so it lives in log.data (first 32 bytes), not in topics
+  // Event topic0: keccak256("Attested(address,address,bytes32,bytes32)")
+  const attestedLog = receipt.logs?.find(log =>
+    log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
+  );
+  const uid = attestedLog?.data
+    ? `0x${attestedLog.data.slice(2, 66)}`   // first 32 bytes of data = UID
+    : txHash;
 
   console.log(`[The Sealer] ✅ Attestation mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };

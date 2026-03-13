@@ -136,17 +136,22 @@ export async function attestAchievement(
     let achievementTxHash: string;
     let achievementUID:    string;
 
-    if (typeof txResponse === 'object' && 'wait' in txResponse) {
-      achievementUID    = await (txResponse as any).wait();
-      achievementTxHash = (txResponse as any).tx?.hash ?? achievementUID;
-    } else {
-      const preparedTx  = (txResponse as any).data || txResponse;
+    // Always use viem directly — avoid EAS SDK .wait() which is unreliable across versions
+    {
+      const preparedTx  = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
       achievementTxHash = await walletClient.sendTransaction(preparedTx as any);
       const receipt     = await publicClient.waitForTransactionReceipt({
         hash: achievementTxHash as Hash, pollingInterval: 1000, timeout: 90_000,
       });
       achievementTxHash = receipt.transactionHash;
-      achievementUID    = (receipt.logs?.[0]?.topics?.[1] as string) ?? achievementTxHash;
+      // EAS Attested event: UID is non-indexed — lives in log.data first 32 bytes
+      // topic0 = keccak256("Attested(address,address,bytes32,bytes32)")
+      const attestedLog = receipt.logs?.find(log =>
+        log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
+      );
+      achievementUID = attestedLog?.data
+        ? `0x${attestedLog.data.slice(2, 66)}`
+        : achievementTxHash;
     }
 
     console.log(`[attest-achievement] ✅ EAS tx=${achievementTxHash} uid=${achievementUID}`);
