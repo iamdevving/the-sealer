@@ -1,73 +1,44 @@
 // src/app/api/attest-commitment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { withX402Payment } from '@/lib/x402';
+import { withX402Payment, issueCommitmentAttestation } from '@/lib/x402';
 import { registerPendingAchievement } from '@/lib/verify/register';
-import { mintBadge } from '@/lib/nft';
+import { mintCommitment } from '@/lib/nft';
 import type { ClaimType } from '@/lib/verify/types';
 
 export const runtime = 'nodejs';
 
-// Combined price covers: commitment mint + future achievement mint
-const COMMITMENT_PRICE = '0.20';
+// $0.50 covers commitment NFT + future certificate mint — one payment, full lifecycle
+const COMMITMENT_PRICE = '0.50';
+
+const VALID_CLAIM_TYPES: ClaimType[] = [
+  'x402_payment_reliability',
+  'defi_trading_performance',
+  'code_software_delivery',
+  'website_app_delivery',
+  'social_media_growth',
+];
 
 /**
  * POST /api/attest-commitment
  *
- * Body (JSON):
- * {
- *   commitment: string      — the SMART goal statement (required)
- *   agentId:   string      — wallet address of agent/human (required)
- *   claimType: string      — 'x402_payment_reliability' | 'defi_trading_performance' | 'code_software_delivery' | 'website_app_delivery' | 'social_media_growth'
- *   deadline:  string      — ISO date string or human date, e.g. "2025-12-31" (required)
- *   metric:    string      — measurable target, e.g. "95% success rate over 30 days" (required)
- *   theme:     string      — badge/card theme key (optional, default 'circuit-anim')
+ * Required body fields:
+ *   commitment  string   — the goal statement (min 10 chars)
+ *   agentId     string   — agent wallet address (0x...)
+ *   claimType   string   — one of VALID_CLAIM_TYPES
+ *   deadline    string   — ISO date or "YYYY-MM-DD", e.g. "2026-06-01"
+ *   metric      string   — measurable target description
  *
- *   // Per-claimType verification params (all optional, used to pre-fill PendingAchievement)
- *   // x402:
- *   agentWallet:          string
- *   minSuccessRate:       number
- *   minTotalUSD:          number
- *   requireDistinctRecipients: boolean
- *   maxGapHours:          number
- *   windowDays:           number
+ * Optional:
+ *   evidence    string   — supporting URL or context
+ *   theme       string   — visual theme key (default: 'dark')
+ *   windowDays  number   — override verification window (default: derived from deadline)
+ *   difficultyVersion number — scoring version (default: 1)
  *
- *   // defi_pnl:
- *   protocol:             string
- *   chain:                string
- *   minCollateral:        number
- *   minTradeCount:        number
- *   maxDrawdown:          number
- *   target:               number
- *
- *   // github_delivery:
- *   repoUrl:              string
- *   githubUsername:       string
- *   walletGithubSig:      string
- *   targetCount:          number
- *   requireCIPass:        boolean
- *   minDiffLinesPerPR:    number
- *
- *   // website_delivery:
- *   url:                  string
- *   dnsVerifyRecord:      string
- *   lighthouseMinScore:   number
- *   uptimeMonitorId:      string
- *   uptimeWindowDays:     number
- *   indexedPagesMin:      number
- *
- *   // social_growth:
- *   platform:             string   — 'farcaster' | 'lens'
- *   handle:               string
- *   platformId:           string
- *   baselineFollowers:    number
- *   targetFollowers:      number
- *   minEngagementRate:    number
- *   minPostsPerWeek:      number
- * }
+ *   + per-claimType verification params (see extractVerificationParams)
  *
  * Headers:
- *   PAYMENT-SIGNATURE: <base tx hash or solana signature>
- *   X-TEST-PAYMENT: true   (bypass payment in dev)
+ *   PAYMENT-SIGNATURE  <base tx hash or solana sig>
+ *   X-TEST-PAYMENT: true   (bypass in dev)
  */
 export async function POST(req: NextRequest) {
   return withX402Payment(req, async (paymentChain) => {
@@ -79,126 +50,134 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Validate required fields ──────────────────────────────────────────
-    const { commitment, agentId, claimType, deadline, metric, theme } = body as {
-      commitment: string;
-      agentId:   string;
-      claimType: string;
-      deadline:  string;
-      metric:    string;
-      theme?:    string;
-    };
+    const commitment       = (body.commitment as string)?.trim();
+    const agentId          = (body.agentId   as string)?.trim();
+    const claimType        = (body.claimType as string)?.trim();
+    const deadline         = (body.deadline  as string)?.trim();
+    const metric           = (body.metric    as string)?.trim();
+    const evidence         = (body.evidence  as string)?.trim() || '';
+    const theme            = (body.theme     as string)?.trim() || 'dark';
+    const difficultyVersion = Number(body.difficultyVersion) || 1;
 
-    if (!commitment || typeof commitment !== 'string' || commitment.trim().length < 10) {
-      return NextResponse.json(
-        { error: 'commitment is required (min 10 chars)' },
-        { status: 400 }
-      );
+    if (!commitment || commitment.length < 10) {
+      return NextResponse.json({ error: 'commitment is required (min 10 chars)' }, { status: 400 });
     }
-    if (!agentId || typeof agentId !== 'string') {
+    if (!agentId) {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400 });
     }
-    if (!claimType || typeof claimType !== 'string') {
-      return NextResponse.json({ error: 'claimType is required' }, { status: 400 });
+    if (!claimType || !VALID_CLAIM_TYPES.includes(claimType as ClaimType)) {
+      return NextResponse.json(
+        { error: `claimType must be one of: ${VALID_CLAIM_TYPES.join(', ')}` },
+        { status: 400 },
+      );
     }
-    if (!deadline || typeof deadline !== 'string') {
-      return NextResponse.json({ error: 'deadline is required' }, { status: 400 });
+    if (!deadline) {
+      return NextResponse.json({ error: 'deadline is required (YYYY-MM-DD)' }, { status: 400 });
     }
-    if (!metric || typeof metric !== 'string') {
+    if (!metric) {
       return NextResponse.json({ error: 'metric is required' }, { status: 400 });
     }
 
-    const VALID_CLAIM_TYPES = [
-      'x402_payment_reliability',
-      'defi_trading_performance',
-      'code_software_delivery',
-      'website_app_delivery',
-      'social_media_growth',
-    ];
-    if (!VALID_CLAIM_TYPES.includes(claimType)) {
-      return NextResponse.json(
-        { error: `claimType must be one of: ${VALID_CLAIM_TYPES.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    const walletAddress = agentId.startsWith('0x')
+      ? agentId as `0x${string}`
+      : '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
-    // ── Build structured statement stored in EAS ──────────────────────────
-    // We encode as JSON so the verifier can reconstruct all params from EAS alone
-    const structuredStatement = JSON.stringify({
-      commitment: commitment.trim(),
-      claimType,
-      deadline,
-      metric,
-      agentId,
-      // Pass through all verificationParams from body
-      verificationParams: extractVerificationParams(body, claimType),
-    });
+    // ── Parse deadline → windowDays + unix timestamp ──────────────────────
+    const deadlineDate    = parseDeadline(deadline);
+    const deadlineUnix    = Math.floor(deadlineDate.getTime() / 1000);
+    const nowUnix         = Math.floor(Date.now() / 1000);
+    const windowDays      = body.windowDays
+      ? Number(body.windowDays)
+      : Math.max(1, Math.ceil((deadlineUnix - nowUnix) / 86400));
 
-    // ── Mint the commitment NFT (Badge, productType=0) ────────────────────
-    // This reuses the existing mintBadge function — same contract, same mint
-    // The SVG URI points to /api/commitment with the theme and statement
-    const themeKey  = (theme as string) || 'circuit-anim';
-    const safeCommitment = encodeURIComponent(commitment.trim().slice(0, 200));
-    const safeDeadline   = encodeURIComponent(deadline);
-    const safeMetric     = encodeURIComponent(metric.slice(0, 80));
-    const safeAgentId    = encodeURIComponent(agentId.slice(0, 10));
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
-    const imageUri = `${baseUrl}/api/commitment?commitment=${safeCommitment}&deadline=${safeDeadline}&metric=${safeMetric}&agentId=${safeAgentId}&theme=${themeKey}`;
-
-    let mintReceipt: Awaited<ReturnType<typeof mintBadge>>;
+    // ── EAS commitment attestation ────────────────────────────────────────
+    // Issues onchain record with discrete schema fields
+    let easTxHash: string;
+    let commitmentUid: string;
     try {
-      mintReceipt = await mintBadge(
-        agentId as `0x${string}`,
-        imageUri,
-        '',                   // attestationTx — empty at mint time, filled by EAS later
-        structuredStatement,  // statement — stored as NFT description
-      );
-    } catch (err: unknown) {
-      console.error('[attest-commitment] Mint failed:', err);
+      const receipt = await issueCommitmentAttestation({
+        agentId:           walletAddress,
+        claimType:         claimType as ClaimType,
+        metric,
+        evidence,
+        deadline:          BigInt(deadlineUnix),
+        difficultyVersion: difficultyVersion as 1,
+      });
+      easTxHash     = receipt.transactionHash;
+      commitmentUid = receipt.uid;
+    } catch (err) {
+      console.error('[attest-commitment] EAS attestation failed:', err);
       return NextResponse.json(
-        { error: 'Commitment mint failed', details: String(err) },
-        { status: 500 }
+        { error: 'EAS commitment attestation failed', details: String(err) },
+        { status: 500 },
       );
     }
 
-    const txHash       = mintReceipt.txHash;
-    const attestTxHash = txHash;
+    // ── Mint commitment NFT ───────────────────────────────────────────────
+    const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
+    const tokenUri = `${baseUrl}/api/commitment?uid=${commitmentUid}&theme=${theme}`;
+
+    let nftTxHash: string;
+    let tokenId:   bigint;
+    try {
+      const nft = await mintCommitment(
+        walletAddress,
+        easTxHash,       // attestationTx
+        claimType,
+        deadlineUnix,
+        commitmentUid,
+      );
+      nftTxHash = nft.txHash;
+      tokenId   = nft.tokenId;
+    } catch (err) {
+      console.error('[attest-commitment] NFT mint failed:', err);
+      return NextResponse.json(
+        { error: 'Commitment NFT mint failed', details: String(err) },
+        { status: 500 },
+      );
+    }
 
     // ── Register pending achievement in Redis ─────────────────────────────
-    // The verifier will check this periodically via cron or manual trigger
-    const deadlineDate = parseDeadline(deadline);
-    const windowDays   = body.windowDays ? Number(body.windowDays) : 30;
-
+    // mintTimestamp is set inside registerPendingAchievement (Math.floor(Date.now()/1000))
+    // commitmentUid is the EAS UID — used as the Redis key for later lookups
     try {
       await registerPendingAchievement({
-        attestationUID:     txHash,
+        attestationUID:     commitmentUid,
         subject:            agentId,
         claimType:          claimType as ClaimType,
-        statement:          commitment.trim(),
+        statement:          commitment,
         windowDays,
-        verificationParams: JSON.stringify(extractVerificationParams(body, claimType)),
+        verificationParams: JSON.stringify({
+          ...extractVerificationParams(body, claimType),
+          agentWallet: agentId,
+          windowDays,
+          deadline:    deadlineUnix,
+        }),
       });
-    } catch (err: unknown) {
-      // Non-fatal — log and continue. The cron can pick it up later.
-      console.error('[attest-commitment] Redis registration failed:', err);
+    } catch (err) {
+      // Non-fatal — cron can recover
+      console.error('[attest-commitment] Redis registration failed (non-fatal):', err);
     }
 
-    // ── Build SVG URIs for response ───────────────────────────────────────
-    const permanentImageUri = `${baseUrl}/api/commitment?uid=${txHash}&theme=${themeKey}`;
-
+    // ── Response ──────────────────────────────────────────────────────────
     return NextResponse.json({
-      success:           true,
-      txHash,
-      attestationTxHash: attestTxHash,
-      imageUri:          permanentImageUri,
-      commitment:        commitment.trim(),
+      success:          true,
+      commitmentUid,
+      easTxHash,
+      nftTxHash,
+      tokenId:          tokenId.toString(),
+      tokenUri,
+      commitment,
       claimType,
-      deadline,
       metric,
+      evidence,
+      deadline:         deadlineDate.toISOString(),
+      windowDays,
       agentId,
-      paymentChain:      paymentChain || 'base',
-      message:           'Commitment minted. Achievement verification will begin automatically.',
-      verificationNote:  `Your achievement will be verified by ${deadlineDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. You can also trigger verification manually via POST /api/verify/${claimType.replace('_', '/')}.`,
+      paymentChain:     paymentChain || 'base',
+      easExplorer:      `https://base.easscan.org/attestation/view/${commitmentUid}`,
+      message:          'Commitment sealed onchain. Certificate will be issued after verification.',
+      verifyEndpoint:   `/api/verify/${claimType.replace(/_/g, '/')}`,
     });
   }, COMMITMENT_PRICE);
 }
@@ -218,10 +197,7 @@ function extractVerificationParams(
   body: Record<string, unknown>,
   claimType: string,
 ): Record<string, unknown> {
-  // Pull only the fields relevant to this claimType
-  const common = {
-    windowDays: body.windowDays,
-  };
+  const common = { windowDays: body.windowDays };
 
   switch (claimType) {
     case 'x402_payment_reliability':
@@ -233,7 +209,6 @@ function extractVerificationParams(
         requireDistinctRecipients: body.requireDistinctRecipients,
         maxGapHours:               body.maxGapHours,
       };
-
     case 'defi_trading_performance':
       return {
         ...common,
@@ -246,7 +221,6 @@ function extractVerificationParams(
         minTradeCount: body.minTradeCount,
         maxDrawdown:   body.maxDrawdown,
       };
-
     case 'code_software_delivery':
       return {
         ...common,
@@ -258,7 +232,6 @@ function extractVerificationParams(
         requireCIPass:     body.requireCIPass,
         minDiffLinesPerPR: body.minDiffLinesPerPR,
       };
-
     case 'website_app_delivery':
       return {
         ...common,
@@ -268,9 +241,7 @@ function extractVerificationParams(
         uptimeMonitorId:    body.uptimeMonitorId,
         uptimeWindowDays:   body.uptimeWindowDays,
         indexedPagesMin:    body.indexedPagesMin,
-        mintTimestamp:      new Date().toISOString(),
       };
-
     case 'social_media_growth':
       return {
         ...common,
@@ -282,7 +253,6 @@ function extractVerificationParams(
         minEngagementRate: body.minEngagementRate,
         minPostsPerWeek:   body.minPostsPerWeek,
       };
-
     default:
       return common;
   }

@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
-import { mintBadge, mintCard, mintOrRenewSealerID, mintSleeve } from '@/lib/nft';
+import { mintBadge, mintCard, mintSID, renewSID, mintSleeve } from '@/lib/nft';
+import { createPublicClient, http, parseAbi } from 'viem';
+import { base } from 'viem/chains';
 import { nanoid } from 'nanoid';
 
 export async function POST(req: NextRequest) {
@@ -58,11 +60,24 @@ export async function POST(req: NextRequest) {
         let nftTxHash: string | null = null;
         let tokenId:   bigint | null = null;
         let nftRenewed = false;
+
         try {
-          const nft  = await mintOrRenewSealerID(walletAddress, sidUrl, txHash, name, entityType, chain);
-          nftTxHash  = nft.txHash;
-          tokenId    = nft.tokenId;
-          nftRenewed = nft.renewed;
+          const publicClient  = createPublicClient({ chain: base, transport: http(process.env.ALCHEMY_RPC_URL!) });
+          const SID_ADDRESS   = process.env.SEALER_ID_CONTRACT_ADDRESS as `0x${string}`;
+          const SID_ABI       = parseAbi(['function hasSID(address wallet) view returns (bool)']);
+          const alreadyHasSID = await publicClient.readContract({
+            address: SID_ADDRESS, abi: SID_ABI, functionName: 'hasSID', args: [walletAddress],
+          });
+
+          if (alreadyHasSID) {
+            const nft  = await renewSID(walletAddress, sidUrl, txHash);
+            nftTxHash  = nft.txHash;
+            nftRenewed = true;
+          } else {
+            const nft = await mintSID(walletAddress, sidUrl, txHash, name, entityType, chain);
+            nftTxHash = nft.txHash;
+            tokenId   = nft.tokenId;
+          }
           console.log(`[attest] SID NFT ${nftRenewed ? 'renewed' : 'minted'}: ${nftTxHash}`);
         } catch (err) {
           console.warn('[attest] SID NFT mint failed (non-fatal):', err);
@@ -130,7 +145,7 @@ export async function POST(req: NextRequest) {
           const nft = await mintBadge(walletAddress, badgeUrl, txHash, statement);
           nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else if (format === 'sleeve') {
-          const nft = await mintSleeve(walletAddress, sleeveUrl, txHash, paymentSource, statement);
+          const nft = await mintSleeve(walletAddress, sleeveUrl, txHash, paymentSource);
           nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else {
           const nft = await mintCard(walletAddress, cardUrl, txHash, statement);

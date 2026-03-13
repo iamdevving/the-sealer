@@ -70,6 +70,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Strings__factory>;
     getContractFactory(
+      name: "SealerCertificate",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SealerCertificate__factory>;
+    getContractFactory(
+      name: "SealerCommitment",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SealerCommitment__factory>;
+    getContractFactory(
       name: "SealerID",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.SealerID__factory>;
@@ -157,6 +165,16 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Strings>;
     getContractAt(
+      name: "SealerCertificate",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SealerCertificate>;
+    getContractAt(
+      name: "SealerCommitment",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SealerCommitment>;
+    getContractAt(
       name: "SealerID",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -234,6 +252,14 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Strings>;
     deployContract(
+      name: "SealerCertificate",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerCertificate>;
+    deployContract(
+      name: "SealerCommitment",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerCommitment>;
+    deployContract(
       name: "SealerID",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.SealerID>;
@@ -320,6 +346,16 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Strings>;
+    deployContract(
+      name: "SealerCertificate",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerCertificate>;
+    deployContract(
+      name: "SealerCommitment",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SealerCommitment>;
     deployContract(
       name: "SealerID",
       args: any[],
