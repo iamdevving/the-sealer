@@ -147,7 +147,7 @@ export async function GET(req: NextRequest) {
     '<rect x="0" y="' + HDR_H + '" width="' + W + '" height="' + (H - HDR_H) + '" fill="url(#guil)" opacity="0.5"/>' +
     '<rect x="0" y="0" width="' + W + '" height="' + HDR_H + '" fill="' + T.HDR + '"/>' +
     '<rect x="0" y="0" width="' + W + '" height="' + HDR_H + '" fill="url(#guil)" opacity="0.12"/>' +
-    '<image href="' + LOGO_URL + '" x="4" y="9" width="24" height="24" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>' +
+    '<image href="' + LOGO_URL + '" x="12" y="9" width="24" height="24" opacity="0.85" preserveAspectRatio="xMidYMid meet"/>' +
     '<text x="38" y="21" font-family="monospace" font-size="7" fill="#fff" opacity="0.6" letter-spacing="1.2">THE SEALER PROTOCOL &#xB7; ONCHAIN IDENTITY REGISTRY</text>' +
     '<text x="' + (W - PAD) + '" y="21" font-family="monospace" font-size="6" fill="#fff" opacity="0.35" text-anchor="end" letter-spacing="1">ISSUED ' + issueDate + '</text>' +
     '<text x="' + PAD + '" y="54" font-family="Georgia, serif" font-size="24" fill="#fff" letter-spacing="3">SEALER ID</text>' +
