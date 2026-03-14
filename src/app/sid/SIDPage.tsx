@@ -97,7 +97,6 @@ export default function SIDPage() {
   const faint   = isDark ? '#1e2d4a' : '#d4c9a8';
 
   // URL references — no base64
-  const logoSrc  = '/logo-small.png';
   const stampSrc = isDark ? '/assets/stamp-blue.png' : '/assets/stamp-committed.png';
 
   return (
@@ -194,7 +193,7 @@ export default function SIDPage() {
           <div className="sid-header">
             <div className="sid-header-top">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoSrc} alt="" width={14} height={14} style={{ opacity: 0.85 }}/>
+              <img src="/logo-small.png" alt="" width={22} height={22} style={{ opacity: 0.85 }}/>
               <span className="sid-header-meta">THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</span>
               <span className="sid-header-date">ISSUED {issueDate}</span>
             </div>
@@ -219,8 +218,11 @@ export default function SIDPage() {
                   <img className="photo" src={displayImage} alt={name}/>
                 ) : (
                   <div className="photo-placeholder">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoSrc} alt="" />
+                    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+                      <circle cx="30" cy="30" r="28" stroke={faint} strokeWidth="1.5"/>
+                      <circle cx="30" cy="24" r="10" fill={faint} opacity="0.4"/>
+                      <ellipse cx="30" cy="46" rx="16" ry="10" fill={faint} opacity="0.4"/>
+                    </svg>
                   </div>
                 )}
               </div>
