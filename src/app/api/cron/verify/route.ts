@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       }
 
       await redis.set(key, JSON.stringify({
-        ...pending, status: 'achieved', lastChecked: now,
+        ...pending, status: 'achieved', lastChecked: now, proofPoints, difficulty: achieved.difficulty,
       } satisfies PendingAchievement), { ex: 90 * 86400 });
 
       results.achieved++;

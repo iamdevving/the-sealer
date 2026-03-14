@@ -40,6 +40,8 @@ export interface PendingAchievement {
   level?: AchievementLevel     // set after successful verification
   lastChecked?: number         // unix seconds
   failureReason?: string
+  proofPoints?: number
+  difficulty?: number
 }
 
 // Result returned from every verifier

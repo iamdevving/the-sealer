@@ -115,7 +115,7 @@ export async function handleVerifyRoute(
     }
 
     await redis.set(KEY_PREFIX + uid, JSON.stringify({
-      ...pending, status: 'achieved', lastChecked: now,
+      ...pending, status: 'achieved', lastChecked: now, proofPoints, difficulty: achieved.difficulty,
     } satisfies PendingAchievement), { ex: 90 * 86400 });
 
     return NextResponse.json({
