@@ -6,7 +6,25 @@ import { snapshotSVG } from '@/lib/snapshot';
 import { mintBadge, mintCard, mintSID, renewSID, mintSleeve } from '@/lib/nft';
 import { createPublicClient, http, parseAbi } from 'viem';
 import { base } from 'viem/chains';
+import { Redis } from '@upstash/redis';
 import { nanoid } from 'nanoid';
+
+const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
+
+const HANDLE_REGEX = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
+
+async function claimHandle(handle: string, walletAddress: string): Promise<void> {
+  // Free old handle if wallet already had one
+  const oldHandle = await redis.get(`sid:wallet:${walletAddress}`) as string | null;
+  if (oldHandle && oldHandle !== handle) {
+    await redis.del(`sid:handle:${oldHandle}`);
+  }
+  await Promise.all([
+    redis.set(`sid:handle:${handle}`, walletAddress.toLowerCase()),
+    redis.set(`sid:wallet:${walletAddress.toLowerCase()}`, handle),
+    redis.set(`sid:free_claim_used:${walletAddress.toLowerCase()}`, 'true'),
+  ]);
+}
 
 export async function POST(req: NextRequest) {
   const body   = await req.json();
@@ -40,8 +58,22 @@ export async function POST(req: NextRequest) {
         const social     = body.social?.trim()     || '';
         const tags       = body.tags?.trim()       || '';
         const firstSeen  = body.firstSeen?.trim()  || '';
+        const handle     = body.handle?.trim().toLowerCase() || '';
 
-        const receipt = await issueIdentityAttestation(name, entityType, chain, imageUrl);
+        // Validate handle if provided
+        if (handle && !HANDLE_REGEX.test(handle)) {
+          return NextResponse.json({ error: 'Invalid handle format. Use 3-32 chars, lowercase letters, numbers, dots and hyphens only.' }, { status: 400 });
+        }
+
+        // Check handle availability if provided
+        if (handle) {
+          const existing = await redis.get(`sid:handle:${handle}`);
+          if (existing && (existing as string).toLowerCase() !== walletAddress.toLowerCase()) {
+            return NextResponse.json({ error: 'Handle already taken' }, { status: 409 });
+          }
+        }
+
+        const receipt = await issueIdentityAttestation(name, entityType, chain, imageUrl, walletAddress);
         const txHash  = receipt.transactionHash;
 
         const sidParams = new URLSearchParams({
@@ -52,6 +84,7 @@ export async function POST(req: NextRequest) {
           ...(social    ? { social }    : {}),
           ...(tags      ? { tags }      : {}),
           ...(firstSeen ? { firstSeen } : {}),
+          ...(handle    ? { handle }    : {}),
         });
 
         const sidUrl    = `${baseUrl}/api/sid?${sidParams}`;
@@ -83,6 +116,16 @@ export async function POST(req: NextRequest) {
           console.warn('[attest] SID NFT mint failed (non-fatal):', err);
         }
 
+        // Claim handle in Redis if provided
+        if (handle) {
+          try {
+            await claimHandle(handle, walletAddress);
+            console.log(`[attest] Handle claimed: ${handle} → ${walletAddress}`);
+          } catch (err) {
+            console.warn('[attest] Handle claim failed (non-fatal):', err);
+          }
+        }
+
         try {
           const svgRes = await fetch(sidUrl);
           if (svgRes.ok) {
@@ -100,6 +143,7 @@ export async function POST(req: NextRequest) {
           nftTxHash,
           tokenId:          tokenId?.toString() ?? null,
           nftRenewed,
+          handle:           handle || null,
           nftContract:      process.env.SEALER_ID_CONTRACT_ADDRESS,
           attestationChain: 'Base',
           paymentChain:     paymentSource,
