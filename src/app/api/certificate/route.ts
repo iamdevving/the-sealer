@@ -437,7 +437,7 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const tierFrame = TIER_FRAME_COLOR[s.badgeTier !== 'none' ? s.badgeTier : 'none'];
 
   // ── Footer logo ───────────────────────────────────────────────────────────────
-  const LOGO_SZ     = 24;
+  const LOGO_SZ     = 36;
   const LOGO_FT_X   = M;
   // Centre logo to span both text lines: top line at svgH-29, bottom at svgH-15 → centre at svgH-22
   const LOGO_FT_Y   = svgH - 22 - LOGO_SZ / 2;
