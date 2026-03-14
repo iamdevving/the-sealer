@@ -141,7 +141,6 @@ export default function SIDPage() {
         }
         .photo-frame img.photo { width: 100%; height: 100%; object-fit: cover; display: block; }
         .photo-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
-        .photo-placeholder img { width: 60px; height: 60px; opacity: 0.15; }
         .entity-pill {
           width: 110px; height: 18px; border-radius: 3px;
           display: flex; align-items: center; justify-content: center;
