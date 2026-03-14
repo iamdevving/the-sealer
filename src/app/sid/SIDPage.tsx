@@ -65,7 +65,7 @@ export default function SIDPage() {
   const [copied, setCopied]         = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const displayImage = localImage || imageUrl;
+  const displayImage = localImage || (imageUrl && imageUrl.startsWith('http') ? imageUrl : '');
 
   const svgImageParam = (!localImage && imageUrl) ? `&imageUrl=${encodeURIComponent(imageUrl)}` : '';
   const svgUrl = `/api/sid?agentId=${encodeURIComponent(agentId)}&name=${encodeURIComponent(name)}&chain=${encodeURIComponent(chain)}&entityType=${encodeURIComponent(entityType)}&theme=${themeName}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}${firstSeen !== '-' ? `&firstSeen=${encodeURIComponent(firstSeen)}` : ''}${llm ? `&llm=${encodeURIComponent(llm)}` : ''}${socials.length ? `&social=${encodeURIComponent(socials.join(','))}` : ''}${tags.length ? `&tags=${encodeURIComponent(tags.join(','))}` : ''}${svgImageParam}`;
