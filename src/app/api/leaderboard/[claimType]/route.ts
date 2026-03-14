@@ -38,9 +38,9 @@ export interface LeaderboardEntry {
 
 export async function GET(
   req:     NextRequest,
-  context: { params: { claimType: string } },
+  context: { params: Promise<{ claimType: string }> },
 ) {
-  const { claimType } = context.params;
+  const { claimType } = await context.params;
   const limit = parseInt(new URL(req.url).searchParams.get('limit') || '20');
 
   if (claimType !== 'all' && !VALID_CLAIM_TYPES.includes(claimType)) {
