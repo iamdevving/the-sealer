@@ -34,3 +34,23 @@ export async function POST(req: NextRequest) {
     status:      entry.status,
   });
 }
+
+export async function GET(req: NextRequest) {
+  const secret = req.headers.get('authorization')?.replace('Bearer ', '');
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const wallet = new URL(req.url).searchParams.get('wallet')?.toLowerCase();
+  const keys   = await redis.keys(`${KEY_PREFIX}*`);
+  const raws   = await Promise.all(keys.map(k => redis.get(k)));
+
+  const entries = raws
+    .map((raw, i) => {
+      const entry = typeof raw === 'string' ? JSON.parse(raw) : raw as any;
+      return { uid: keys[i].replace(KEY_PREFIX, ''), subject: entry?.subject?.toLowerCase(), status: entry?.status, claimType: entry?.claimType, proofPoints: entry?.proofPoints ?? 0, difficulty: entry?.difficulty ?? 0 };
+    })
+    .filter(e => !wallet || e.subject === wallet);
+
+  return NextResponse.json({ entries, total: entries.length });
+}
