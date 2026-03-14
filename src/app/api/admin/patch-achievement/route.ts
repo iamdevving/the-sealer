@@ -1,7 +1,4 @@
 // src/app/api/admin/patch-achievement/route.ts
-// One-off admin route to patch proofPoints/difficulty on existing achievements
-// Protected by CRON_SECRET
-
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 
@@ -16,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { uid, proofPoints, difficulty } = await req.json();
+  const { uid, proofPoints, difficulty, status } = await req.json();
   if (!uid) return NextResponse.json({ error: 'uid required' }, { status: 400 });
 
   const raw = await redis.get(KEY_PREFIX + uid);
@@ -26,8 +23,14 @@ export async function POST(req: NextRequest) {
 
   if (proofPoints !== undefined) entry.proofPoints = proofPoints;
   if (difficulty  !== undefined) entry.difficulty  = difficulty;
+  if (status      !== undefined) entry.status      = status;
 
   await redis.set(KEY_PREFIX + uid, JSON.stringify(entry), { ex: 90 * 86400 });
 
-  return NextResponse.json({ success: true, uid, proofPoints: entry.proofPoints, difficulty: entry.difficulty });
+  return NextResponse.json({
+    success: true, uid,
+    proofPoints: entry.proofPoints,
+    difficulty:  entry.difficulty,
+    status:      entry.status,
+  });
 }
