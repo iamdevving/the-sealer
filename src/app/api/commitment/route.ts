@@ -271,7 +271,7 @@ export async function GET(req: NextRequest) {
 
   // ── MARK_WHITE — logo in header top-right, above TX ──
   // Logo: 22px, x=340 (a bit left of edge), y=6 — TX aligns to category row y=37
-  const markImg = `<image href="${MARK_WHITE}" x="338" y="6" width="22" height="22" opacity="0.82"/>`;
+  const markImg = `<image href="${MARK_WHITE}" x="326" y="4" width="36" height="36" opacity="0.9"/>`;
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="380" height="${totalH}" viewBox="0 0 380 ${totalH}"
