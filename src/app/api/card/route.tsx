@@ -201,7 +201,7 @@ export async function GET(req: NextRequest) {
   <rect x="0" y="438" width="540" height="32" fill="${t.bandBg}"/>
   <rect x="0" y="438" width="540" height="1" fill="${t.statBorder}"/>
   <text x="22" y="457" font-family="monospace" font-size="7" fill="${t.headerText}" opacity="0.3" letter-spacing="2">THESEALER.XYZ &#183; CRYPTOGRAPHICALLY VERIFIED</text>
-  <image href="${mark}" x="491" y="445" width="28" height="28" preserveAspectRatio="xMidYMid meet" opacity="0.75"/>
+  <image href="${mark}" x="480" y="441" width="44" height="44" preserveAspectRatio="xMidYMid meet" opacity="0.85"/>
 
 </g>
 
