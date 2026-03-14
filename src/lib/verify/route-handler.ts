@@ -35,12 +35,13 @@ export async function handleVerifyRoute(
   if (pending.claimType !== claimType) {
     return NextResponse.json({ error: `Wrong verifier. This is ${claimType}, commitment is ${pending.claimType}` }, { status: 400 });
   }
-  if (['achieved', 'failed', 'expired'].includes(pending.status)) {
-    return NextResponse.json({ uid, status: pending.status, alreadyResolved: true });
-  }
 
   const now   = Math.floor(Date.now() / 1000);
   const force = body.force || req.headers.get('x-force-verify') === 'true';
+
+  if (['achieved', 'failed', 'expired'].includes(pending.status) && !force) {
+    return NextResponse.json({ uid, status: pending.status, alreadyResolved: true });
+  }
 
   if (pending.status === 'verifying' && pending.lastChecked) {
     if (Date.now() - pending.lastChecked * 1000 < VERIFY_WINDOW_MS && !force) {
