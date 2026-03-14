@@ -206,7 +206,7 @@ export async function renewSID(
     address:      SID_ADDRESS,
     abi:          SID_ABI,
     functionName: 'renew',
-    args:         [recipient, `${BASE_URL}/api/metadata/sid/pending`, newAttestationTx],
+    args: [recipient, newSvgUrl, newAttestationTx],
   });
 
   await sendAndWait(hash);
