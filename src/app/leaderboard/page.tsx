@@ -115,7 +115,7 @@ export default function LeaderboardPage() {
         .rank { font-size: 14px; font-weight: 700; }
         .identity { display: flex; flex-direction: column; gap: 3px; }
         .handle { font-size: 11px; color: ${accent}; letter-spacing: 0.5px; }
-        .wallet-addr { font-size: 8px; color: ${ink}; opacity: 0.6; letter-spacing: 0.5px; }
+        .wallet-addr { font-size: 8px; color: ${inkDim}; letter-spacing: 0.5px; }
         .category { font-size: 7px; color: ${inkDim}; letter-spacing: 0.8px; }
         .achievement-count { font-size: 7px; color: ${inkDim}; margin-top: 2px; }
         .points { font-size: 14px; font-weight: 700; color: ${ink}; }
@@ -179,7 +179,7 @@ export default function LeaderboardPage() {
             <div className="empty">No achievements yet for {claimLabel}</div>
           ) : (
             entries.map(e => (
-              <div key={e.wallet} className="board-row">
+              <div key={e.wallet} className="board-row" style={{cursor:'pointer'}} onClick={() => window.location.href=`/agent/${e.handle || e.wallet}`}>
                 <div className="rank" style={{color: medalColor(e.rank)}}>
                   {e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`}
                 </div>
