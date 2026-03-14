@@ -1,6 +1,6 @@
 'use client';
 // src/app/sid/SIDPage.tsx
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function truncateAddr(a: string) {
@@ -61,15 +61,37 @@ export default function SIDPage() {
   const ENTITY_LBL = entityType === 'AI_AGENT' ? 'AI AGENT' : entityType === 'HUMAN' ? 'HUMAN' : 'UNKNOWN';
   const isDark     = themeName === 'dark';
 
-  const [localImage, setLocalImage] = useState<string>('');
-  const [copied, setCopied]         = useState(false);
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [localImage,     setLocalImage]     = useState<string>('');
+  const [copied,         setCopied]         = useState(false);
+  const [currentHandle,  setCurrentHandle]  = useState<string | null>(null);
+  const [handleInput,    setHandleInput]    = useState('');
+  const [handleStatus,   setHandleStatus]   = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid' | 'claiming' | 'claimed' | 'error'
+  >('idle');
+  const [handleMsg,      setHandleMsg]      = useState('');
+  const [freeClaimUsed,  setFreeClaimUsed]  = useState(false);
+
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const displayImage = localImage || (imageUrl && imageUrl.startsWith('http') ? imageUrl : '');
+  // Fetch current handle on load
+  useEffect(() => {
+    if (agentId && agentId !== '????') {
+      fetch(`/api/sid/check?wallet=${encodeURIComponent(agentId.toLowerCase())}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.handle) setCurrentHandle(d.handle);
+          if (d.freeClaimUsed) setFreeClaimUsed(d.freeClaimUsed);
+        })
+        .catch(() => {});
+    }
+  }, [agentId]);
 
-  const svgImageParam = (!localImage && imageUrl) ? `&imageUrl=${encodeURIComponent(imageUrl)}` : '';
-  const svgUrl = `/api/sid?agentId=${encodeURIComponent(agentId)}&name=${encodeURIComponent(name)}&chain=${encodeURIComponent(chain)}&entityType=${encodeURIComponent(entityType)}&theme=${themeName}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}${firstSeen !== '-' ? `&firstSeen=${encodeURIComponent(firstSeen)}` : ''}${llm ? `&llm=${encodeURIComponent(llm)}` : ''}${socials.length ? `&social=${encodeURIComponent(socials.join(','))}` : ''}${tags.length ? `&tags=${encodeURIComponent(tags.join(','))}` : ''}${svgImageParam}`;
+  const displayImage   = localImage || (imageUrl && imageUrl.startsWith('http') ? imageUrl : '');
+  const svgImageParam  = (!localImage && imageUrl) ? `&imageUrl=${encodeURIComponent(imageUrl)}` : '';
+  const svgUrl         = `/api/sid?agentId=${encodeURIComponent(agentId)}&name=${encodeURIComponent(name)}&chain=${encodeURIComponent(chain)}&entityType=${encodeURIComponent(entityType)}&theme=${themeName}${owner ? `&owner=${encodeURIComponent(owner)}` : ''}${firstSeen !== '-' ? `&firstSeen=${encodeURIComponent(firstSeen)}` : ''}${llm ? `&llm=${encodeURIComponent(llm)}` : ''}${socials.length ? `&social=${encodeURIComponent(socials.join(','))}` : ''}${tags.length ? `&tags=${encodeURIComponent(tags.join(','))}` : ''}${currentHandle ? `&handle=${encodeURIComponent(currentHandle)}` : ''}${svgImageParam}`;
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
   function handleImport() { fileRef.current?.click(); }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -87,6 +109,40 @@ export default function SIDPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function checkHandle(h: string) {
+    if (!h || h.length < 3) { setHandleStatus('idle'); setHandleMsg(''); return; }
+    setHandleStatus('checking');
+    try {
+      const r = await fetch(`/api/sid/check?handle=${encodeURIComponent(h)}`);
+      const d = await r.json();
+      if (d.error)        { setHandleStatus('invalid'); setHandleMsg(d.error); }
+      else if (d.available) { setHandleStatus('available'); setHandleMsg(''); }
+      else                  { setHandleStatus('taken');   setHandleMsg('Handle already taken'); }
+    } catch { setHandleStatus('error'); setHandleMsg('Check failed'); }
+  }
+
+  async function claimHandle() {
+    if (handleStatus !== 'available') return;
+    setHandleStatus('claiming');
+    try {
+      const r = await fetch('/api/sid/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: agentId, handle: handleInput }),
+      });
+      const d = await r.json();
+      if (d.success) {
+        setCurrentHandle(handleInput);
+        setHandleStatus('claimed');
+        setHandleMsg('Handle claimed!');
+      } else {
+        setHandleStatus('error');
+        setHandleMsg(d.error || 'Claim failed');
+      }
+    } catch { setHandleStatus('error'); setHandleMsg('Claim failed'); }
+  }
+
+  // ── Theme values ──────────────────────────────────────────────────────────
   const bg      = isDark ? '#0d1117' : '#f5f0e8';
   const hdrBg   = isDark ? '#0a0f1e' : '#1a1f3a';
   const ink     = isDark ? '#c8d8f0' : '#1a1f3a';
@@ -95,10 +151,9 @@ export default function SIDPage() {
   const eAccent = entityType === 'AI_AGENT' ? accent : entityType === 'HUMAN' ? '#9ca3af' : '#f59e0b';
   const mrzBg   = isDark ? '#070c14' : '#e8e0cc';
   const faint   = isDark ? '#1e2d4a' : '#d4c9a8';
-
-  // URL references — no base64
   const stampSrc = isDark ? '/assets/stamp-blue.png' : '/assets/stamp-committed.png';
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{`
@@ -159,6 +214,23 @@ export default function SIDPage() {
         .sid-serial { font-size: 9px; color: ${accent}; letter-spacing: 2px; margin-bottom: 6px; }
         .stamp-wrap { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; transform: rotate(-12deg); flex-shrink: 0; }
         .stamp-wrap img { width: 90px; height: 90px; object-fit: contain; }
+        .sid-handle { padding: 12px 20px; border-top: 0.8px solid ${faint}; position: relative; z-index: 1; }
+        .handle-lbl { font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; margin-bottom: 8px; }
+        .handle-current { font-size: 11px; color: ${accent}; letter-spacing: 1px; font-family: monospace; }
+        .handle-input-row { display: flex; gap: 8px; align-items: center; }
+        .handle-input {
+          flex: 1; background: ${faint}22; border: 0.8px solid ${faint};
+          border-radius: 4px; padding: 6px 10px;
+          font-family: monospace; font-size: 10px; color: ${ink}; outline: none;
+        }
+        .handle-input:focus { border-color: ${accent}; }
+        .handle-btn {
+          padding: 6px 12px; border-radius: 4px; font-size: 8px; font-weight: 700;
+          letter-spacing: 1px; cursor: pointer; border: none;
+          background: ${accent}; color: #fff; font-family: monospace;
+        }
+        .handle-btn:disabled { opacity: 0.4; cursor: default; }
+        .handle-msg { font-size: 7px; margin-top: 5px; letter-spacing: 0.5px; }
         .sid-mrz { background: ${mrzBg}; border-top: 0.8px solid ${faint}; padding: 10px 20px 14px; position: relative; z-index: 1; }
         .mrz-lbl { font-size: 5.5px; color: ${inkDim}; letter-spacing: 1px; margin-bottom: 6px; }
         .mrz-line { font-size: 9px; color: ${ink}; letter-spacing: 1.8px; font-family: monospace; line-height: 1.6; word-break: break-all; }
@@ -218,9 +290,9 @@ export default function SIDPage() {
                 ) : (
                   <div className="photo-placeholder">
                     <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                      <circle cx="30" cy="30" r="28" stroke={faint} strokeWidth="1.5"/>
-                      <circle cx="30" cy="24" r="10" fill={faint} opacity="0.4"/>
-                      <ellipse cx="30" cy="46" rx="16" ry="10" fill={faint} opacity="0.4"/>
+                      <circle cx="30" cy="30" r="28" stroke={inkDim} strokeWidth="1.5" opacity="0.5"/>
+                      <circle cx="30" cy="24" r="10" fill={inkDim} opacity="0.3"/>
+                      <ellipse cx="30" cy="46" rx="16" ry="10" fill={inkDim} opacity="0.3"/>
                     </svg>
                   </div>
                 )}
@@ -244,6 +316,7 @@ export default function SIDPage() {
 
           <div className="sid-div"/>
 
+          {/* Tags / socials / LLM */}
           {(socials.length > 0 || tags.length > 0 || llm) && (
             <div className="sid-tags">
               {socials.length > 0 && (
@@ -273,6 +346,56 @@ export default function SIDPage() {
               <img src={stampSrc} alt="seal stamp" />
             </div>
           </div>
+
+          {/* Handle */}
+          {agentId && agentId !== '????' && (
+            <div className="sid-handle">
+              <div className="handle-lbl">HANDLE</div>
+              {currentHandle ? (
+                <div className="handle-current">@{currentHandle}</div>
+              ) : (
+                <>
+                  <div className="handle-input-row">
+                    <input
+                      className="handle-input"
+                      placeholder="aria.agent"
+                      value={handleInput}
+                      onChange={e => {
+                        const val = e.target.value.toLowerCase();
+                        setHandleInput(val);
+                        checkHandle(val);
+                      }}
+                    />
+                    <button
+                      className="handle-btn"
+                      disabled={handleStatus !== 'available'}
+                      onClick={claimHandle}
+                    >
+                      {handleStatus === 'claiming' ? '...' : 'CLAIM'}
+                    </button>
+                  </div>
+                  {handleStatus === 'checking' && (
+                    <div className="handle-msg" style={{color: inkDim}}>Checking...</div>
+                  )}
+                  {handleStatus === 'available' && (
+                    <div className="handle-msg" style={{color: '#22c55e'}}>✓ Available</div>
+                  )}
+                  {(handleStatus === 'taken' || handleStatus === 'invalid') && (
+                    <div className="handle-msg" style={{color: '#ef4444'}}>{handleMsg}</div>
+                  )}
+                  {handleStatus === 'claimed' && (
+                    <div className="handle-msg" style={{color: '#22c55e'}}>✓ {handleMsg}</div>
+                  )}
+                  {handleStatus === 'error' && (
+                    <div className="handle-msg" style={{color: '#ef4444'}}>{handleMsg}</div>
+                  )}
+                  {freeClaimUsed && handleStatus === 'idle' && (
+                    <div className="handle-msg" style={{color: inkDim}}>Paid renewal required via /api/attest</div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* MRZ */}
           <div className="sid-mrz">
