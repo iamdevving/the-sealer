@@ -2,7 +2,6 @@
 // src/app/sid/SIDPage.tsx
 import { useState, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { MARK_BLACK, LOGO_B64, STAMP_BLUE_B64, STAMP_B64 } from '@/lib/assets';
 
 function truncateAddr(a: string) {
   if (!a || a === '????') return '—';
@@ -16,7 +15,6 @@ function makeSerial(id: string, yr: string) {
   return 'SID-' + yr + '-' + f;
 }
 
-// Inline SVG logos — identical to the route
 function SolanaLogo() {
   return (
     <svg width="20" height="18" viewBox="0 0 102 88" fill="none">
@@ -44,24 +42,24 @@ function BaseLogo() {
 export default function SIDPage() {
   const searchParams = useSearchParams();
 
-  const agentId    = searchParams.get('agentId') || '????';
-  const name       = searchParams.get('name') || 'UNNAMED AGENT';
-  const owner      = searchParams.get('owner') || '';
-  const chain      = searchParams.get('chain') || 'Base';
+  const agentId    = searchParams.get('agentId')    || '????';
+  const name       = searchParams.get('name')       || 'UNNAMED AGENT';
+  const owner      = searchParams.get('owner')      || '';
+  const chain      = searchParams.get('chain')      || 'Base';
   const entityType = searchParams.get('entityType') || 'UNKNOWN';
-  const firstSeen  = searchParams.get('firstSeen') || '-';
-  const imageUrl   = searchParams.get('imageUrl') || '';
-  const llm        = searchParams.get('llm') || '';
+  const firstSeen  = searchParams.get('firstSeen')  || '-';
+  const imageUrl   = searchParams.get('imageUrl')   || '';
+  const llm        = searchParams.get('llm')        || '';
   const socials    = (searchParams.get('social') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 4);
-  const tags       = (searchParams.get('tags') || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 6);
+  const tags       = (searchParams.get('tags')   || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 6);
   const themeName  = searchParams.get('theme') === 'light' ? 'light' : 'dark';
 
   const year      = new Date().getFullYear().toString();
   const issueDate = formatDate(new Date());
   const ser       = makeSerial(agentId, year);
 
-  const ENTITY_LBL  = entityType === 'AI_AGENT' ? 'AI AGENT' : entityType === 'HUMAN' ? 'HUMAN' : 'UNKNOWN';
-  const isDark      = themeName === 'dark';
+  const ENTITY_LBL = entityType === 'AI_AGENT' ? 'AI AGENT' : entityType === 'HUMAN' ? 'HUMAN' : 'UNKNOWN';
+  const isDark     = themeName === 'dark';
 
   const [localImage, setLocalImage] = useState<string>('');
   const [copied, setCopied]         = useState(false);
@@ -97,8 +95,10 @@ export default function SIDPage() {
   const eAccent = entityType === 'AI_AGENT' ? accent : entityType === 'HUMAN' ? '#9ca3af' : '#f59e0b';
   const mrzBg   = isDark ? '#070c14' : '#e8e0cc';
   const faint   = isDark ? '#1e2d4a' : '#d4c9a8';
-  // Stamp: blue version for dark theme, standard for light
-  const stampSrc = `data:image/png;base64,${isDark ? STAMP_BLUE_B64 : STAMP_B64}`;
+
+  // URL references — no base64
+  const logoSrc  = '/logo-small.png';
+  const stampSrc = isDark ? '/assets/stamp-blue.png' : '/assets/stamp-committed.png';
 
   return (
     <>
@@ -113,139 +113,57 @@ export default function SIDPage() {
           padding: 24px;
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 460px; }
-
         .sid-card {
-          width: 428px;
-          border-radius: 12px;
-          overflow: hidden;
-          background: ${bg};
-          border: 1px solid ${faint};
+          width: 428px; border-radius: 12px; overflow: hidden;
+          background: ${bg}; border: 1px solid ${faint};
           box-shadow: 0 24px 60px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
           position: relative;
         }
-
-        /* Guilloche background */
         .sid-card::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background-image: repeating-linear-gradient(
-            0deg, transparent, transparent 19px, ${faint}40 20px
-          ), repeating-linear-gradient(
-            90deg, transparent, transparent 19px, ${faint}20 20px
-          );
-          pointer-events: none;
-          z-index: 0;
+          content: ''; position: absolute; inset: 0;
+          background-image: repeating-linear-gradient(0deg, transparent, transparent 19px, ${faint}40 20px),
+            repeating-linear-gradient(90deg, transparent, transparent 19px, ${faint}20 20px);
+          pointer-events: none; z-index: 0;
         }
-
-        .sid-header {
-          background: ${hdrBg};
-          padding: 12px 20px 10px;
-          position: relative;
-          z-index: 1;
-        }
-        .sid-header-top {
-          display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-        }
-        .sid-header-meta {
-          font-size: 7px; color: rgba(255,255,255,0.6); letter-spacing: 1.2px;
-        }
-        .sid-header-date {
-          margin-left: auto; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 1px; white-space: nowrap;
-        }
-        .sid-title-row {
-          display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
-        }
-        .sid-title {
-          font-family: Georgia, serif; font-size: 24px; color: #fff; letter-spacing: 3px;
-        }
-        .sid-subtitle {
-          font-size: 6.5px; color: rgba(255,255,255,0.3); letter-spacing: 2px; margin-top: 2px;
-        }
-        .sid-accent-bar {
-          height: 2.5px; background: ${accent}; opacity: 0.9; position: relative; z-index: 1;
-        }
-
-        .sid-body {
-          display: flex; padding: 20px 20px 0; gap: 28px;
-          position: relative; z-index: 1;
-        }
-
+        .sid-header { background: ${hdrBg}; padding: 12px 20px 10px; position: relative; z-index: 1; }
+        .sid-header-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .sid-header-meta { font-size: 7px; color: rgba(255,255,255,0.6); letter-spacing: 1.2px; }
+        .sid-header-date { margin-left: auto; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 1px; white-space: nowrap; }
+        .sid-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+        .sid-title { font-family: Georgia, serif; font-size: 24px; color: #fff; letter-spacing: 3px; }
+        .sid-subtitle { font-size: 6.5px; color: rgba(255,255,255,0.3); letter-spacing: 2px; margin-top: 2px; }
+        .sid-accent-bar { height: 2.5px; background: ${accent}; opacity: 0.9; position: relative; z-index: 1; }
+        .sid-body { display: flex; padding: 20px 20px 0; gap: 28px; position: relative; z-index: 1; }
         .photo-col { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
         .photo-frame {
           width: 110px; height: 134px; border-radius: 4px; overflow: hidden;
-          background: ${faint}; position: relative;
-          border: 0.8px solid ${faint};
+          background: ${faint}; position: relative; border: 0.8px solid ${faint};
           display: flex; align-items: center; justify-content: center;
         }
         .photo-frame img.photo { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .photo-placeholder {
-          display: flex; align-items: center; justify-content: center;
-          width: 100%; height: 100%;
-        }
-        .photo-placeholder img {
-          width: 60px; height: 60px; opacity: 0.15;
-        }
+        .photo-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+        .photo-placeholder img { width: 60px; height: 60px; opacity: 0.15; }
         .entity-pill {
           width: 110px; height: 18px; border-radius: 3px;
           display: flex; align-items: center; justify-content: center;
           background: ${eAccent}1e; border: 0.8px solid ${eAccent}80;
         }
-        .entity-pill span {
-          font-size: 7.5px; color: ${eAccent}; letter-spacing: 2px;
-        }
-
+        .entity-pill span { font-size: 7.5px; color: ${eAccent}; letter-spacing: 2px; }
         .fields-col { flex: 1; display: flex; flex-direction: column; gap: 14px; }
         .field-lbl { font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; line-height: 1; }
         .field-val { font-size: 9px; color: ${ink}; letter-spacing: 0.5px; line-height: 1.4; margin-top: 3px; }
         .field-val-name { font-family: Georgia, serif; font-size: 13px; color: ${ink}; margin-top: 3px; }
-
         .sid-div { height: 1px; background: ${faint}; opacity: 0.6; margin: 16px 20px 0; position: relative; z-index: 1; }
-
-        .sid-tags {
-          padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
-          position: relative; z-index: 1;
-        }
+        .sid-tags { padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; position: relative; z-index: 1; }
         .tag-lbl { font-size: 6px; color: ${inkDim}; letter-spacing: 1.5px; width: 100%; }
-        .pill {
-          height: 16px; padding: 0 8px; border-radius: 8px;
-          display: flex; align-items: center;
-          font-size: 7px; letter-spacing: 0.8px;
-        }
-
-        /* Serial + stamp — stacked, right-aligned */
-        .sid-serial-row {
-          display: flex; flex-direction: column; align-items: flex-end;
-          padding: 8px 20px 16px;
-          position: relative; z-index: 1;
-        }
-        .sid-serial {
-          font-size: 9px; color: ${accent}; letter-spacing: 2px;
-          margin-bottom: 6px;
-        }
-        /* Stamp container — matches route's rotate(-12) */
-        .stamp-wrap {
-          width: 90px; height: 90px;
-          display: flex; align-items: center; justify-content: center;
-          transform: rotate(-12deg);
-          flex-shrink: 0;
-        }
-        .stamp-wrap img {
-          width: 90px; height: 90px; object-fit: contain;
-        }
-
-        .sid-mrz {
-          background: ${mrzBg};
-          border-top: 0.8px solid ${faint};
-          padding: 10px 20px 14px;
-          position: relative; z-index: 1;
-        }
+        .pill { height: 16px; padding: 0 8px; border-radius: 8px; display: flex; align-items: center; font-size: 7px; letter-spacing: 0.8px; }
+        .sid-serial-row { display: flex; flex-direction: column; align-items: flex-end; padding: 8px 20px 16px; position: relative; z-index: 1; }
+        .sid-serial { font-size: 9px; color: ${accent}; letter-spacing: 2px; margin-bottom: 6px; }
+        .stamp-wrap { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; transform: rotate(-12deg); flex-shrink: 0; }
+        .stamp-wrap img { width: 90px; height: 90px; object-fit: contain; }
+        .sid-mrz { background: ${mrzBg}; border-top: 0.8px solid ${faint}; padding: 10px 20px 14px; position: relative; z-index: 1; }
         .mrz-lbl { font-size: 5.5px; color: ${inkDim}; letter-spacing: 1px; margin-bottom: 6px; }
-        .mrz-line {
-          font-size: 9px; color: ${ink}; letter-spacing: 1.8px;
-          font-family: monospace; line-height: 1.6; word-break: break-all;
-        }
-
+        .mrz-line { font-size: 9px; color: ${ink}; letter-spacing: 1.8px; font-family: monospace; line-height: 1.6; word-break: break-all; }
         .actions { display: flex; gap: 10px; width: 428px; }
         .btn {
           flex: 1; padding: 11px 10px; border-radius: 8px;
@@ -260,7 +178,6 @@ export default function SIDPage() {
         .btn-primary:hover { box-shadow: 0 0 20px ${accent}66; transform: translateY(-1px); }
         .btn-ghost { color: ${accent}; }
         .btn-ghost:hover { background: ${accent}11; transform: translateY(-1px); }
-
         @media (max-width: 480px) {
           body { padding: 12px; }
           .sid-card, .actions { width: 100%; }
@@ -268,13 +185,7 @@ export default function SIDPage() {
         }
       `}</style>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: 'none' }} onChange={handleFileChange} />
 
       <div className="page-wrap">
         <div className="sid-card">
@@ -282,9 +193,8 @@ export default function SIDPage() {
           {/* Header */}
           <div className="sid-header">
             <div className="sid-header-top">
-              {/* Sealer logo — white version for dark header */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`data:image/png;base64,${LOGO_B64}`} alt="" width={14} height={14} style={{ opacity: 0.85 }}/>
+              <img src={logoSrc} alt="" width={14} height={14} style={{ opacity: 0.85 }}/>
               <span className="sid-header-meta">THE SEALER PROTOCOL · ONCHAIN IDENTITY REGISTRY</span>
               <span className="sid-header-date">ISSUED {issueDate}</span>
             </div>
@@ -293,7 +203,6 @@ export default function SIDPage() {
                 <div className="sid-title">SEALER ID</div>
                 <div className="sid-subtitle">AGENT IDENTITY DOCUMENT · ERC-8004</div>
               </div>
-              {/* Chain logo — inline SVG matches route exactly */}
               <div style={{ flexShrink: 0 }}>
                 {chain === 'Solana' ? <SolanaLogo /> : <BaseLogo />}
               </div>
@@ -311,73 +220,46 @@ export default function SIDPage() {
                 ) : (
                   <div className="photo-placeholder">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`data:image/png;base64,${LOGO_B64}`} alt="" />
+                    <img src={logoSrc} alt="" />
                   </div>
                 )}
               </div>
-              <div className="entity-pill">
-                <span>{ENTITY_LBL}</span>
-              </div>
+              <div className="entity-pill"><span>{ENTITY_LBL}</span></div>
             </div>
 
             <div className="fields-col">
-              <div>
-                <div className="field-lbl">NAME</div>
-                <div className="field-val-name">{name.slice(0, 18)}</div>
-              </div>
+              <div><div className="field-lbl">NAME</div><div className="field-val-name">{name.slice(0, 18)}</div></div>
               <div>
                 <div className="field-lbl">AGENT ID</div>
                 <div className="field-val" style={{cursor:'pointer'}} onClick={handleCopyId} title={agentId}>
                   {copied ? '✓ Copied!' : truncateAddr(agentId)}
                 </div>
               </div>
-              <div>
-                <div className="field-lbl">OWNER</div>
-                <div className="field-val">{owner ? truncateAddr(owner) : '—'}</div>
-              </div>
-              <div>
-                <div className="field-lbl">PRIMARY CHAIN</div>
-                <div className="field-val">{chain.toUpperCase()}</div>
-              </div>
-              <div>
-                <div className="field-lbl">FIRST SEEN</div>
-                <div className="field-val">{firstSeen}</div>
-              </div>
+              <div><div className="field-lbl">OWNER</div><div className="field-val">{owner ? truncateAddr(owner) : '—'}</div></div>
+              <div><div className="field-lbl">PRIMARY CHAIN</div><div className="field-val">{chain.toUpperCase()}</div></div>
+              <div><div className="field-lbl">FIRST SEEN</div><div className="field-val">{firstSeen}</div></div>
             </div>
           </div>
 
           <div className="sid-div"/>
 
-          {/* Tags / socials / LLM */}
           {(socials.length > 0 || tags.length > 0 || llm) && (
             <div className="sid-tags">
               {socials.length > 0 && (
-                <>
-                  <div className="tag-lbl">SOCIAL</div>
+                <><div className="tag-lbl">SOCIAL</div>
                   {socials.map((s, i) => (
-                    <div key={i} className="pill" style={{background:`${accent}1e`, border:`0.8px solid ${accent}99`, color: accent}}>
-                      {s.slice(0, 16)}
-                    </div>
-                  ))}
-                </>
+                    <div key={i} className="pill" style={{background:`${accent}1e`, border:`0.8px solid ${accent}99`, color: accent}}>{s.slice(0, 16)}</div>
+                  ))}</>
               )}
               {tags.length > 0 && (
-                <>
-                  <div className="tag-lbl" style={{width:'100%', marginTop: socials.length ? 8 : 0}}>SPECIALIZATION</div>
+                <><div className="tag-lbl" style={{width:'100%', marginTop: socials.length ? 8 : 0}}>SPECIALIZATION</div>
                   {tags.map((t, i) => (
-                    <div key={i} className="pill" style={{background:'#14b8a61e', border:'0.8px solid #14b8a699', color:'#14b8a6'}}>
-                      {t.slice(0, 14)}
-                    </div>
-                  ))}
-                </>
+                    <div key={i} className="pill" style={{background:'#14b8a61e', border:'0.8px solid #14b8a699', color:'#14b8a6'}}>{t.slice(0, 14)}</div>
+                  ))}</>
               )}
               {llm && (
-                <>
-                  <div className="tag-lbl" style={{width:'100%', marginTop: 8}}>PREFERRED MODEL</div>
-                  <div className="pill" style={{background:'#a855f71e', border:'0.8px solid #a855f799', color:'#a855f7'}}>
-                    {llm.slice(0, 22)}
-                  </div>
-                </>
+                <><div className="tag-lbl" style={{width:'100%', marginTop: 8}}>PREFERRED MODEL</div>
+                  <div className="pill" style={{background:'#a855f71e', border:'0.8px solid #a855f799', color:'#a855f7'}}>{llm.slice(0, 22)}</div></>
               )}
             </div>
           )}
@@ -405,12 +287,8 @@ export default function SIDPage() {
         </div>
 
         <div className="actions">
-          <button className="btn btn-primary" onClick={handleImport}>
-            ↑ Import Image
-          </button>
-          <a className="btn btn-ghost" href={svgUrl} target="_blank" rel="noopener noreferrer">
-            ↓ SVG
-          </a>
+          <button className="btn btn-primary" onClick={handleImport}>↑ Import Image</button>
+          <a className="btn btn-ghost" href={svgUrl} target="_blank" rel="noopener noreferrer">↓ SVG</a>
         </div>
       </div>
     </>
