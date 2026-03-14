@@ -326,7 +326,7 @@ export default function CardPage() {
           <div className="bottom-band">
             <span className="band-text">THESEALER.XYZ · CRYPTOGRAPHICALLY VERIFIED</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:22,height:22,opacity:0.65}}/>
+            <img src={t.dark ? MARK_WHITE : MARK_BLACK} alt="" style={{width:32,height:32,opacity:0.65}}/>
           </div>
         </div>
 
