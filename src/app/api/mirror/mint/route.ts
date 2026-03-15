@@ -27,15 +27,43 @@ const ERC721_ABI = parseAbi([
 const publicClient = createPublicClient({ chain: base, transport: http(process.env.ALCHEMY_RPC_URL!) });
 
 async function verifyBaseOwnership(contract: string, tokenId: string, wallet: string): Promise<boolean> {
+  // Normalise tokenId — Alchemy sometimes returns hex strings
+  const tokenIdBig = tokenId.startsWith('0x') ? BigInt(tokenId) : BigInt(tokenId);
+
+  // Try ERC-721 ownerOf first
   try {
     const owner = await publicClient.readContract({
       address:      contract as `0x${string}`,
       abi:          ERC721_ABI,
       functionName: 'ownerOf',
-      args:         [BigInt(tokenId)],
+      args:         [tokenIdBig],
     });
     return owner.toLowerCase() === wallet.toLowerCase();
-  } catch { return false; }
+  } catch {}
+
+  // Fallback: ERC-1155 balanceOf
+  try {
+    const ERC1155_ABI = parseAbi(['function balanceOf(address account, uint256 id) view returns (uint256)']);
+    const balance = await publicClient.readContract({
+      address:      contract as `0x${string}`,
+      abi:          ERC1155_ABI,
+      functionName: 'balanceOf',
+      args:         [wallet as `0x${string}`, tokenIdBig],
+    });
+    return balance > BigInt(0);
+  } catch {}
+
+  // Fallback: Alchemy isHolderOfCollection
+  try {
+    const alchemyUrl = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_KEY}/isHolderOfCollection?wallet=${wallet}&contractAddress=${contract}`;
+    const res = await fetch(alchemyUrl, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const data = await res.json();
+      return !!data.isHolderOfCollection;
+    }
+  } catch {}
+
+  return false;
 }
 
 async function verifySolanaOwnership(mint: string, wallet: string): Promise<boolean> {
