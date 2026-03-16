@@ -44,6 +44,7 @@ export default function MirrorInteractivePage() {
   const [loading,     setLoading]     = useState(false);
   const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
   const [targetWallet,setTargetWallet]= useState('');
+  const [showConfirm,  setShowConfirm]  = useState(false);
   const [error,       setError]       = useState('');
   const [mintResult,  setMintResult]  = useState<any>(null);
   const [nftFilter,   setNftFilter]   = useState<'all' | SourceChain>('all');
@@ -108,10 +109,11 @@ export default function MirrorInteractivePage() {
   const ethCount     = nfts.filter(n => n.chain === 'ethereum').length;
   const solanaCount  = nfts.filter(n => n.chain === 'solana').length;
 
-  // Can mint if: EVM NFT + EVM connected, OR Solana NFT + Solana connected
-  const canMint = selectedNFT && (
+  // Solana NFT needs Solana connected (ownership) + EVM connected (recipient)
+  const needsEVM    = selectedNFT?.chain === 'solana' && !isConnected;
+  const canMint     = selectedNFT && !needsEVM && (
     (selectedNFT.chain !== 'solana' && isConnected) ||
-    (selectedNFT.chain === 'solana' && solConnected)
+    (selectedNFT.chain === 'solana' && solConnected && isConnected)
   );
 
   return (
@@ -169,7 +171,7 @@ export default function MirrorInteractivePage() {
 
         /* Override wallet adapter button styles */
         .wallet-adapter-button {
-          background: ${solGreen}18 !important;
+          background: transparent !important;
           border: 0.8px solid ${solGreen} !important;
           border-radius: 8px !important;
           color: ${solGreen} !important;
@@ -181,11 +183,11 @@ export default function MirrorInteractivePage() {
           padding: 11px 16px !important;
           width: 100% !important;
           justify-content: flex-start !important;
+          line-height: 1 !important;
         }
-        .wallet-adapter-button:hover {
-          background: ${solGreen}28 !important;
-        }
+        .wallet-adapter-button:hover { background: ${solGreen}18 !important; }
         .wallet-adapter-button-start-icon { display: none !important; }
+        .wallet-adapter-modal-wrapper { font-family: 'Space Mono', monospace !important; }
 
         .load-btn {
           padding: 10px 20px; border-radius: 8px; font-size: 9px; font-weight: 700;
@@ -484,16 +486,36 @@ export default function MirrorInteractivePage() {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="field-label">RECIPIENT WALLET (EVM — RECEIVES THE MIRROR NFT)</div>
-                    <input
-                      className="field-input"
-                      placeholder={address || 'EVM wallet address...'}
-                      value={targetWallet}
-                      onChange={e => setTargetWallet(e.target.value)}
-                    />
-                    <div style={{fontSize:7,color:inkDim,marginTop:6}}>Leave empty to use your connected EVM wallet</div>
-                  </div>
+                  {/* EVM wallet warning for Solana NFTs */}
+                  {needsEVM && (
+                    <div className="warning-box">
+                      <div className="warning-title">⚠ EVM WALLET REQUIRED</div>
+                      <div className="warning-text">The Mirror NFT mints on Base. Connect a Browser Wallet or WalletConnect to receive it.</div>
+                      <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                        {displayConnectors.map(connector => (
+                          <button key={connector.uid} className="connector-btn" style={{fontSize:'8px',padding:'8px 14px',flex:'0 0 auto'}} onClick={() => connect({ connector })}>
+                            → {connector.name === 'Injected' ? 'Browser Wallet' : connector.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recipient — only show override if EVM connected */}
+                  {isConnected && (
+                    <div>
+                      <div className="field-label">RECIPIENT WALLET (OPTIONAL OVERRIDE)</div>
+                      <input
+                        className="field-input"
+                        placeholder={address || 'EVM wallet address...'}
+                        value={targetWallet}
+                        onChange={e => setTargetWallet(e.target.value)}
+                      />
+                      <div style={{fontSize:7,color:inkDim,marginTop:6}}>
+                        Defaults to {address ? truncateAddr(address) : 'connected EVM wallet'}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="summary-box">
                     <div className="summary-label">SUMMARY</div>
@@ -508,16 +530,36 @@ export default function MirrorInteractivePage() {
 
                   {error && <div className="error-msg">{error}</div>}
 
-                  <div className="btn-row">
-                    <button className="btn" onClick={() => { setStep('browse'); setError(''); }}>← Back</button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleMint}
-                      disabled={!canMint}
-                    >
-                      MINT MIRROR — $0.20
-                    </button>
-                  </div>
+                  {/* Confirm overlay */}
+                  {showConfirm && (
+                    <div style={{background:`${faint}44`,border:`0.8px solid ${accent}44`,borderRadius:8,padding:'16px',display:'flex',flexDirection:'column',gap:10}}>
+                      <div style={{fontSize:9,color:ink,letterSpacing:'1px'}}>CONFIRM MINT</div>
+                      <div style={{fontSize:8,color:inkDim,lineHeight:1.7}}>
+                        You are about to mint a Mirror NFT for <strong style={{color:ink}}>$0.20 USDC</strong>.<br/>
+                        NFT: <strong style={{color:ink}}>{selectedNFT.name}</strong><br/>
+                        Recipient: <strong style={{color:ink}}>{targetWallet ? truncateAddr(targetWallet) : truncateAddr(address||'')} (Base)</strong>
+                      </div>
+                      <div className="btn-row" style={{marginTop:0}}>
+                        <button className="btn" onClick={() => setShowConfirm(false)}>Cancel</button>
+                        <button className="btn btn-primary" onClick={() => { setShowConfirm(false); handleMint(); }}>
+                          CONFIRM — $0.20 USDC
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!showConfirm && (
+                    <div className="btn-row">
+                      <button className="btn" onClick={() => { setStep('browse'); setError(''); }}>← Back</button>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => setShowConfirm(true)}
+                        disabled={!canMint}
+                      >
+                        MINT MIRROR — $0.20
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
