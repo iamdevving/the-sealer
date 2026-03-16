@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useX402Payment } from '@/lib/useX402Payment';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 type Step = 'connect' | 'browse' | 'configure' | 'minting' | 'done';
@@ -44,8 +45,10 @@ export default function MirrorInteractivePage() {
   const [loading,     setLoading]     = useState(false);
   const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
   const [targetWallet,setTargetWallet]= useState('');
+  const [paying,       setPaying]       = useState(false);
   const [targetChain, setTargetChain]  = useState<'Base'|'Solana'>('Base');
   const [showConfirm,  setShowConfirm]  = useState(false);
+  const { pay } = useX402Payment();
   const [error,       setError]       = useState('');
   const [mintResult,  setMintResult]  = useState<any>(null);
   const [nftFilter,   setNftFilter]   = useState<'all' | SourceChain>('all');
@@ -75,19 +78,37 @@ export default function MirrorInteractivePage() {
   async function handleMint() {
     if (!selectedNFT) return;
 
-    // For EVM NFTs use connected EVM wallet, for Solana use Solana wallet
     const ownerWallet = selectedNFT.chain === 'solana' ? solAddress : (address || '');
     if (!ownerWallet) return;
 
     setStep('minting');
     setError('');
+    setPaying(true);
+
     try {
-      // Pick recipient based on target chain
+      // ── Step 1: Send USDC payment ───────────────────────────────────────
+      // Prefer Solana payment if Solana wallet connected, else Base
+      const preferredChain = publicKey ? 'solana' : 'base';
+      let paymentResult: { txHash: string; paymentChain: string };
+      try {
+        paymentResult = await pay('0.20', preferredChain as any);
+      } catch (payErr: any) {
+        setError(`Payment failed: ${payErr?.message || String(payErr)}`);
+        setStep('configure');
+        setPaying(false);
+        return;
+      }
+      setPaying(false);
+
+      // ── Step 2: Mint with payment proof ────────────────────────────────
       const recipient = targetWallet || (targetChain === 'Base' ? address : solAddress) || ownerWallet;
       const res = await fetch('/api/mirror/mint', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+        headers: {
+          'Content-Type': 'application/json',
+          'X-PAYMENT':    paymentResult.txHash,
+        },
+        body: JSON.stringify({
           originalChain:    selectedNFT.chain,
           originalContract: selectedNFT.contract,
           originalTokenId:  selectedNFT.tokenId,
@@ -96,14 +117,18 @@ export default function MirrorInteractivePage() {
           targetChain,
           nftName:          selectedNFT.name,
           imageUrl:         selectedNFT.imageUrl,
-          paymentChain:     'Base',
+          paymentChain:     paymentResult.paymentChain,
         }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Mint failed'); setStep('configure'); return; }
       setMintResult(data);
       setStep('done');
-    } catch (e: any) { setError(String(e)); setStep('configure'); }
+    } catch (e: any) {
+      setError(String(e));
+      setStep('configure');
+      setPaying(false);
+    }
   }
 
   const filteredNFTs = nfts.filter(n => nftFilter === 'all' || n.chain === nftFilter);
@@ -579,8 +604,15 @@ export default function MirrorInteractivePage() {
           {/* ── Step: Minting ───────────────────────────────────────────── */}
           {step === 'minting' && (
             <div className="done-area">
-              <div className="loading-pulse" style={{fontSize:11,letterSpacing:'3px'}}>MINTING MIRROR...</div>
-              <div className="done-sub">Verifying ownership and minting your soulbound mirror NFT on Base. This may take 15–30 seconds.</div>
+              <div className="loading-pulse" style={{fontSize:11,letterSpacing:'3px'}}>
+                {paying ? 'APPROVING PAYMENT...' : 'MINTING MIRROR...'}
+              </div>
+              <div className="done-sub">
+                {paying
+                  ? 'Approve the $0.20 USDC transaction in your wallet.'
+                  : `Verifying ownership and minting your soulbound mirror NFT on ${targetChain}. This may take 15–30 seconds.`
+                }
+              </div>
             </div>
           )}
 
