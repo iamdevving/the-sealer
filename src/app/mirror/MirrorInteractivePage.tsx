@@ -2,6 +2,8 @@
 // src/app/mirror/MirrorInteractivePage.tsx
 import { useState, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 type Step = 'connect' | 'browse' | 'configure' | 'minting' | 'done';
 type SourceChain = 'base' | 'ethereum' | 'solana';
@@ -20,35 +22,38 @@ function truncateAddr(a: string) {
   return a.slice(0, 6) + '···' + a.slice(-4);
 }
 
-const accent  = '#3b82f6';
-const bg      = '#060a12';
-const hdrBg   = '#0a0f1e';
-const ink     = '#c8d8f0';
-const inkDim  = '#5a7090';
-const faint   = '#1e2d4a';
-const warning = '#f59e0b';
+const accent   = '#3b82f6';
+const bg       = '#060a12';
+const hdrBg    = '#0a0f1e';
+const ink      = '#c8d8f0';
+const inkDim   = '#5a7090';
+const faint    = '#1e2d4a';
+const warning  = '#f59e0b';
+const solGreen = '#9945FF';
 
 export default function MirrorInteractivePage() {
-  const { address, isConnected } = useAccount();
-  const { connect, connectors }  = useConnect();
-  const { disconnect }           = useDisconnect();
+  const { address, isConnected }           = useAccount();
+  const { connect, connectors }            = useConnect();
+  const { disconnect }                     = useDisconnect();
+  const { publicKey, connected: solConnected, disconnect: solDisconnect } = useWallet();
 
-  const [step,         setStep]         = useState<Step>('connect');
-  const [nfts,         setNfts]         = useState<NFTItem[]>([]);
-  const [loading,      setLoading]      = useState(false);
-  const [selectedNFT,  setSelectedNFT]  = useState<NFTItem | null>(null);
-  const [solanaWallet, setSolanaWallet] = useState('');
-  const [targetWallet, setTargetWallet] = useState('');
-  const [error,        setError]        = useState('');
-  const [mintResult,   setMintResult]   = useState<any>(null);
-  const [nftFilter,    setNftFilter]    = useState<'all' | SourceChain>('all');
+  const solAddress = publicKey?.toBase58() || '';
 
-  // Deduplicate connectors — keep only Injected + WalletConnect
+  const [step,        setStep]        = useState<Step>('connect');
+  const [nfts,        setNfts]        = useState<NFTItem[]>([]);
+  const [loading,     setLoading]     = useState(false);
+  const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
+  const [targetWallet,setTargetWallet]= useState('');
+  const [error,       setError]       = useState('');
+  const [mintResult,  setMintResult]  = useState<any>(null);
+  const [nftFilter,   setNftFilter]   = useState<'all' | SourceChain>('all');
+
   const filteredConnectors = connectors.filter(c =>
     c.id === 'injected' || c.id === 'walletConnect'
   );
-  // Fallback: if neither found, show all
   const displayConnectors = filteredConnectors.length > 0 ? filteredConnectors : connectors;
+
+  const anyConnected = isConnected || solConnected;
 
   const fetchNFTs = useCallback(async (baseAddr: string, solAddr: string) => {
     setLoading(true);
@@ -66,19 +71,24 @@ export default function MirrorInteractivePage() {
   }, []);
 
   async function handleMint() {
-    if (!selectedNFT || !address) return;
+    if (!selectedNFT) return;
+
+    // For EVM NFTs use connected EVM wallet, for Solana use Solana wallet
+    const ownerWallet = selectedNFT.chain === 'solana' ? solAddress : (address || '');
+    if (!ownerWallet) return;
+
     setStep('minting');
     setError('');
     try {
-      const recipient = targetWallet || address;
-      const res  = await fetch('/api/mirror/mint', {
+      const recipient = targetWallet || ownerWallet;
+      const res = await fetch('/api/mirror/mint', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           originalChain:    selectedNFT.chain,
           originalContract: selectedNFT.contract,
           originalTokenId:  selectedNFT.tokenId,
-          ownerWallet:      address,
+          ownerWallet,
           recipientWallet:  recipient,
           targetChain:      'Base',
           nftName:          selectedNFT.name,
@@ -93,11 +103,16 @@ export default function MirrorInteractivePage() {
     } catch (e: any) { setError(String(e)); setStep('configure'); }
   }
 
-  const isSolana       = selectedNFT?.chain === 'solana';
-  const filteredNFTs   = nfts.filter(n => nftFilter === 'all' || n.chain === nftFilter);
-  const baseCount      = nfts.filter(n => n.chain === 'base').length;
-  const ethCount       = nfts.filter(n => n.chain === 'ethereum').length;
-  const solanaCount    = nfts.filter(n => n.chain === 'solana').length;
+  const filteredNFTs = nfts.filter(n => nftFilter === 'all' || n.chain === nftFilter);
+  const baseCount    = nfts.filter(n => n.chain === 'base').length;
+  const ethCount     = nfts.filter(n => n.chain === 'ethereum').length;
+  const solanaCount  = nfts.filter(n => n.chain === 'solana').length;
+
+  // Can mint if: EVM NFT + EVM connected, OR Solana NFT + Solana connected
+  const canMint = selectedNFT && (
+    (selectedNFT.chain !== 'solana' && isConnected) ||
+    (selectedNFT.chain === 'solana' && solConnected)
+  );
 
   return (
     <>
@@ -110,64 +125,77 @@ export default function MirrorInteractivePage() {
           padding: 24px;
         }
         .wrap { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-        .card {
-          background: ${hdrBg}; border-radius: 12px;
-          border: 1px solid ${faint}; overflow: hidden;
-        }
+        .card { background: ${hdrBg}; border-radius: 12px; border: 1px solid ${faint}; overflow: hidden; }
         .card-header {
           padding: 16px 24px; border-bottom: 0.8px solid ${faint};
-          display: flex; align-items: center; justify-content: space-between;
+          display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
         }
         .card-title { font-size: 11px; color: ${ink}; letter-spacing: 2px; }
         .card-sub   { font-size: 7px; color: ${inkDim}; letter-spacing: 1px; margin-top: 2px; }
         .card-body  { padding: 24px; }
         .accent-bar { height: 2.5px; background: ${accent}; }
 
-        .wallet-area {
-          display: flex; flex-direction: column; align-items: center;
-          gap: 20px; padding: 40px 24px; text-align: center;
+        /* Wallet status row */
+        .wallets-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .wallet-badge {
+          display: flex; align-items: center; gap: 6px;
+          padding: 5px 12px; border-radius: 6px;
+          border: 0.8px solid ${faint}; background: ${faint}22;
+          font-size: 8px; color: ${ink}; letter-spacing: 0.5px;
         }
-        .wallet-title { font-family: Georgia, serif; font-size: 22px; color: ${ink}; letter-spacing: 2px; }
-        .wallet-sub { font-size: 9px; color: ${inkDim}; letter-spacing: 1px; max-width: 420px; line-height: 1.7; }
-        .connector-list { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 320px; }
-        .connector-btn {
-          padding: 12px 20px; border-radius: 8px; font-size: 9px; font-weight: 700;
-          letter-spacing: 1.5px; cursor: pointer; border: 0.8px solid ${accent};
-          background: transparent; color: ${accent}; font-family: monospace;
-          transition: all .15s; text-align: left;
-        }
-        .connector-btn:hover { background: ${accent}18; }
-
-        .connected-info {
-          display: flex; align-items: center; gap: 8px;
-          flex-shrink: 0;
-        }
-        .connected-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
-        .connected-addr { font-size: 9px; color: ${ink}; letter-spacing: 0.5px; }
+        .wallet-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .dot-evm { background: #22c55e; }
+        .dot-sol { background: ${solGreen}; }
         .disconnect-btn {
-          padding: 4px 12px; border-radius: 4px; font-size: 7px; letter-spacing: 1px;
+          padding: 3px 8px; border-radius: 4px; font-size: 6.5px; letter-spacing: 1px;
           cursor: pointer; border: 0.8px solid ${faint}; background: transparent;
-          color: ${inkDim}; font-family: monospace; transition: all .15s;
+          color: ${inkDim}; font-family: monospace; transition: all .15s; margin-left: 4px;
         }
         .disconnect-btn:hover { border-color: #ef4444; color: #ef4444; }
 
-        .solana-section { margin-top: 20px; padding-top: 20px; border-top: 0.8px solid ${faint}; }
-        .sol-row { display: flex; gap: 10px; align-items: center; }
-        .sol-input {
-          flex: 1; background: ${faint}22; border: 0.8px solid ${faint};
-          border-radius: 6px; padding: 8px 12px;
-          font-family: monospace; font-size: 9px; color: ${ink}; outline: none;
-        }
-        .sol-input:focus { border-color: ${accent}; }
-        .sol-input::placeholder { color: ${inkDim}; }
-        .fetch-btn {
-          padding: 8px 16px; border-radius: 6px; font-size: 8px; font-weight: 700;
-          letter-spacing: 1px; cursor: pointer; border: 0.8px solid ${accent};
-          background: ${accent}; color: #fff; font-family: monospace;
-          transition: all .15s; white-space: nowrap;
-        }
-        .fetch-btn:disabled { opacity: 0.4; cursor: default; }
+        /* Connect screen */
+        .connect-area { display: flex; flex-direction: column; gap: 24px; padding: 32px 24px; }
+        .connect-col { display: flex; flex-direction: column; gap: 12px; }
+        .connect-label { font-size: 7px; color: ${inkDim}; letter-spacing: 2px; margin-bottom: 4px; }
+        .connect-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
+        .connector-btn {
+          padding: 11px 16px; border-radius: 8px; font-size: 9px; font-weight: 700;
+          letter-spacing: 1.5px; cursor: pointer; border: 0.8px solid ${accent};
+          background: transparent; color: ${accent}; font-family: monospace;
+          transition: all .15s; text-align: left; width: 100%;
+        }
+        .connector-btn:hover { background: ${accent}18; }
+
+        /* Override wallet adapter button styles */
+        .wallet-adapter-button {
+          background: ${solGreen}18 !important;
+          border: 0.8px solid ${solGreen} !important;
+          border-radius: 8px !important;
+          color: ${solGreen} !important;
+          font-family: 'Space Mono', monospace !important;
+          font-size: 9px !important;
+          font-weight: 700 !important;
+          letter-spacing: 1.5px !important;
+          height: auto !important;
+          padding: 11px 16px !important;
+          width: 100% !important;
+          justify-content: flex-start !important;
+        }
+        .wallet-adapter-button:hover {
+          background: ${solGreen}28 !important;
+        }
+        .wallet-adapter-button-start-icon { display: none !important; }
+
+        .load-btn {
+          padding: 10px 20px; border-radius: 8px; font-size: 9px; font-weight: 700;
+          letter-spacing: 1.5px; cursor: pointer; border: 0.8px solid ${accent};
+          background: ${accent}; color: #fff; font-family: monospace;
+          transition: all .15s; width: 100%;
+        }
+        .load-btn:disabled { opacity: 0.4; cursor: default; }
+
+        /* NFT grid */
         .filter-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .filter-pill {
           padding: 4px 12px; border-radius: 12px; font-size: 7px; letter-spacing: 1px;
@@ -184,21 +212,26 @@ export default function MirrorInteractivePage() {
         }
         .nft-item:hover { border-color: ${accent}88; transform: translateY(-1px); }
         .nft-item.selected { border-color: ${accent}; box-shadow: 0 0 12px ${accent}44; }
-        .nft-item.solana-item { cursor: not-allowed; opacity: 0.6; }
-        .nft-item.solana-item:hover { transform: none; border-color: ${warning}44; }
-        .solana-badge {
-          position: absolute; top: 6px; right: 6px;
-          background: ${warning}22; border: 0.8px solid ${warning}44;
+        .nft-item.sol-locked { cursor: not-allowed; opacity: 0.5; }
+        .nft-item.sol-locked:hover { transform: none; border-color: ${warning}44; }
+        .chain-badge {
+          position: absolute; top: 6px; left: 6px;
           border-radius: 4px; padding: 2px 6px;
-          font-size: 6px; color: ${warning}; letter-spacing: 1px;
+          font-size: 6px; letter-spacing: 1px;
         }
+        .badge-sol { background: ${solGreen}22; border: 0.8px solid ${solGreen}44; color: ${solGreen}; }
+        .badge-eth { background: #627EEA22; border: 0.8px solid #627EEA44; color: #627EEA; }
+        .badge-base { background: ${accent}22; border: 0.8px solid ${accent}44; color: ${accent}; }
+        .badge-v2 { background: ${warning}22; border: 0.8px solid ${warning}44; color: ${warning}; }
+
         .nft-img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: ${faint}; }
         .nft-img-placeholder { width: 100%; aspect-ratio: 1; background: ${faint}; display: flex; align-items: center; justify-content: center; font-size: 8px; color: ${inkDim}; }
         .nft-info { padding: 8px; }
-        .nft-name { font-size: 8px; color: ${ink}; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .nft-chain { font-size: 6.5px; color: ${inkDim}; letter-spacing: 0.5px; margin-top: 2px; }
+        .nft-name { font-size: 8px; color: ${ink}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nft-chain { font-size: 6.5px; color: ${inkDim}; margin-top: 2px; }
         .nft-empty { padding: 40px; text-align: center; font-size: 9px; color: ${inkDim}; letter-spacing: 1px; }
 
+        /* Configure */
         .config-section { display: flex; gap: 24px; }
         .config-preview { flex-shrink: 0; }
         .config-preview-card {
@@ -230,13 +263,6 @@ export default function MirrorInteractivePage() {
         .summary-label { font-size: 7px; color: ${inkDim}; letter-spacing: 1.5px; margin-bottom: 8px; }
         .summary-text { font-size: 8px; color: ${ink}; line-height: 1.8; }
 
-        .warning-box {
-          background: ${warning}11; border: 0.8px solid ${warning}44;
-          border-radius: 6px; padding: 12px 14px;
-        }
-        .warning-title { font-size: 8px; color: ${warning}; letter-spacing: 1px; margin-bottom: 6px; }
-        .warning-text { font-size: 7.5px; color: ${warning}99; line-height: 1.6; letter-spacing: 0.3px; }
-
         .btn-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
         .btn {
           padding: 11px 20px; border-radius: 8px; font-size: 9px; font-weight: 700;
@@ -258,13 +284,15 @@ export default function MirrorInteractivePage() {
         .result-key { font-size: 7px; color: ${inkDim}; letter-spacing: 1px; }
         .result-val { font-size: 8px; color: ${ink}; }
 
-        .error-msg { padding: 10px 16px; background: #ef444422; border: 0.8px solid #ef444440; border-radius: 6px; font-size: 8px; color: #ef4444; letter-spacing: 0.5px; }
+        .error-msg { padding: 10px 16px; background: #ef444422; border: 0.8px solid #ef444440; border-radius: 6px; font-size: 8px; color: #ef4444; }
         .loading-pulse { font-size: 9px; color: ${inkDim}; letter-spacing: 1px; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .divider { height: 0.8px; background: ${faint}; margin: 20px 0; }
 
         @media (max-width: 600px) {
           .config-section { flex-direction: column; }
           .nft-grid { grid-template-columns: repeat(2, 1fr); }
+          .connect-split { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -274,93 +302,115 @@ export default function MirrorInteractivePage() {
           <div className="card-header">
             <div>
               <div className="card-title">MIRROR AN NFT</div>
-              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · CROSS-CHAIN · $0.20 USDC</div>
+              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · BASE + ETH + SOLANA · $0.20 USDC</div>
             </div>
-            {isConnected && (
-              <div className="connected-info">
-                <div className="connected-dot"/>
-                <span className="connected-addr">{truncateAddr(address || '')}</span>
-                <button className="disconnect-btn" onClick={() => { disconnect(); setStep('connect'); setNfts([]); setSelectedNFT(null); }}>
-                  DISCONNECT
-                </button>
+            {anyConnected && (
+              <div className="wallets-row">
+                {isConnected && (
+                  <div className="wallet-badge">
+                    <div className="wallet-dot dot-evm"/>
+                    <span>{truncateAddr(address || '')}</span>
+                    <button className="disconnect-btn" onClick={() => { disconnect(); if (!solConnected) { setStep('connect'); setNfts([]); setSelectedNFT(null); } }}>✕</button>
+                  </div>
+                )}
+                {solConnected && (
+                  <div className="wallet-badge" style={{borderColor:`${solGreen}44`}}>
+                    <div className="wallet-dot dot-sol"/>
+                    <span style={{color: solGreen}}>{truncateAddr(solAddress)}</span>
+                    <button className="disconnect-btn" onClick={() => { solDisconnect(); if (!isConnected) { setStep('connect'); setNfts([]); setSelectedNFT(null); } }}>✕</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* ── Step: Connect ───────────────────────────────────────────── */}
-          {step === 'connect' && !isConnected && (
-            <div className="wallet-area">
-              <div className="wallet-title">Connect Your Wallet</div>
-              <div className="wallet-sub">
-                Connect your EVM wallet to browse NFTs on Base and Ethereum. Solana NFT mirroring requires wallet connect — coming soon.
+          {/* ── Step: Connect ─────────────────────────────────────────── */}
+          {step === 'connect' && !anyConnected && (
+            <div className="card-body">
+              <div style={{textAlign:'center', marginBottom:24}}>
+                <div style={{fontFamily:'Georgia,serif', fontSize:20, color:ink, marginBottom:8}}>Connect Your Wallet</div>
+                <div style={{fontSize:9, color:inkDim, maxWidth:460, margin:'0 auto', lineHeight:1.7}}>
+                  Connect an EVM wallet for Base + Ethereum NFTs, a Solana wallet for Solana NFTs, or both.
+                </div>
               </div>
-              <div className="connector-list">
-                {displayConnectors.map(connector => (
-                  <button key={connector.uid} className="connector-btn" onClick={() => connect({ connector })}>
-                    → {connector.name === 'Injected' ? 'Browser Wallet (MetaMask, Rabby...)' : connector.name}
-                  </button>
-                ))}
+              <div className="connect-split">
+                <div className="connect-col">
+                  <div className="connect-label">EVM WALLET (BASE + ETHEREUM)</div>
+                  {displayConnectors.map(connector => (
+                    <button key={connector.uid} className="connector-btn" onClick={() => connect({ connector })}>
+                      → {connector.name === 'Injected' ? 'Browser Wallet' : connector.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="connect-col">
+                  <div className="connect-label" style={{color: solGreen}}>SOLANA WALLET</div>
+                  <WalletMultiButton/>
+                </div>
               </div>
             </div>
           )}
 
-          {/* ── Step: Wallet connected — load NFTs ──────────────────────── */}
-          {isConnected && step === 'connect' && (
+          {/* ── Connected but not browsed yet ─────────────────────────── */}
+          {anyConnected && step === 'connect' && (
             <div className="card-body">
-              <div className="field-label">BASE + ETHEREUM NFTS WILL LOAD AUTOMATICALLY</div>
-              <div className="sol-row" style={{marginTop: 8}}>
-                <button
-                  className="fetch-btn"
-                  style={{flex: 1}}
-                  disabled={loading}
-                  onClick={() => fetchNFTs(address || '', '')}
-                >
-                  {loading ? 'Loading...' : 'LOAD MY NFTS'}
-                </button>
+              <div style={{fontSize:9, color:inkDim, marginBottom:16, letterSpacing:'0.5px', lineHeight:1.7}}>
+                {isConnected && solConnected
+                  ? `Ready to load NFTs from Base + Ethereum (${truncateAddr(address||'')}) and Solana (${truncateAddr(solAddress)}).`
+                  : isConnected
+                  ? `Ready to load Base + Ethereum NFTs. Connect a Solana wallet above to also browse Solana NFTs.`
+                  : `Ready to load Solana NFTs. Connect an EVM wallet above to also browse Base + Ethereum NFTs.`
+                }
               </div>
 
-              <div className="solana-section">
-                <div className="field-label" style={{color: warning, letterSpacing:'1.5px'}}>
-                  ⚠ SOLANA WALLET (READ-ONLY — OWNERSHIP UNVERIFIED)
+              {/* Show connect options for whichever isn't connected */}
+              {!isConnected && (
+                <div style={{marginBottom:16}}>
+                  <div className="connect-label" style={{marginBottom:8}}>ADD EVM WALLET (OPTIONAL)</div>
+                  <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+                    {displayConnectors.map(connector => (
+                      <button key={connector.uid} className="connector-btn" style={{width:'auto', flex:'0 0 auto'}} onClick={() => connect({ connector })}>
+                        → {connector.name === 'Injected' ? 'Browser Wallet' : connector.name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div style={{fontSize: 7.5, color: `${warning}99`, lineHeight: 1.6, marginBottom: 10, letterSpacing: '0.3px'}}>
-                  Solana wallet connect is coming in v2. You can browse Solana NFTs by address but minting is disabled until ownership can be cryptographically verified.
+              )}
+              {!solConnected && (
+                <div style={{marginBottom:16}}>
+                  <div className="connect-label" style={{marginBottom:8, color:solGreen}}>ADD SOLANA WALLET (OPTIONAL)</div>
+                  <WalletMultiButton/>
                 </div>
-                <div className="sol-row">
-                  <input
-                    className="sol-input"
-                    placeholder="Solana wallet address (optional)..."
-                    value={solanaWallet}
-                    onChange={e => setSolanaWallet(e.target.value)}
-                  />
-                  <button
-                    className="fetch-btn"
-                    disabled={loading}
-                    onClick={() => fetchNFTs(address || '', solanaWallet)}
-                  >
-                    {loading ? '...' : 'LOAD ALL'}
-                  </button>
-                </div>
-              </div>
+              )}
 
+              <div className="divider"/>
+              <button
+                className="load-btn"
+                disabled={loading}
+                onClick={() => fetchNFTs(address || '', solAddress)}
+              >
+                {loading ? 'Loading NFTs...' : 'LOAD MY NFTS →'}
+              </button>
               {error && <div className="error-msg" style={{marginTop:12}}>{error}</div>}
             </div>
           )}
 
-          {/* ── Step: Browse NFTs ───────────────────────────────────────── */}
+          {/* ── Step: Browse NFTs ────────────────────────────────────── */}
           {step === 'browse' && (
             <div className="card-body">
               <div className="filter-row">
                 {([
                   ['all',      `All (${nfts.length})`],
                   ['base',     `Base (${baseCount})`],
-                  ['ethereum', `Ethereum (${ethCount})`],
-                  ['solana',   `Solana (${solanaCount}) ⚠`],
+                  ['ethereum', `ETH (${ethCount})`],
+                  ['solana',   `Solana (${solanaCount})`],
                 ] as [string, string][]).map(([f, label]) => (
                   <button key={f} className={`filter-pill${nftFilter===f?' active':''}`} onClick={() => setNftFilter(f as any)}>
                     {label}
                   </button>
                 ))}
+                <button className="filter-pill" style={{marginLeft:'auto'}} onClick={() => fetchNFTs(address||'', solAddress)}>
+                  ↻ Refresh
+                </button>
               </div>
 
               {loading ? (
@@ -370,29 +420,33 @@ export default function MirrorInteractivePage() {
               ) : (
                 <div className="nft-grid">
                   {filteredNFTs.map(nft => {
-                    const isSol     = nft.chain === 'solana';
-                    const isSelected = selectedNFT?.tokenId === nft.tokenId && selectedNFT?.chain === nft.chain;
+                    const isSolLocked = nft.chain === 'solana' && !solConnected;
+                    const isSelected  = selectedNFT?.tokenId === nft.tokenId && selectedNFT?.chain === nft.chain;
                     return (
                       <div
                         key={`${nft.chain}-${nft.contract}-${nft.tokenId}`}
-                        className={`nft-item${isSelected ? ' selected' : ''}${isSol ? ' solana-item' : ''}`}
+                        className={`nft-item${isSelected?' selected':''}${isSolLocked?' sol-locked':''}`}
                         onClick={() => {
-                          if (isSol) return;
+                          if (isSolLocked) return;
                           setSelectedNFT(nft);
                           setStep('configure');
-                          setTargetWallet(address || '');
+                          setTargetWallet('');
                         }}
                       >
-                        {isSol && <span className="solana-badge">V2</span>}
+                        <span className={`chain-badge badge-${nft.chain === 'ethereum' ? 'eth' : nft.chain}`}>
+                          {nft.chain === 'ethereum' ? 'ETH' : nft.chain.toUpperCase()}
+                        </span>
+                        {isSolLocked && <span className="chain-badge badge-v2" style={{left:'auto', right:6}}>CONNECT</span>}
                         {nft.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img className="nft-img" src={nft.imageUrl} alt={nft.name} onError={e => { (e.target as HTMLImageElement).style.display='none'; }}/>
+                          <img className="nft-img" src={nft.imageUrl} alt={nft.name}
+                            onError={e => { (e.target as HTMLImageElement).style.display='none'; }}/>
                         ) : (
                           <div className="nft-img-placeholder">NO IMG</div>
                         )}
                         <div className="nft-info">
                           <div className="nft-name">{nft.name}</div>
-                          <div className="nft-chain">{nft.chain.toUpperCase()} · {truncateAddr(nft.contract)}</div>
+                          <div className="nft-chain">{truncateAddr(nft.contract)}</div>
                         </div>
                       </div>
                     );
@@ -402,7 +456,7 @@ export default function MirrorInteractivePage() {
             </div>
           )}
 
-          {/* ── Step: Configure ─────────────────────────────────────────── */}
+          {/* ── Step: Configure ────────────────────────────────────────── */}
           {step === 'configure' && selectedNFT && (
             <div className="card-body">
               <div className="config-section">
@@ -412,11 +466,11 @@ export default function MirrorInteractivePage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img className="config-preview-img" src={selectedNFT.imageUrl} alt={selectedNFT.name}/>
                     ) : (
-                      <div style={{width:'100%', aspectRatio:'1', background:faint, display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, color:inkDim}}>NO IMAGE</div>
+                      <div style={{width:'100%',aspectRatio:'1',background:faint,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:inkDim}}>NO IMAGE</div>
                     )}
                     <div className="config-preview-name">{selectedNFT.name}</div>
                   </div>
-                  <div style={{fontSize:7, color:inkDim, letterSpacing:'1px', marginTop:8, textAlign:'center'}}>
+                  <div style={{fontSize:7,color:inkDim,letterSpacing:'1px',marginTop:8,textAlign:'center'}}>
                     {selectedNFT.chain.toUpperCase()} · {truncateAddr(selectedNFT.contract)}
                   </div>
                 </div>
@@ -426,19 +480,19 @@ export default function MirrorInteractivePage() {
                     <div className="field-label">TARGET CHAIN (MIRROR LIVES ON)</div>
                     <div className="chain-pills">
                       <button className="chain-pill active">Base</button>
-                      <button className="chain-pill" style={{opacity:0.4, cursor:'not-allowed', borderColor:`${warning}44`, color:warning}} title="Coming in v2">Solana (v2)</button>
+                      <button className="chain-pill" style={{opacity:0.4,cursor:'not-allowed',borderColor:`${warning}44`,color:warning}}>Solana (v2)</button>
                     </div>
                   </div>
 
                   <div>
-                    <div className="field-label">RECIPIENT WALLET</div>
+                    <div className="field-label">RECIPIENT WALLET (EVM — RECEIVES THE MIRROR NFT)</div>
                     <input
                       className="field-input"
-                      placeholder={address || 'Recipient wallet address...'}
+                      placeholder={address || 'EVM wallet address...'}
                       value={targetWallet}
                       onChange={e => setTargetWallet(e.target.value)}
                     />
-                    <div style={{fontSize:7, color:inkDim, marginTop:6}}>Leave empty to send to your connected wallet</div>
+                    <div style={{fontSize:7,color:inkDim,marginTop:6}}>Leave empty to use your connected EVM wallet</div>
                   </div>
 
                   <div className="summary-box">
@@ -452,13 +506,6 @@ export default function MirrorInteractivePage() {
                     </div>
                   </div>
 
-                  {isSolana && (
-                    <div className="warning-box">
-                      <div className="warning-title">⚠ SOLANA MINT DISABLED</div>
-                      <div className="warning-text">Solana wallet connect is required to verify ownership before minting. This feature is coming in v2.</div>
-                    </div>
-                  )}
-
                   {error && <div className="error-msg">{error}</div>}
 
                   <div className="btn-row">
@@ -466,7 +513,7 @@ export default function MirrorInteractivePage() {
                     <button
                       className="btn btn-primary"
                       onClick={handleMint}
-                      disabled={!selectedNFT || !isConnected || isSolana}
+                      disabled={!canMint}
                     >
                       MINT MIRROR — $0.20
                     </button>
@@ -479,7 +526,7 @@ export default function MirrorInteractivePage() {
           {/* ── Step: Minting ───────────────────────────────────────────── */}
           {step === 'minting' && (
             <div className="done-area">
-              <div className="loading-pulse" style={{fontSize:11, letterSpacing:'3px'}}>MINTING MIRROR...</div>
+              <div className="loading-pulse" style={{fontSize:11,letterSpacing:'3px'}}>MINTING MIRROR...</div>
               <div className="done-sub">Verifying ownership and minting your soulbound mirror NFT on Base. This may take 15–30 seconds.</div>
             </div>
           )}
