@@ -13,7 +13,12 @@ import {
   ruleSet,
 } from '@metaplex-foundation/mpl-core';
 
-const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+// Use Helius for minting — supports signatureSubscribe unlike Alchemy
+function getMintRpc(): string {
+  const heliusKey = process.env.HELIUS_API_KEY;
+  if (heliusKey) return `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
+  return process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+}
 
 export interface SolanaMintParams {
   recipientAddress: string;   // Solana wallet address (base58)
@@ -69,7 +74,7 @@ function getOperatorKeypair(): Uint8Array {
 export async function mintSolanaMirror(params: SolanaMintParams): Promise<SolanaMintResult> {
   const { recipientAddress, name, uri } = params;
 
-  const umi = createUmi(SOLANA_RPC);
+  const umi = createUmi(getMintRpc());
 
   // Load operator keypair
   const secretKey  = getOperatorKeypair();
@@ -118,7 +123,7 @@ export async function verifySolanaMintOwnership(
   walletAddress: string
 ): Promise<boolean> {
   try {
-    const umi   = createUmi(SOLANA_RPC);
+    const umi   = createUmi(getMintRpc());
     const asset = await fetchAsset(umi, umiPublicKey(mintAddress));
     return asset.owner.toString() === walletAddress;
   } catch { return false; }
