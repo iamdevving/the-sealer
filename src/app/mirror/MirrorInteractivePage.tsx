@@ -81,7 +81,7 @@ export default function MirrorInteractivePage() {
     setStep('minting');
     setError('');
     try {
-      const recipient = targetWallet || ownerWallet;
+      const recipient = targetWallet || address || ownerWallet;
       const res = await fetch('/api/mirror/mint', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,11 +109,11 @@ export default function MirrorInteractivePage() {
   const ethCount     = nfts.filter(n => n.chain === 'ethereum').length;
   const solanaCount  = nfts.filter(n => n.chain === 'solana').length;
 
-  // Solana NFT needs Solana connected (ownership) + EVM connected (recipient)
-  const needsEVM    = selectedNFT?.chain === 'solana' && !isConnected;
-  const canMint     = selectedNFT && !needsEVM && (
+  // Can mint if ownership wallet is connected + recipient is known
+  const needsEVM    = false; // kept for JSX compat
+  const canMint     = selectedNFT && (
     (selectedNFT.chain !== 'solana' && isConnected) ||
-    (selectedNFT.chain === 'solana' && solConnected && isConnected)
+    (selectedNFT.chain === 'solana' && solConnected && (!!targetWallet || !!address))
   );
 
   return (
@@ -486,36 +486,22 @@ export default function MirrorInteractivePage() {
                     </div>
                   </div>
 
-                  {/* EVM wallet warning for Solana NFTs */}
-                  {needsEVM && (
-                    <div className="warning-box">
-                      <div className="warning-title">⚠ EVM WALLET REQUIRED</div>
-                      <div className="warning-text">The Mirror NFT mints on Base. Connect a Browser Wallet or WalletConnect to receive it.</div>
-                      <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
-                        {displayConnectors.map(connector => (
-                          <button key={connector.uid} className="connector-btn" style={{fontSize:'8px',padding:'8px 14px',flex:'0 0 auto'}} onClick={() => connect({ connector })}>
-                            → {connector.name === 'Injected' ? 'Browser Wallet' : connector.name}
-                          </button>
-                        ))}
-                      </div>
+                  {/* Recipient wallet — always shown, no EVM connect required */}
+                  <div>
+                    <div className="field-label">RECIPIENT WALLET (BASE — RECEIVES THE MIRROR NFT)</div>
+                    <input
+                      className="field-input"
+                      placeholder={address || '0x... Base wallet address'}
+                      value={targetWallet}
+                      onChange={e => setTargetWallet(e.target.value)}
+                    />
+                    <div style={{fontSize:7,color:inkDim,marginTop:6}}>
+                      {address
+                        ? <>Defaults to your connected wallet — {truncateAddr(address)}</>
+                        : 'Enter any Base wallet address to receive the Mirror NFT'
+                      }
                     </div>
-                  )}
-
-                  {/* Recipient — only show override if EVM connected */}
-                  {isConnected && (
-                    <div>
-                      <div className="field-label">RECIPIENT WALLET (OPTIONAL OVERRIDE)</div>
-                      <input
-                        className="field-input"
-                        placeholder={address || 'EVM wallet address...'}
-                        value={targetWallet}
-                        onChange={e => setTargetWallet(e.target.value)}
-                      />
-                      <div style={{fontSize:7,color:inkDim,marginTop:6}}>
-                        Defaults to {address ? truncateAddr(address) : 'connected EVM wallet'}
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div className="summary-box">
                     <div className="summary-label">SUMMARY</div>
