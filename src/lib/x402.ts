@@ -8,7 +8,9 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import type { ClaimType } from '@/lib/verify/types';
 
 const rpcUrl        = process.env.ALCHEMY_RPC_URL!;
-const solanaRpcUrl  = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const solanaRpcUrl  = process.env.HELIUS_API_KEY
+  ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
+  : (process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
 const rawPrivateKey = (process.env.TEST_PRIVATE_KEY || '').trim();
 const privateKey    = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
 
@@ -115,9 +117,10 @@ async function verifyPaymentProof(
     if (isSolanaSignature(cleanProof)) {
       // Retry up to 6 times with 4s delay — tx may not be indexed yet
       let tx = null;
-      for (let attempt = 0; attempt < 6; attempt++) {
+      for (let attempt = 0; attempt < 8; attempt++) {
         tx = await solanaConnection.getTransaction(cleanProof, {
           maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed',
         }).catch(() => null);
         if (tx) break;
         console.log(`[The Sealer] 🔄 Solana tx not found yet, retry ${attempt + 1}/6...`);
@@ -257,7 +260,7 @@ export async function withX402Payment(
     if (!isTestMode && proof) {
       const verify = await verifyPaymentProof(proof);
       if (!verify.valid) {
-        return new NextResponse('Invalid payment proof', { status: 402 });
+        return NextResponse.json({ error: 'Invalid payment proof' }, { status: 402 });
       }
       paymentChain = verify.chain;
     } else if (isTestMode) {

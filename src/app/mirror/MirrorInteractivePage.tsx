@@ -120,7 +120,8 @@ export default function MirrorInteractivePage() {
           paymentChain:     paymentResult.paymentChain,
         }),
       });
-      const data = await res.json();
+      let data: any = {};
+      try { data = await res.json(); } catch { data = { error: `Server error (${res.status})` }; }
       if (!res.ok) { setError(data.error || 'Mint failed'); setStep('configure'); return; }
       setMintResult(data);
       setStep('done');
