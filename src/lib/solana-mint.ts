@@ -13,8 +13,7 @@ import {
   ruleSet,
 } from '@metaplex-foundation/mpl-core';
 
-const SOLANA_RPC    = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-const OPERATOR_B64  = process.env.SOLANA_OPERATOR_PRIVATE_KEY || '';
+const SOLANA_RPC = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 export interface SolanaMintParams {
   recipientAddress: string;   // Solana wallet address (base58)
@@ -29,9 +28,10 @@ export interface SolanaMintResult {
 }
 
 function getOperatorKeypair(): Uint8Array {
-  if (!OPERATOR_B64) throw new Error('SOLANA_OPERATOR_PRIVATE_KEY not set');
+  const OPERATOR_KEY = process.env.SOLANA_OPERATOR_PRIVATE_KEY || '';
+  if (!OPERATOR_KEY) throw new Error('SOLANA_OPERATOR_PRIVATE_KEY not set');
 
-  const raw = OPERATOR_B64.trim();
+  const raw = OPERATOR_KEY.trim();
 
   // Try base64 — take last 64 bytes if longer (some encoders add prefix bytes)
   try {
