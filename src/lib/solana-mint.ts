@@ -33,26 +33,37 @@ function getOperatorKeypair(): Uint8Array {
 
   const raw = OPERATOR_B64.trim();
 
-  // Try base64 first
+  // Try base64 — take last 64 bytes if longer (some encoders add prefix bytes)
   try {
     const buf = Buffer.from(raw, 'base64');
     if (buf.length === 64) return new Uint8Array(buf);
+    if (buf.length > 64)   return new Uint8Array(buf.slice(buf.length - 64));
   } catch {}
 
-  // Try base58 (Phantom export format)
+  // Try bs58 v5 API
   try {
-    const bs58 = require('bs58');
-    const buf  = bs58.decode(raw);
+    const bs58mod = require('bs58');
+    const bs58    = bs58mod.default ?? bs58mod;
+    const buf     = Buffer.from(bs58.decode(raw));
     if (buf.length === 64) return new Uint8Array(buf);
+    if (buf.length > 64)   return new Uint8Array(buf.slice(buf.length - 64));
   } catch {}
 
-  // Try JSON byte array [1,2,3,...] format
+  // Try JSON byte array [1,2,3,...] format (Solana CLI export)
   try {
     const arr = JSON.parse(raw);
     if (Array.isArray(arr) && arr.length === 64) return new Uint8Array(arr);
   } catch {}
 
-  throw new Error(`Invalid Solana operator key — could not decode. Got ${raw.length} chars. Try exporting from Phantom as base58.`);
+  // Try hex
+  try {
+    if (raw.length === 128) {
+      const buf = Buffer.from(raw, 'hex');
+      if (buf.length === 64) return new Uint8Array(buf);
+    }
+  } catch {}
+
+  throw new Error(`Invalid Solana operator key — could not decode. Got ${raw.length} chars, base64 gives ${Buffer.from(raw, 'base64').length} bytes.`);
 }
 
 export async function mintSolanaMirror(params: SolanaMintParams): Promise<SolanaMintResult> {
