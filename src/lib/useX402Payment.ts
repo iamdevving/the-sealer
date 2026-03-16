@@ -88,7 +88,22 @@ export function useX402Payment() {
     tx.feePayer         = publicKey;
 
     const signature = await solSendTransaction(tx, connection);
-    await connection.confirmTransaction(signature, 'confirmed');
+
+    // Wait for confirmation with longer timeout — if it times out we still
+    // proceed since the tx was submitted and will likely confirm
+    try {
+      const { blockhash: latestBlockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash('confirmed');
+      await connection.confirmTransaction(
+        { signature, blockhash: latestBlockhash, lastValidBlockHeight },
+        'confirmed',
+      );
+    } catch (confirmErr: any) {
+      // Timeout is non-fatal — tx was submitted, signature is valid
+      console.warn('[x402] Solana confirmation timeout (non-fatal):', confirmErr?.message);
+      // Brief extra wait then continue
+      await new Promise(r => setTimeout(r, 3000));
+    }
     return signature;
   }, [publicKey, solSendTransaction, connection]);
 

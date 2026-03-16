@@ -52,11 +52,9 @@ async function sendAttestation(
     },
   });
 
-  // Always use viem directly — avoid EAS SDK .wait() which is unreliable across versions
   let txHash: string;
 
   if (typeof txResponse === 'string' && (txResponse as string).startsWith('0x')) {
-    // Already a tx hash string
     txHash = txResponse;
   } else {
     const preparedTx = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
@@ -68,14 +66,11 @@ async function sendAttestation(
   });
   txHash = receipt.transactionHash;
 
-  // EAS Attested event: Attested(address indexed recipient, address indexed attester, bytes32 uid, bytes32 indexed schema)
-  // UID is non-indexed so it lives in log.data (first 32 bytes), not in topics
-  // Event topic0: keccak256("Attested(address,address,bytes32,bytes32)")
   const attestedLog = receipt.logs?.find(log =>
     log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
   );
   const uid = attestedLog?.data
-    ? `0x${attestedLog.data.slice(2, 66)}`   // first 32 bytes of data = UID
+    ? `0x${attestedLog.data.slice(2, 66)}`
     : txHash;
 
   console.log(`[The Sealer] ✅ Attestation mined — tx: ${txHash}, uid: ${uid}`);
@@ -118,9 +113,16 @@ async function verifyPaymentProof(
     }
 
     if (isSolanaSignature(cleanProof)) {
-      const tx = await solanaConnection.getTransaction(cleanProof, {
-        maxSupportedTransactionVersion: 0,
-      }).catch(() => null);
+      // Retry up to 6 times with 4s delay — tx may not be indexed yet
+      let tx = null;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        tx = await solanaConnection.getTransaction(cleanProof, {
+          maxSupportedTransactionVersion: 0,
+        }).catch(() => null);
+        if (tx) break;
+        console.log(`[The Sealer] 🔄 Solana tx not found yet, retry ${attempt + 1}/6...`);
+        await new Promise(r => setTimeout(r, 4000));
+      }
 
       if (tx) {
         const recipientKey = new PublicKey(PAYMENT_CONFIG.solanaRecipient);
@@ -139,6 +141,9 @@ async function verifyPaymentProof(
         console.log('[The Sealer] ❌ Solana TX recipient mismatch');
         return { valid: false };
       }
+
+      console.log('[The Sealer] ❌ Solana TX not found after retries');
+      return { valid: false };
     }
 
     console.log('[The Sealer] ❌ Unrecognized proof format');
