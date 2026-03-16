@@ -2,7 +2,6 @@
 // Metaplex Core + Umi — soulbound NFT minting on Solana
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import {
-  createGenericFile,
   createSignerFromKeypair,
   generateSigner,
   keypairIdentity,
@@ -11,12 +10,8 @@ import {
 import {
   create,
   fetchAsset,
-  transfer,
-  burn,
-  addPlugin,
   ruleSet,
 } from '@metaplex-foundation/mpl-core';
-import { base64 } from '@metaplex-foundation/umi/serializers';
 
 const SOLANA_RPC    = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const OPERATOR_B64  = process.env.SOLANA_OPERATOR_PRIVATE_KEY || '';
@@ -33,11 +28,31 @@ export interface SolanaMintResult {
   txSignature: string;   // transaction signature
 }
 
-function getOperatorKeypair() {
+function getOperatorKeypair(): Uint8Array {
   if (!OPERATOR_B64) throw new Error('SOLANA_OPERATOR_PRIVATE_KEY not set');
-  const secretKey = Buffer.from(OPERATOR_B64, 'base64');
-  if (secretKey.length !== 64) throw new Error('Invalid Solana operator key — expected 64 bytes');
-  return secretKey;
+
+  const raw = OPERATOR_B64.trim();
+
+  // Try base64 first
+  try {
+    const buf = Buffer.from(raw, 'base64');
+    if (buf.length === 64) return new Uint8Array(buf);
+  } catch {}
+
+  // Try base58 (Phantom export format)
+  try {
+    const bs58 = require('bs58');
+    const buf  = bs58.decode(raw);
+    if (buf.length === 64) return new Uint8Array(buf);
+  } catch {}
+
+  // Try JSON byte array [1,2,3,...] format
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.length === 64) return new Uint8Array(arr);
+  } catch {}
+
+  throw new Error(`Invalid Solana operator key — could not decode. Got ${raw.length} chars. Try exporting from Phantom as base58.`);
 }
 
 export async function mintSolanaMirror(params: SolanaMintParams): Promise<SolanaMintResult> {
