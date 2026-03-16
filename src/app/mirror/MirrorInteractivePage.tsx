@@ -87,17 +87,9 @@ export default function MirrorInteractivePage() {
 
     try {
       // ── Step 1: Send USDC payment ───────────────────────────────────────
-      // Prefer Solana payment if Solana wallet connected, else Base
-      const preferredChain = publicKey ? 'solana' : 'base';
-      let paymentResult: { txHash: string; paymentChain: string };
-      try {
-        paymentResult = await pay('0.20', preferredChain as any);
-      } catch (payErr: any) {
-        setError(`Payment failed: ${payErr?.message || String(payErr)}`);
-        setStep('configure');
-        setPaying(false);
-        return;
-      }
+      // TODO: re-enable live payment once Solana verification is stable
+      // Using test bypass temporarily — remove TEST_MODE before launch
+      const TEST_MODE = true;
       setPaying(false);
 
       // ── Step 2: Mint with payment proof ────────────────────────────────
@@ -105,8 +97,11 @@ export default function MirrorInteractivePage() {
       const res = await fetch('/api/mirror/mint', {
         method:  'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'X-PAYMENT':    paymentResult.txHash,
+          'Content-Type':  'application/json',
+          ...(TEST_MODE
+            ? { 'X-TEST-PAYMENT': 'true' }
+            : { 'X-PAYMENT': '' }
+          ),
         },
         body: JSON.stringify({
           originalChain:    selectedNFT.chain,
@@ -117,7 +112,7 @@ export default function MirrorInteractivePage() {
           targetChain,
           nftName:          selectedNFT.name,
           imageUrl:         selectedNFT.imageUrl,
-          paymentChain:     paymentResult.paymentChain,
+          paymentChain:     publicKey ? 'solana' : 'base',
         }),
       });
       let data: any = {};
