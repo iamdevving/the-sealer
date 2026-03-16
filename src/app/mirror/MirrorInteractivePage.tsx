@@ -44,6 +44,7 @@ export default function MirrorInteractivePage() {
   const [loading,     setLoading]     = useState(false);
   const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
   const [targetWallet,setTargetWallet]= useState('');
+  const [targetChain, setTargetChain]  = useState<'Base'|'Solana'>('Base');
   const [showConfirm,  setShowConfirm]  = useState(false);
   const [error,       setError]       = useState('');
   const [mintResult,  setMintResult]  = useState<any>(null);
@@ -81,7 +82,8 @@ export default function MirrorInteractivePage() {
     setStep('minting');
     setError('');
     try {
-      const recipient = targetWallet || address || ownerWallet;
+      // Pick recipient based on target chain
+      const recipient = targetWallet || (targetChain === 'Base' ? address : solAddress) || ownerWallet;
       const res = await fetch('/api/mirror/mint', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,7 +93,7 @@ export default function MirrorInteractivePage() {
           originalTokenId:  selectedNFT.tokenId,
           ownerWallet,
           recipientWallet:  recipient,
-          targetChain:      'Base',
+          targetChain,
           nftName:          selectedNFT.name,
           imageUrl:         selectedNFT.imageUrl,
           paymentChain:     'Base',
@@ -109,11 +111,12 @@ export default function MirrorInteractivePage() {
   const ethCount     = nfts.filter(n => n.chain === 'ethereum').length;
   const solanaCount  = nfts.filter(n => n.chain === 'solana').length;
 
-  // Can mint if ownership wallet is connected + recipient is known
-  const needsEVM    = false; // kept for JSX compat
-  const canMint     = selectedNFT && (
+  const needsEVM = false; // kept for JSX compat
+  // recipient must be provided or inferable
+  const hasRecipient = !!targetWallet || (targetChain === 'Base' ? !!address : !!solAddress);
+  const canMint = selectedNFT && hasRecipient && (
     (selectedNFT.chain !== 'solana' && isConnected) ||
-    (selectedNFT.chain === 'solana' && solConnected && (!!targetWallet || !!address))
+    (selectedNFT.chain === 'solana' && solConnected)
   );
 
   return (
@@ -481,24 +484,46 @@ export default function MirrorInteractivePage() {
                   <div>
                     <div className="field-label">TARGET CHAIN (MIRROR LIVES ON)</div>
                     <div className="chain-pills">
-                      <button className="chain-pill active">Base</button>
-                      <button className="chain-pill" style={{opacity:0.4,cursor:'not-allowed',borderColor:`${warning}44`,color:warning}}>Solana (v2)</button>
+                      <button
+                        className={`chain-pill${targetChain==='Base'?' active':''}`}
+                        onClick={() => { setTargetChain('Base'); setTargetWallet(''); }}
+                      >Base</button>
+                      <button
+                        className={`chain-pill${targetChain==='Solana'?' active':''}`}
+                        style={targetChain==='Solana'?{borderColor:solGreen,color:solGreen,background:`${solGreen}18`}:{}}
+                        onClick={() => { setTargetChain('Solana'); setTargetWallet(''); }}
+                      >Solana</button>
                     </div>
+                    {targetChain === 'Solana' && !solConnected && (
+                      <div style={{fontSize:7,color:warning,marginTop:6,letterSpacing:'0.5px'}}>
+                        ⚠ Connect Phantom above to auto-fill your Solana address, or type one below
+                      </div>
+                    )}
                   </div>
 
-                  {/* Recipient wallet — always shown, no EVM connect required */}
+                  {/* Recipient — dynamic based on target chain */}
                   <div>
-                    <div className="field-label">RECIPIENT WALLET (BASE — RECEIVES THE MIRROR NFT)</div>
+                    <div className="field-label">
+                      RECIPIENT {targetChain === 'Solana' ? 'SOLANA' : 'BASE'} WALLET
+                    </div>
                     <input
                       className="field-input"
-                      placeholder={address || '0x... Base wallet address'}
+                      placeholder={
+                        targetChain === 'Solana'
+                          ? (solAddress || 'Solana wallet address...')
+                          : (address    || '0x... Base wallet address')
+                      }
                       value={targetWallet}
                       onChange={e => setTargetWallet(e.target.value)}
                     />
                     <div style={{fontSize:7,color:inkDim,marginTop:6}}>
-                      {address
-                        ? <>Defaults to your connected wallet — {truncateAddr(address)}</>
-                        : 'Enter any Base wallet address to receive the Mirror NFT'
+                      {targetChain === 'Solana'
+                        ? solAddress
+                          ? <>Defaults to your connected Solana wallet — {truncateAddr(solAddress)}</>
+                          : 'Enter any Solana wallet address to receive the Mirror NFT'
+                        : address
+                          ? <>Defaults to your connected EVM wallet — {truncateAddr(address)}</>
+                          : 'Enter any Base wallet address to receive the Mirror NFT'
                       }
                     </div>
                   </div>
@@ -507,7 +532,7 @@ export default function MirrorInteractivePage() {
                     <div className="summary-label">SUMMARY</div>
                     <div className="summary-text">
                       Mirror <strong>{selectedNFT.name}</strong> from <strong>{selectedNFT.chain.toUpperCase()}</strong><br/>
-                      → Mint on <strong>Base</strong> as soulbound NFT<br/>
+                      → Mint on <strong>{targetChain}</strong> as soulbound NFT<br/>
                       → Wrapped in Sealer Mirror SVG<br/>
                       → Ownership verified before mint<br/>
                       → <strong>$0.20 USDC</strong> via x402
@@ -523,7 +548,7 @@ export default function MirrorInteractivePage() {
                       <div style={{fontSize:8,color:inkDim,lineHeight:1.7}}>
                         You are about to mint a Mirror NFT for <strong style={{color:ink}}>$0.20 USDC</strong>.<br/>
                         NFT: <strong style={{color:ink}}>{selectedNFT.name}</strong><br/>
-                        Recipient: <strong style={{color:ink}}>{targetWallet ? truncateAddr(targetWallet) : truncateAddr(address||'')} (Base)</strong>
+                        Recipient: <strong style={{color:ink}}>{targetWallet ? truncateAddr(targetWallet) : truncateAddr(targetChain==='Solana'?solAddress:address||'')} ({targetChain})</strong>
                       </div>
                       <div className="btn-row" style={{marginTop:0}}>
                         <button className="btn" onClick={() => setShowConfirm(false)}>Cancel</button>

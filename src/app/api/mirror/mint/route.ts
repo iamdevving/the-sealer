@@ -5,6 +5,7 @@ import { createPublicClient, createWalletClient, http, parseAbi } from 'viem';
 import { base, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { withX402Payment } from '@/lib/x402';
+import { mintSolanaMirror } from '@/lib/solana-mint';
 
 export const runtime = 'nodejs';
 
@@ -76,13 +77,108 @@ async function verifySolanaOwnership(mint: string, wallet: string): Promise<bool
   } catch { return false; }
 }
 
-async function buildTokenURI(params: {
+function buildTokenURI(params: {
   imageUrl: string; chain: string; originalChain: string;
   nftName: string; txHash: string; originalContract: string;
   originalTokenId: string; mirrorTokenId: string;
-}): Promise<string> {
+}): string {
   const { imageUrl, chain, originalChain, nftName, txHash, originalContract, originalTokenId, mirrorTokenId } = params;
   return `${BASE_URL}/api/mirror/card?chain=${encodeURIComponent(chain)}&originalChain=${encodeURIComponent(originalChain)}&nftName=${encodeURIComponent(nftName)}&txHash=${encodeURIComponent(txHash)}&originalContract=${encodeURIComponent(originalContract)}&originalTokenId=${encodeURIComponent(originalTokenId)}&mirrorTokenId=${encodeURIComponent(mirrorTokenId)}${imageUrl ? `&imageUrl=${encodeURIComponent(imageUrl)}` : ''}`;
+}
+
+// ── Mint on Base (EVM SealerMirror contract) ─────────────────────────────────
+async function mintOnBase(params: {
+  recipientWallet: string; originalChain: string; originalContract: string;
+  originalTokenId: string; ownerWallet: string; nftName: string;
+  imageUrl: string; paymentSource: string;
+}) {
+  const { recipientWallet, originalChain, originalContract, originalTokenId, ownerWallet, nftName, imageUrl, paymentSource } = params;
+
+  const account      = privateKeyToAccount(OPERATOR_KEY);
+  const walletClient = createWalletClient({ account, chain: base, transport: http(process.env.ALCHEMY_RPC_URL!) });
+
+  const mintTxHash = await walletClient.writeContract({
+    address:      MIRROR_ADDRESS,
+    abi:          MIRROR_ABI,
+    functionName: 'mintMirror',
+    args: [{
+      recipient:         recipientWallet as `0x${string}`,
+      tokenURI:          `${BASE_URL}/api/mirror/card?mirrorTokenId=pending`,
+      originalChain,
+      originalContract:  originalContract || originalTokenId,
+      originalTokenId,
+      attestationTxHash: '',
+      paymentChain:      paymentSource,
+    }],
+  });
+
+  const receipt = await baseClient.waitForTransactionReceipt({ hash: mintTxHash });
+
+  let mirrorTokenId = '0';
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() === MIRROR_ADDRESS.toLowerCase() && log.topics[3]) {
+      mirrorTokenId = BigInt(log.topics[3]).toString();
+      break;
+    }
+  }
+
+  const tokenURI = buildTokenURI({
+    imageUrl, chain: 'Base', originalChain,
+    nftName: nftName || `#${originalTokenId}`, txHash: mintTxHash,
+    originalContract: originalContract || originalTokenId, originalTokenId, mirrorTokenId,
+  });
+
+  // Update tokenURI with real mirrorTokenId
+  await walletClient.writeContract({
+    address:      MIRROR_ADDRESS,
+    abi:          parseAbi(['function updateMirror(uint256 tokenId, string tokenURI_, string newOriginalChain, string newOriginalContract, string newOriginalTokenId, address newOriginalOwner, string newAttestationTxHash) external']),
+    functionName: 'updateMirror',
+    args: [
+      BigInt(mirrorTokenId), tokenURI, originalChain,
+      originalContract || originalTokenId, originalTokenId,
+      ownerWallet as `0x${string}`, mintTxHash,
+    ],
+  });
+
+  return { mirrorTokenId, txHash: mintTxHash, tokenURI, targetChain: 'Base' };
+}
+
+// ── Mint on Solana (Metaplex Core) ───────────────────────────────────────────
+async function mintOnSolana(params: {
+  recipientWallet: string; originalChain: string; originalContract: string;
+  originalTokenId: string; nftName: string; imageUrl: string;
+}) {
+  const { recipientWallet, originalChain, originalContract, originalTokenId, nftName, imageUrl } = params;
+
+  // Build a temp token URI — we use a unique ID based on timestamp
+  const tempId   = `sol-${Date.now()}`;
+  const tokenURI = buildTokenURI({
+    imageUrl, chain: 'Solana', originalChain,
+    nftName: nftName || `#${originalTokenId}`, txHash: tempId,
+    originalContract: originalContract || originalTokenId, originalTokenId, mirrorTokenId: tempId,
+  });
+
+  const result = await mintSolanaMirror({
+    recipientAddress: recipientWallet,
+    name:             `Mirror: ${nftName || originalTokenId}`,
+    uri:              tokenURI,
+    mirrorTokenId:    tempId,
+  });
+
+  // Final token URI with real mint address
+  const finalTokenURI = buildTokenURI({
+    imageUrl, chain: 'Solana', originalChain,
+    nftName: nftName || `#${originalTokenId}`, txHash: result.txSignature,
+    originalContract: originalContract || originalTokenId, originalTokenId,
+    mirrorTokenId: result.mintAddress,
+  });
+
+  return {
+    mirrorTokenId: result.mintAddress,
+    txHash:        result.txSignature,
+    tokenURI:      finalTokenURI,
+    targetChain:   'Solana',
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -96,7 +192,7 @@ export async function POST(req: NextRequest) {
       originalTokenId,
       ownerWallet,
       recipientWallet,
-      targetChain,
+      targetChain,     // 'Base' | 'Solana'
       nftName,
       imageUrl,
     } = body;
@@ -106,8 +202,17 @@ export async function POST(req: NextRequest) {
     }
 
     const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
+    const target        = targetChain || 'Base';
 
-    // ── Verify ownership ────────────────────────────────────────────────────
+    // Validate recipient format matches target chain
+    if (target === 'Base' && !recipientWallet.startsWith('0x')) {
+      return NextResponse.json({ error: 'Base target requires an EVM wallet address (0x...)' }, { status: 400 });
+    }
+    if (target === 'Solana' && recipientWallet.startsWith('0x')) {
+      return NextResponse.json({ error: 'Solana target requires a Solana wallet address' }, { status: 400 });
+    }
+
+    // ── Verify ownership ──────────────────────────────────────────────────────
     let ownershipVerified = false;
 
     if (originalChain === 'base' || originalChain === 'ethereum') {
@@ -124,72 +229,62 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    if (!OPERATOR_KEY) {
-      return NextResponse.json({ error: 'Operator key not configured' }, { status: 500 });
-    }
-
+    // ── Mint ──────────────────────────────────────────────────────────────────
     try {
-      const account      = privateKeyToAccount(OPERATOR_KEY);
-      const walletClient = createWalletClient({ account, chain: base, transport: http(process.env.ALCHEMY_RPC_URL!) });
+      let mintResult: { mirrorTokenId: string; txHash: string; tokenURI: string; targetChain: string };
 
-      const mintTxHash = await walletClient.writeContract({
-        address:      MIRROR_ADDRESS,
-        abi:          MIRROR_ABI,
-        functionName: 'mintMirror',
-        args: [{
-          recipient:         recipientWallet as `0x${string}`,
-          tokenURI:          `${BASE_URL}/api/mirror/card?mirrorTokenId=pending`,
-          originalChain,
-          originalContract:  originalContract || originalTokenId,
-          originalTokenId,
-          attestationTxHash: '',
-          paymentChain:      paymentSource,
-        }],
-      });
-
-      const receipt = await baseClient.waitForTransactionReceipt({ hash: mintTxHash });
-
-      let mirrorTokenId = '0';
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === MIRROR_ADDRESS.toLowerCase() && log.topics[3]) {
-          mirrorTokenId = BigInt(log.topics[3]).toString();
-          break;
-        }
+      if (target === 'Solana') {
+        mintResult = await mintOnSolana({
+          recipientWallet, originalChain,
+          originalContract: originalContract || originalTokenId,
+          originalTokenId, nftName: nftName || `#${originalTokenId}`,
+          imageUrl: imageUrl || '',
+        });
+      } else {
+        if (!OPERATOR_KEY) return NextResponse.json({ error: 'Operator key not configured' }, { status: 500 });
+        mintResult = await mintOnBase({
+          recipientWallet, originalChain,
+          originalContract: originalContract || originalTokenId,
+          originalTokenId, ownerWallet,
+          nftName: nftName || `#${originalTokenId}`,
+          imageUrl: imageUrl || '', paymentSource,
+        });
       }
 
-      const tokenURI = await buildTokenURI({
-        imageUrl: imageUrl || '', chain: targetChain || 'Base', originalChain,
-        nftName: nftName || `#${originalTokenId}`, txHash: mintTxHash,
-        originalContract: originalContract || originalTokenId, originalTokenId, mirrorTokenId,
-      });
-
-      await walletClient.writeContract({
-        address:      MIRROR_ADDRESS,
-        abi:          parseAbi(['function updateMirror(uint256 tokenId, string tokenURI_, string newOriginalChain, string newOriginalContract, string newOriginalTokenId, address newOriginalOwner, string newAttestationTxHash) external']),
-        functionName: 'updateMirror',
-        args: [
-          BigInt(mirrorTokenId), tokenURI, originalChain,
-          originalContract || originalTokenId, originalTokenId,
-          ownerWallet as `0x${string}`, mintTxHash,
-        ],
-      });
-
+      // Store in Redis
       const mirrorData = {
-        mirrorTokenId, originalChain,
+        mirrorTokenId:    mintResult.mirrorTokenId,
+        targetChain:      mintResult.targetChain,
+        originalChain,
         originalContract: originalContract || originalTokenId,
-        originalTokenId, ownerWallet, recipientWallet,
-        nftName: nftName || `#${originalTokenId}`,
-        imageUrl: imageUrl || '', txHash: mintTxHash, tokenURI,
-        mintedAt: new Date().toISOString(), invalidated: false,
-        paymentChain: paymentSource,
+        originalTokenId,  ownerWallet, recipientWallet,
+        nftName:          nftName || `#${originalTokenId}`,
+        imageUrl:         imageUrl || '',
+        txHash:           mintResult.txHash,
+        tokenURI:         mintResult.tokenURI,
+        mintedAt:         new Date().toISOString(),
+        invalidated:      false,
+        paymentChain:     paymentSource,
       };
-      await redis.set(`mirror:data:${mirrorTokenId}`, JSON.stringify(mirrorData), { ex: 365 * 86400 });
-      await redis.set(`mirror:owner:${ownerWallet.toLowerCase()}:${originalChain}:${originalTokenId}`, mirrorTokenId, { ex: 365 * 86400 });
+
+      const redisKey = target === 'Solana'
+        ? `mirror:sol:${mintResult.mirrorTokenId}`
+        : `mirror:data:${mintResult.mirrorTokenId}`;
+
+      await redis.set(redisKey, JSON.stringify(mirrorData), { ex: 365 * 86400 });
+      await redis.set(
+        `mirror:owner:${ownerWallet.toLowerCase()}:${originalChain}:${originalTokenId}`,
+        `${target}:${mintResult.mirrorTokenId}`,
+        { ex: 365 * 86400 }
+      );
 
       return NextResponse.json({
-        success: true, mirrorTokenId,
-        txHash:  mintTxHash, tokenURI,
-        permalink: `${BASE_URL}/mirror?mirrorTokenId=${mirrorTokenId}&txHash=${mintTxHash}&chain=${targetChain || 'Base'}&originalChain=${originalChain}&originalTokenId=${encodeURIComponent(originalTokenId)}&nftName=${encodeURIComponent(nftName || '')}&imageUrl=${encodeURIComponent(imageUrl || '')}`,
+        success:      true,
+        mirrorTokenId: mintResult.mirrorTokenId,
+        txHash:       mintResult.txHash,
+        tokenURI:     mintResult.tokenURI,
+        targetChain:  mintResult.targetChain,
+        permalink:    `${BASE_URL}/mirror?mirrorTokenId=${encodeURIComponent(mintResult.mirrorTokenId)}&txHash=${encodeURIComponent(mintResult.txHash)}&chain=${mintResult.targetChain}&originalChain=${originalChain}&originalTokenId=${encodeURIComponent(originalTokenId)}&nftName=${encodeURIComponent(nftName || '')}&imageUrl=${encodeURIComponent(imageUrl || '')}`,
       });
 
     } catch (err: any) {
