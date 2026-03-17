@@ -119,7 +119,6 @@ async function verifyPaymentProof(
     }
 
     if (isSolanaSignature(cleanProof)) {
-      // Retry up to 6 times with 4s delay — tx may not be indexed yet
       const conn = getSolanaConnection();
       let tx = null;
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -128,25 +127,50 @@ async function verifyPaymentProof(
           commitment: 'confirmed',
         }).catch(() => null);
         if (tx) break;
-        console.log(`[The Sealer] 🔄 Solana tx not found yet, retry ${attempt + 1}/6...`);
+        console.log(`[The Sealer] 🔄 Solana tx not found yet, retry ${attempt + 1}/8...`);
         await new Promise(r => setTimeout(r, 4000));
       }
 
       if (tx) {
-        const recipientKey = new PublicKey(PAYMENT_CONFIG.solanaRecipient);
-        const accountKeys  = tx.transaction.message.getAccountKeys
+        // USDC transfers go through Associated Token Accounts (ATAs)
+        // so we check postTokenBalances for the recipient's ATA receiving USDC
+        const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+        const recipientPubkey = PAYMENT_CONFIG.solanaRecipient;
+
+        // Method 1: Check token balance changes — find USDC credit to recipient's ATA
+        const postBalances  = tx.meta?.postTokenBalances  || [];
+        const preBalances   = tx.meta?.preTokenBalances   || [];
+
+        // Get account keys for owner lookup
+        const accountKeys = tx.transaction.message.getAccountKeys
           ? tx.transaction.message.getAccountKeys().staticAccountKeys
           : (tx.transaction.message as any).accountKeys;
 
-        const recipientFound = accountKeys.some(
-          (key: PublicKey) => key.toBase58() === recipientKey.toBase58(),
-        );
+        const usdcCredit = postBalances.some((post: any) => {
+          if (post.mint !== USDC_MINT) return false;
+          const owner = post.owner || accountKeys[post.accountIndex]?.toBase58?.();
+          if (owner !== recipientPubkey) return false;
+          const pre    = preBalances.find((p: any) => p.accountIndex === post.accountIndex);
+          const preAmt = pre ? Number(pre.uiTokenAmount?.amount || 0) : 0;
+          const postAmt = Number(post.uiTokenAmount?.amount || 0);
+          return postAmt > preAmt; // received USDC
+        });
 
-        if (recipientFound) {
-          console.log('[The Sealer] ✅ Solana verification OK');
+        if (usdcCredit) {
+          console.log('[The Sealer] ✅ Solana USDC verification OK (token balance)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
-        console.log('[The Sealer] ❌ Solana TX recipient mismatch');
+
+        // Method 2: Fallback — check if recipient address appears anywhere
+        const recipientKey = new PublicKey(recipientPubkey);
+        const allKeys = accountKeys.map((k: any) => k.toBase58 ? k.toBase58() : k.toString());
+        if (allKeys.includes(recipientKey.toBase58())) {
+          console.log('[The Sealer] ✅ Solana verification OK (account key)');
+          return { valid: true, txHash: cleanProof, chain: 'solana' };
+        }
+
+        console.log('[The Sealer] ❌ Solana TX — recipient not found in token balances or accounts');
+        console.log('[The Sealer] Post token balances:', JSON.stringify(postBalances));
         return { valid: false };
       }
 
