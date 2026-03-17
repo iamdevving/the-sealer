@@ -616,26 +616,35 @@ export default function MirrorInteractivePage() {
           {step === 'done' && mintResult && (
             <div className="done-area">
               <div className="done-title">Mirror Minted ✓</div>
-              <div className="done-sub">Your soulbound Mirror NFT has been minted on Base. It reflects the original NFT and will void if the original is transferred.</div>
+              <div className="done-sub">
+                Your soulbound Mirror NFT has been minted on {mintResult.targetChain || targetChain}.
+                It reflects the original NFT and will void if the original is transferred.
+              </div>
               <div className="result-box">
                 <div className="result-row">
                   <span className="result-key">MIRROR TOKEN ID</span>
-                  <span className="result-val">#{mintResult.mirrorTokenId}</span>
+                  <span className="result-val" style={{fontSize:7, wordBreak:'break-all'}}>
+                    {mintResult.mirrorTokenId}
+                  </span>
                 </div>
                 <div className="result-row">
                   <span className="result-key">TX HASH</span>
-                  <span className="result-val" style={{cursor:'pointer'}} onClick={() => navigator.clipboard.writeText(mintResult.txHash)}>
-                    {mintResult.txHash?.slice(0,10)}···
+                  <span className="result-val" style={{cursor:'pointer', fontSize:7}} onClick={() => navigator.clipboard.writeText(mintResult.txHash)}>
+                    {mintResult.txHash?.slice(0,12)}···
                   </span>
                 </div>
                 <div className="result-row">
                   <span className="result-key">CHAIN</span>
-                  <span className="result-val">Base</span>
+                  <span className="result-val">{mintResult.targetChain || targetChain}</span>
                 </div>
               </div>
               <div className="btn-row">
                 <a className="btn btn-primary" href={mintResult.permalink} target="_blank" rel="noopener noreferrer">VIEW MIRROR →</a>
-                <a className="btn" href={`https://basescan.org/tx/${mintResult.txHash}`} target="_blank" rel="noopener noreferrer">BASESCAN</a>
+                {(mintResult.targetChain || targetChain) === 'Solana' ? (
+                  <a className="btn" href={`https://explorer.solana.com/address/${mintResult.mirrorTokenId}`} target="_blank" rel="noopener noreferrer">SOLSCAN</a>
+                ) : (
+                  <a className="btn" href={`https://basescan.org/tx/${mintResult.txHash}`} target="_blank" rel="noopener noreferrer">BASESCAN</a>
+                )}
                 <button className="btn" onClick={() => { setStep('browse'); setMintResult(null); setSelectedNFT(null); setError(''); }}>MIRROR ANOTHER</button>
               </div>
             </div>
