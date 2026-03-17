@@ -649,7 +649,7 @@ export default function MirrorInteractivePage() {
               <div className="btn-row">
                 <a className="btn btn-primary" href={mintResult.permalink} target="_blank" rel="noopener noreferrer">VIEW MIRROR →</a>
                 {(mintResult.targetChain || targetChain) === 'Solana' ? (
-                  <a className="btn" href={`https://explorer.solana.com/address/${mintResult.mirrorTokenId}`} target="_blank" rel="noopener noreferrer">SOLSCAN</a>
+                  <a className="btn" href={`https://solscan.io/token/${mintResult.mirrorTokenId}`} target="_blank" rel="noopener noreferrer">SOLSCAN</a>
                 ) : (
                   <a className="btn" href={`https://basescan.org/tx/${mintResult.txHash}`} target="_blank" rel="noopener noreferrer">BASESCAN</a>
                 )}

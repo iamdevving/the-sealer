@@ -23,17 +23,21 @@ export default function MirrorPage() {
   const mirrorTokenId    = searchParams.get('mirrorTokenId') || '';
   const forceInvalidated = searchParams.get('forceInvalidated') === 'true' || searchParams.get('invalidated') === 'true';
 
-  const uid         = truncateHash(txHash);
+  const isSolana    = chain === 'Solana';
+  const uid         = isSolana ? txHash.slice(0, 8) + '…' : truncateHash(txHash);
   const dateStr     = formatDate(new Date());
   const chainLabel  = originalChain === 'ethereum' ? 'ETH' : originalChain.toUpperCase();
-  const basescanUrl = txHash ? `https://basescan.org/tx/${txHash}` : '#';
+
+  // Dynamic explorer URL based on target chain
+  const explorerUrl = isSolana
+    ? (mirrorTokenId ? `https://solscan.io/token/${mirrorTokenId}` : `https://solscan.io/tx/${txHash}`)
+    : (txHash ? `https://basescan.org/tx/${txHash}` : '#');
+  const explorerLabel = isSolana ? '◎ Solscan' : '⬡ Basescan';
 
   const [invalidated, setInvalidated] = useState(forceInvalidated);
   const [uidCopied, setUidCopied]     = useState(false);
   const [imgError, setImgError]       = useState(false);
-
-  // Local file import state (overrides imageUrl param when set)
-  const [localImage, setLocalImage] = useState<string>('');
+  const [localImage, setLocalImage]   = useState<string>('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setInvalidated(forceInvalidated); }, [forceInvalidated]);
@@ -41,18 +45,13 @@ export default function MirrorPage() {
   const displayImage = localImage || imageUrl;
   const svgUrl = `/api/mirror/card?chain=${encodeURIComponent(chain)}&originalChain=${encodeURIComponent(originalChain)}&nftName=${encodeURIComponent(nftName)}&txHash=${txHash}${displayImage ? `&imageUrl=${encodeURIComponent(displayImage)}` : ''}${mirrorTokenId ? `&mirrorTokenId=${mirrorTokenId}` : ''}`;
 
-  function handleImport() {
-    fileRef.current?.click();
-  }
+  function handleImport() { fileRef.current?.click(); }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setLocalImage(ev.target?.result as string);
-      setImgError(false);
-    };
+    reader.onload = (ev) => { setLocalImage(ev.target?.result as string); setImgError(false); };
     reader.readAsDataURL(file);
     e.target.value = '';
   }
@@ -78,152 +77,57 @@ export default function MirrorPage() {
           padding: 24px;
         }
         .page-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; max-width: 400px; }
-
         .mirror-card {
           width: 315px;
           background: linear-gradient(160deg, rgba(240,244,255,0.92) 0%, rgba(232,238,255,0.88) 50%, rgba(221,228,248,0.94) 100%);
-          border-radius: 16px;
-          overflow: hidden;
-          position: relative;
-          box-shadow:
-            0 8px 32px rgba(60,80,140,0.18),
-            0 2px 8px rgba(60,80,140,0.10),
-            inset 0 1px 0 rgba(255,255,255,0.7),
-            inset 0 -1px 0 rgba(100,120,180,0.12);
+          border-radius: 16px; overflow: hidden; position: relative;
+          box-shadow: 0 8px 32px rgba(60,80,140,0.18), 0 2px 8px rgba(60,80,140,0.10), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(100,120,180,0.12);
           border: 1px solid rgba(180,195,230,0.7);
         }
         .mirror-card::before {
-          content: '';
-          position: absolute; inset: 1.5px; border-radius: 14.5px;
-          border: 0.5px solid rgba(255,255,255,0.5);
-          pointer-events: none; z-index: 10;
+          content: ''; position: absolute; inset: 1.5px; border-radius: 14.5px;
+          border: 0.5px solid rgba(255,255,255,0.5); pointer-events: none; z-index: 10;
         }
-        .frost-overlay {
-          position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 1;
-          opacity: 0.4;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
-        }
-        .sheen {
-          position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 16px 16px 0 0;
-          pointer-events: none; z-index: 2;
-          background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%);
-        }
-
-        .image-wrap {
-          margin: 8px 8px 0; border-radius: 6px; overflow: hidden; position: relative;
-          background: rgba(255,255,255,0.18); min-height: 180px;
-          display: flex; align-items: center; justify-content: center; z-index: 3;
-        }
+        .frost-overlay { position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 1; opacity: 0.4; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E"); }
+        .sheen { position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 16px 16px 0 0; pointer-events: none; z-index: 2; background: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 100%); }
+        .image-wrap { margin: 8px 8px 0; border-radius: 6px; overflow: hidden; position: relative; background: rgba(255,255,255,0.18); min-height: 180px; display: flex; align-items: center; justify-content: center; z-index: 3; }
         .image-wrap img { width: 100%; display: block; border-radius: 6px; }
-        .image-vignette {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0,0,20,0.25) 100%);
-        }
-        .glass-stripe1 {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.35) 18%, rgba(255,255,255,0.02) 32%, rgba(255,255,255,0) 100%);
-          opacity: 0.9;
-        }
-        .glass-stripe2 {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(145deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,1) 36%, rgba(255,255,255,1) 39%, rgba(255,255,255,0) 45%, rgba(255,255,255,0) 100%);
-          opacity: 0.35;
-        }
-        .glass-stripe3 {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          background: linear-gradient(315deg, rgba(26,26,58,0.22) 0%, rgba(26,26,58,0.06) 30%, rgba(26,26,58,0) 100%);
-        }
-        .image-border {
-          position: absolute; inset: 0; border-radius: 6px; pointer-events: none;
-          border: 1px solid rgba(255,255,255,0.75); box-sizing: border-box;
-        }
-        .image-border-inner {
-          position: absolute; inset: 1px; border-radius: 5px; pointer-events: none;
-          border: 1px solid rgba(20,20,60,0.12); box-sizing: border-box;
-        }
-        .mirror-watermark {
-          position: absolute; top: 13px; right: 8px;
-          font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 2px;
-          pointer-events: none; z-index: 4;
-        }
-
-        .void-area {
-          position: absolute; inset: 0; border-radius: 6px;
-          background: rgba(8,8,18,0.92);
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 6px; z-index: 4;
-        }
+        .image-vignette { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0,0,20,0.25) 100%); }
+        .glass-stripe1 { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.35) 18%, rgba(255,255,255,0.02) 32%, rgba(255,255,255,0) 100%); opacity: 0.9; }
+        .glass-stripe2 { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; background: linear-gradient(145deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 30%, rgba(255,255,255,1) 36%, rgba(255,255,255,1) 39%, rgba(255,255,255,0) 45%, rgba(255,255,255,0) 100%); opacity: 0.35; }
+        .glass-stripe3 { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; background: linear-gradient(315deg, rgba(26,26,58,0.22) 0%, rgba(26,26,58,0.06) 30%, rgba(26,26,58,0) 100%); }
+        .image-border { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; border: 1px solid rgba(255,255,255,0.75); box-sizing: border-box; }
+        .image-border-inner { position: absolute; inset: 1px; border-radius: 5px; pointer-events: none; border: 1px solid rgba(20,20,60,0.12); box-sizing: border-box; }
+        .mirror-watermark { position: absolute; top: 13px; right: 8px; font-size: 6px; color: rgba(255,255,255,0.35); letter-spacing: 2px; pointer-events: none; z-index: 4; }
+        .void-area { position: absolute; inset: 0; border-radius: 6px; background: rgba(8,8,18,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; z-index: 4; }
         .void-title { font-size: 7px; color: rgba(255,255,255,0.22); letter-spacing: 4px; }
         .void-sub { font-size: 5.5px; color: rgba(255,255,255,0.12); letter-spacing: 1.5px; }
-        .void-cta {
-          margin-top: 8px; padding: 5px 16px;
-          border: 0.5px solid rgba(255,255,255,0.12); border-radius: 3px;
-          background: rgba(255,255,255,0.04);
-          font-size: 5.5px; color: rgba(255,255,255,0.28); letter-spacing: 1.5px;
-          cursor: pointer; transition: all .2s;
-        }
+        .void-cta { margin-top: 8px; padding: 5px 16px; border: 0.5px solid rgba(255,255,255,0.12); border-radius: 3px; background: rgba(255,255,255,0.04); font-size: 5.5px; color: rgba(255,255,255,0.28); letter-spacing: 1.5px; cursor: pointer; transition: all .2s; }
         .void-cta:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); }
         .crack-svg { position: absolute; inset: 0; border-radius: 6px; pointer-events: none; }
         .no-image { text-align: center; padding: 60px 20px; }
         .no-image p { font-size: 8px; color: rgba(100,120,180,0.4); letter-spacing: 3px; }
         .no-image small { font-size: 6.5px; color: rgba(100,120,180,0.25); display: block; margin-top: 6px; }
-
-        .name-bar {
-          margin: 0 8px; height: 30px;
-          background: rgba(255,255,255,0.22);
-          border-top: 0.5px solid rgba(255,255,255,0.5);
-          display: flex; align-items: center; padding: 0 12px;
-          z-index: 3; position: relative;
-        }
-        .name-text {
-          font-size: 11px; font-weight: 700;
-          color: rgba(20,40,100,0.9); letter-spacing: 0.2px;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-
-        .mirror-footer {
-          margin: 0 8px 6px; height: 26px;
-          background: rgba(255,255,255,0.1);
-          border-top: 0.5px solid rgba(255,255,255,0.2);
-          display: flex; align-items: center;
-          padding: 0 6px; z-index: 3; position: relative; gap: 4px;
-        }
+        .name-bar { margin: 0 8px; height: 30px; background: rgba(255,255,255,0.22); border-top: 0.5px solid rgba(255,255,255,0.5); display: flex; align-items: center; padding: 0 12px; z-index: 3; position: relative; }
+        .name-text { font-size: 11px; font-weight: 700; color: rgba(20,40,100,0.9); letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mirror-footer { margin: 0 8px 6px; height: 26px; background: rgba(255,255,255,0.1); border-top: 0.5px solid rgba(255,255,255,0.2); display: flex; align-items: center; padding: 0 6px; z-index: 3; position: relative; gap: 4px; }
         .footer-chain { display: flex; align-items: center; flex-shrink: 0; opacity: 0.45; }
-        .footer-tx {
-          font-size: 5.5px; color: rgba(40,60,120,0.4); letter-spacing: 0.5px;
-          flex: 1; margin-left: 4px; cursor: pointer; transition: color .2s; white-space: nowrap;
-        }
+        .footer-tx { font-size: 5.5px; color: rgba(40,60,120,0.4); letter-spacing: 0.5px; flex: 1; margin-left: 4px; cursor: pointer; transition: color .2s; white-space: nowrap; }
         .footer-tx:hover { color: rgba(40,60,120,0.7); }
         .footer-right { font-size: 5.5px; color: rgba(40,60,120,0.38); letter-spacing: 0.3px; text-align: right; flex-shrink: 0; }
         .footer-mark { flex-shrink: 0; margin-left: 6px; opacity: 0.65; }
-
         .actions { display: flex; gap: 10px; width: 315px; }
-        .btn {
-          flex: 1; padding: 11px 10px; border-radius: 8px;
-          font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
-          letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
-          border: 1px solid rgba(100,130,220,0.6); transition: all .2s;
-          text-decoration: none; text-align: center;
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          background: transparent;
-        }
+        .btn { flex: 1; padding: 11px 10px; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border: 1px solid rgba(100,130,220,0.6); transition: all .2s; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; }
         .btn-primary { background: rgba(80,110,200,0.85); color: #fff; border-color: rgba(80,110,200,0.85); }
         .btn-primary:hover { box-shadow: 0 0 20px rgba(80,110,200,0.4); transform: translateY(-1px); }
         .btn-ghost { color: rgba(40,60,140,0.8); background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); }
         .btn-ghost:hover { background: rgba(255,255,255,0.6); transform: translateY(-1px); }
         .btn-warn { background: rgba(220,60,60,0.15); color: rgba(200,40,40,0.9); border-color: rgba(200,40,40,0.3); }
         .btn-warn:hover { background: rgba(220,60,60,0.25); transform: translateY(-1px); }
-
         @media (max-width: 380px) { body { padding: 12px; } .actions { flex-wrap: wrap; } }
       `}</style>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" style={{ display: 'none' }} onChange={handleFileChange} />
 
       <div className="page-wrap">
         <div className="mirror-card">
@@ -325,8 +229,8 @@ export default function MirrorPage() {
           <button className="btn btn-primary" onClick={handleImport}>
             ↑ Import Image
           </button>
-          <a className="btn btn-ghost" href={basescanUrl} target="_blank" rel="noopener noreferrer">
-            ⬡ Basescan
+          <a className="btn btn-ghost" href={explorerUrl} target="_blank" rel="noopener noreferrer">
+            {explorerLabel}
           </a>
           {invalidated ? (
             <button className="btn btn-warn">
