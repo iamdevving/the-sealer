@@ -92,7 +92,7 @@ export async function mintSolanaMirror(params: SolanaMintParams): Promise<Solana
     plugins: [
       {
         type: 'PermanentFreezeDelegate',
-        frozen: false,
+        frozen: true,  // soulbound — non-transferable on Solana
         authority: { type: 'UpdateAuthority' },
       },
       {

@@ -132,6 +132,7 @@ export default function MirrorInteractivePage() {
   const ethCount     = nfts.filter(n => n.chain === 'ethereum').length;
   const solanaCount  = nfts.filter(n => n.chain === 'solana').length;
 
+  const mirrorPrice = targetChain === 'Solana' ? '$0.90' : '$0.30';
   const needsEVM = false; // kept for JSX compat
   // recipient must be provided or inferable
   const hasRecipient = !!targetWallet || (targetChain === 'Base' ? !!address : !!solAddress);
@@ -328,7 +329,7 @@ export default function MirrorInteractivePage() {
           <div className="card-header">
             <div>
               <div className="card-title">MIRROR AN NFT</div>
-              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · BASE + ETH + SOLANA · $0.20 USDC</div>
+              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · BASE + ETH + SOLANA · {mirrorPrice} USDC</div>
             </div>
             {anyConnected && (
               <div className="wallets-row">
@@ -556,7 +557,14 @@ export default function MirrorInteractivePage() {
                       → Mint on <strong>{targetChain}</strong> as soulbound NFT<br/>
                       → Wrapped in Sealer Mirror SVG<br/>
                       → Ownership verified before mint<br/>
-                      → <strong>$0.20 USDC</strong> via x402
+                      → <strong>{mirrorPrice} USDC</strong> via x402
+                    </div>
+                  </div>
+
+                  <div style={{background:'rgba(239,68,68,0.08)',border:'0.8px solid rgba(239,68,68,0.25)',borderRadius:6,padding:'10px 14px'}}>
+                    <div style={{fontSize:8,color:'#ef4444',letterSpacing:'1.5px',marginBottom:4}}>⚠ SOULBOUND — NON-TRANSFERABLE</div>
+                    <div style={{fontSize:7.5,color:'rgba(239,68,68,0.7)',lineHeight:1.6}}>
+                      This Mirror NFT cannot be transferred after minting. It is permanently bound to the recipient wallet. Verify the recipient address carefully before confirming.
                     </div>
                   </div>
 
@@ -567,14 +575,14 @@ export default function MirrorInteractivePage() {
                     <div style={{background:`${faint}44`,border:`0.8px solid ${accent}44`,borderRadius:8,padding:'16px',display:'flex',flexDirection:'column',gap:10}}>
                       <div style={{fontSize:9,color:ink,letterSpacing:'1px'}}>CONFIRM MINT</div>
                       <div style={{fontSize:8,color:inkDim,lineHeight:1.7}}>
-                        You are about to mint a Mirror NFT for <strong style={{color:ink}}>$0.20 USDC</strong>.<br/>
+                        You are about to mint a Mirror NFT for <strong style={{color:ink}}>{mirrorPrice} USDC</strong>.<br/>
                         NFT: <strong style={{color:ink}}>{selectedNFT.name}</strong><br/>
                         Recipient: <strong style={{color:ink}}>{targetWallet ? truncateAddr(targetWallet) : truncateAddr(targetChain==='Solana'?solAddress:address||'')} ({targetChain})</strong>
                       </div>
                       <div className="btn-row" style={{marginTop:0}}>
                         <button className="btn" onClick={() => setShowConfirm(false)}>Cancel</button>
                         <button className="btn btn-primary" onClick={() => { setShowConfirm(false); handleMint(); }}>
-                          CONFIRM — $0.20 USDC
+                          CONFIRM — {mirrorPrice} USDC
                         </button>
                       </div>
                     </div>
@@ -605,7 +613,7 @@ export default function MirrorInteractivePage() {
               </div>
               <div className="done-sub">
                 {paying
-                  ? 'Approve the $0.20 USDC transaction in your wallet.'
+                  ? 'Approve the {mirrorPrice} USDC transaction in your wallet.'
                   : `Verifying ownership and minting your soulbound mirror NFT on ${targetChain}. This may take 15–30 seconds.`
                 }
               </div>

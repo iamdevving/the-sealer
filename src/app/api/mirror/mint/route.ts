@@ -16,7 +16,8 @@ const ALCHEMY_KEY    = process.env.ALCHEMY_API_KEY || process.env.ALCHEMY_RPC_UR
 const HELIUS_KEY     = process.env.HELIUS_API_KEY || '';
 const BASE_URL       = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
 const OPERATOR_KEY   = process.env.TEST_PRIVATE_KEY as `0x${string}`;
-const MIRROR_PRICE   = '0.20';
+const MIRROR_PRICE_BASE   = '0.30';
+const MIRROR_PRICE_SOLANA = '0.90';
 
 const MIRROR_ABI = parseAbi([
   'function mintMirror((address recipient, string tokenURI, string originalChain, string originalContract, string originalTokenId, string attestationTxHash, string paymentChain) p) external returns (uint256)',
@@ -182,6 +183,14 @@ async function mintOnSolana(params: {
 }
 
 export async function POST(req: NextRequest) {
+  // Read body first to determine price based on target chain
+  // We need to clone before withX402Payment consumes it
+  let price = MIRROR_PRICE_BASE;
+  try {
+    const preview = await req.clone().json();
+    if (preview?.targetChain === 'Solana') price = MIRROR_PRICE_SOLANA;
+  } catch {}
+
   return withX402Payment(req, async (paymentChain) => {
     let body: any = {};
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
@@ -291,5 +300,5 @@ export async function POST(req: NextRequest) {
       console.error('[mirror/mint]', err);
       return NextResponse.json({ error: 'Mint failed', details: String(err) }, { status: 500 });
     }
-  }, MIRROR_PRICE);
+  }, price);
 }
