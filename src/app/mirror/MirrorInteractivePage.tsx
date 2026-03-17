@@ -333,8 +333,8 @@ export default function MirrorInteractivePage() {
           <div className="accent-bar"/>
           <div className="card-header">
             <div>
-              <div className="card-title">MIRROR AN NFT</div>
-              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · BASE + ETH + SOLANA · {mirrorPrice} USDC</div>
+              <div className="card-title">MINT A MIRROR</div>
+              <div className="card-sub">WRAP ANY NFT IN A SEALER MIRROR · BASE + ETH + SOLANA · FROM $0.30 USDC</div>
             </div>
             {anyConnected && (
               <div className="wallets-row">
@@ -601,7 +601,7 @@ export default function MirrorInteractivePage() {
                         onClick={() => setShowConfirm(true)}
                         disabled={!canMint}
                       >
-                        MINT MIRROR — $0.20
+                        {`MINT MIRROR — ${mirrorPrice}`}
                       </button>
                     </div>
                   )}
@@ -618,7 +618,7 @@ export default function MirrorInteractivePage() {
               </div>
               <div className="done-sub">
                 {paying
-                  ? 'Approve the {mirrorPrice} USDC transaction in your wallet.'
+                  ? `Approve the ${mirrorPrice} USDC transaction in your wallet.`
                   : `Verifying ownership and minting your soulbound mirror NFT on ${targetChain}. This may take 15–30 seconds.`
                 }
               </div>
