@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import SocialQueuePanel from '@/components/SocialQueuePanel';
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'sealer-admin';
-
 const colors = {
   bg:      '#0a0a0f',
   surface: '#12121a',
@@ -20,13 +18,16 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [error,    setError]    = useState('');
 
-  function handleLogin() {
-    if (password === ADMIN_PASSWORD) {
-      setAuthed(true);
-      setError('');
-    } else {
-      setError('Invalid password');
-    }
+  async function handleLogin() {
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ password }),
+      });
+      if (res.ok) { setAuthed(true); setError(''); }
+      else { setError('Invalid password'); }
+    } catch { setError('Auth error'); }
   }
 
   if (!authed) {
