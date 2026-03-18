@@ -14,6 +14,8 @@
     "@metaplex-foundation/mpl-core": "^1.8.0",
     "@metaplex-foundation/umi": "^1.5.1",
     "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/ed25519": "^3.0.1",
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-phantom": "^0.9.28",
@@ -33,6 +35,7 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "tweetnacl": "^1.0.3",
     "viem": "^2.47.4",
     "wagmi": "^3.5.0"
   },
