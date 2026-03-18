@@ -9,6 +9,7 @@ import { verifyCodeSoftwareDelivery }    from '@/lib/verify/github';
 import { verifyWebsiteAppDelivery }      from '@/lib/verify/website';
 import { verifySocialMediaGrowth }       from '@/lib/verify/social';
 import { attestAchievement }             from '@/lib/verify/attest-achievement';
+import { computeProofPoints }            from '@/lib/verify/utils';
 import type { CertificateMetric, CertificateOutcome } from '@/lib/verify/attest-achievement';
 import type { CommitmentThresholds }     from '@/lib/difficulty';
 
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
       const metricsTotal = metrics.length;
       const outcome: CertificateOutcome = metricsMet === metricsTotal ? 'FULL'
         : metricsMet > 0 ? 'PARTIAL' : 'FAILED';
-      const proofPoints  = computeProofPoints(outcome, daysEarly, deadlineDays, metricsMet, metricsTotal);
+      const proofPoints = computeProofPoints(outcome, daysEarly, deadlineDays, metricsMet, metricsTotal);
 
       const achieved = await attestAchievement({
         agentId:              pending.subject as `0x${string}`,
@@ -141,14 +142,10 @@ async function runVerifier(pending: PendingAchievement, params: Record<string, a
   }
 }
 
-// ── Shared helpers (mirrored from route-handler.ts) ───────────────────────────
-
-function computeProofPoints(outcome: CertificateOutcome, daysEarly: number, deadlineDays: number, metricsMet: number, metricsTotal: number): number {
-  const base  = outcome === 'FULL' ? 1000 : outcome === 'PARTIAL' ? 500 : 0;
-  const speed = outcome !== 'FAILED' && deadlineDays > 0 ? Math.round(Math.min(daysEarly, deadlineDays) / deadlineDays * 200) : 0;
-  const depth = metricsTotal > 0 ? Math.round((metricsMet / metricsTotal) * 200) : 0;
-  return Math.min(base + speed + depth, 1400);
-}
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+// These mirror route-handler.ts — both files import computeProofPoints from utils.ts.
+// The metric/text builders below are kept local to avoid a circular dep chain.
+// If you change logic here, change it in route-handler.ts too (or extract to utils).
 
 function extractThresholds(claimType: string, params: Record<string, any>): CommitmentThresholds {
   const pick = (keys: string[]) => Object.fromEntries(keys.filter(k => typeof params[k] === 'number').map(k => [k, params[k] as number]));

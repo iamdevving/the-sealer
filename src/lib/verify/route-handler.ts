@@ -5,6 +5,7 @@ import { attestAchievement } from '@/lib/verify/attest-achievement';
 import type { CertificateMetric, CertificateOutcome } from '@/lib/verify/attest-achievement';
 import type { CommitmentThresholds } from '@/lib/difficulty';
 import type { PendingAchievement, VerificationResult } from '@/lib/verify/types';
+import { computeProofPoints } from '@/lib/verify/utils';
 
 const redis      = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 const KEY_PREFIX = 'achievement:pending:';
@@ -74,13 +75,13 @@ export async function handleVerifyRoute(
       return NextResponse.json({ uid, status: graceExpired ? 'failed' : 'pending', passed: false, failureReason: result.failureReason, evidence: result.evidence });
     }
 
-    const onTime     = now <= pending.deadline;
-    const daysEarly  = Math.ceil((pending.deadline - now) / 86400);
+    const onTime       = now <= pending.deadline;
+    const daysEarly    = Math.ceil((pending.deadline - now) / 86400);
     const deadlineDays = Math.ceil((pending.deadline - pending.mintTimestamp) / 86400);
-    const rawM       = result.evidence.rawMetrics as Record<string, number | string | boolean>;
-    const metrics    = buildCertificateMetrics(claimType, rawM, params);
-    const metricsMet    = metrics.filter(m => m.met).length;
-    const metricsTotal  = metrics.length;
+    const rawM         = result.evidence.rawMetrics as Record<string, number | string | boolean>;
+    const metrics      = buildCertificateMetrics(claimType, rawM, params);
+    const metricsMet   = metrics.filter(m => m.met).length;
+    const metricsTotal = metrics.length;
     const outcome: CertificateOutcome = metricsMet === metricsTotal ? 'FULL'
       : metricsMet > 0 ? 'PARTIAL' : 'FAILED';
     const proofPoints = computeProofPoints(outcome, daysEarly, deadlineDays, metricsMet, metricsTotal);
@@ -147,27 +148,10 @@ export async function handleGetRoute(req: NextRequest): Promise<NextResponse> {
   const p: PendingAchievement = typeof raw === 'string' ? JSON.parse(raw) : raw as PendingAchievement;
   return NextResponse.json({
     uid, status: p.status, claimType: p.claimType, subject: p.subject,
-    deadline:     new Date(p.deadline * 1000).toISOString(),
+    deadline:      new Date(p.deadline * 1000).toISOString(),
     failureReason: p.failureReason,
-    lastChecked:  p.lastChecked ? new Date(p.lastChecked * 1000).toISOString() : null,
+    lastChecked:   p.lastChecked ? new Date(p.lastChecked * 1000).toISOString() : null,
   });
-}
-
-// ── Proof points ──────────────────────────────────────────────────────────────
-
-function computeProofPoints(
-  outcome:       CertificateOutcome,
-  daysEarly:     number,
-  deadlineDays:  number,
-  metricsMet:    number,
-  metricsTotal:  number,
-): number {
-  const base   = outcome === 'FULL' ? 1000 : outcome === 'PARTIAL' ? 500 : 0;
-  const speed  = outcome !== 'FAILED' && deadlineDays > 0
-    ? Math.round(Math.min(daysEarly, deadlineDays) / deadlineDays * 200)
-    : 0;
-  const depth  = metricsTotal > 0 ? Math.round((metricsMet / metricsTotal) * 200) : 0;
-  return Math.min(base + speed + depth, 1400);
 }
 
 // ── Certificate metrics ───────────────────────────────────────────────────────
@@ -229,7 +213,7 @@ function buildCertificateMetrics(
   }
 }
 
-// ── Helpers (unchanged logic, kept here to avoid duplication) ─────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractThresholds(claimType: string, params: Record<string, any>): CommitmentThresholds {
   const pick = (keys: string[]) =>
