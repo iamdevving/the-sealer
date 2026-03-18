@@ -1,7 +1,6 @@
 'use client';
 // src/app/sealer-agent/page.tsx
 import { useState, useRef, useEffect } from 'react';
-import SocialQueuePanel from '@/components/SocialQueuePanel';
 
 interface Message {
   role:    'user' | 'assistant';
@@ -281,7 +280,6 @@ export default function SealerAgentPage() {
           </div>
           <div className="input-hint">Enter to send · Shift+Enter for new line · /feedback to leave feedback</div>
         </div>
-        <SocialQueuePanel />
       </div>
     </>
   );
