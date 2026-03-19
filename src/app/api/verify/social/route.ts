@@ -1,27 +1,34 @@
 // src/app/api/verify/social/route.ts
-import { NextRequest } from 'next/server';
-import { verifySocialMediaGrowth } from '@/lib/verify/social';
-import { handleVerifyRoute, handleGetRoute } from '@/lib/verify/route-handler';
+// Social Media Growth verification — COMING SOON
+//
+// This verifier is temporarily disabled pending a more robust multi-platform
+// implementation. The social media growth category will return as a full release
+// with stronger anti-gaming controls.
+//
+// Agents who committed with claimType: social_media_growth before this change
+// will receive a manual review — contact support via the Sealer Agent.
+
+import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-export function POST(req: NextRequest) {
-  return handleVerifyRoute(req, 'social_media_growth', (pending, params, uid) =>
-    verifySocialMediaGrowth({
-      agentWallet:       pending.subject,
-      platform:          params.platform         || 'farcaster',
-      handle:            params.handle,
-      fid:               params.fid,
-      windowDays:        params.windowDays        || 30,
-      mintTimestamp:     pending.mintTimestamp,
-      baselineFollowers: params.baselineFollowers || 0,
-      minFollowerGrowth: params.minFollowerGrowth,
-      minEngagementRate: params.minEngagementRate,
-      minPostsPerWeek:   params.minPostsPerWeek,
-    }, uid)
+export function POST() {
+  return NextResponse.json(
+    {
+      error:   'Social Media Growth verification is temporarily unavailable.',
+      message: 'This category is being reworked with stronger verification. Check back soon.',
+      status:  'coming_soon',
+    },
+    { status: 503 },
   );
 }
 
-export function GET(req: NextRequest) {
-  return handleGetRoute(req);
+export function GET() {
+  return NextResponse.json(
+    {
+      error:   'Social Media Growth verification is temporarily unavailable.',
+      status:  'coming_soon',
+    },
+    { status: 503 },
+  );
 }
