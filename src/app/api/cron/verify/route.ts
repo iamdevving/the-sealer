@@ -9,7 +9,8 @@ import { verifyCodeSoftwareDelivery }    from '@/lib/verify/github';
 import { verifyWebsiteAppDelivery }      from '@/lib/verify/website';
 import { verifySocialMediaGrowth }       from '@/lib/verify/social';
 import { attestAchievement }             from '@/lib/verify/attest-achievement';
-import { computeProofPoints }            from '@/lib/verify/utils';
+import { computeScoring }                from '@/lib/verify/scoring';
+import { computeDifficulty }             from '@/lib/difficulty';
 import type { CertificateMetric, CertificateOutcome } from '@/lib/verify/attest-achievement';
 import type { CommitmentThresholds }     from '@/lib/difficulty';
 
@@ -64,11 +65,36 @@ export async function GET(req: NextRequest) {
       const deadlineDays = Math.ceil((pending.deadline - pending.mintTimestamp) / 86400);
       const rawM         = result.evidence.rawMetrics as Record<string, number | string | boolean>;
       const metrics      = buildCertificateMetrics(pending.claimType, rawM, params);
-      const metricsMet   = metrics.filter(m => m.met).length;
-      const metricsTotal = metrics.length;
-      const outcome: CertificateOutcome = metricsMet === metricsTotal ? 'FULL'
-        : metricsMet > 0 ? 'PARTIAL' : 'FAILED';
-      const proofPoints = computeProofPoints(outcome, daysEarly, deadlineDays, metricsMet, metricsTotal);
+
+      // ── v2 scoring (single source of truth: scoring.ts) ─────────────────
+      const thresholds = extractThresholds(pending.claimType, params);
+      const diffResult = computeDifficulty(pending.claimType, thresholds, []);
+
+      // Only score metrics with weight > 0 (display-only rows have weight 0)
+      const weightedMetrics = metrics.filter(m => (m.weight ?? 0) > 0);
+      const totalWeight     = weightedMetrics.reduce((s, m) => s + (m.weight as number), 0);
+      const normMetrics     = weightedMetrics.map(m => ({
+        label:    m.label,
+        weight:   (m.weight as number) / totalWeight,
+        target:   Number(m.target),
+        achieved: Number(m.achieved),
+      }));
+
+      const scoring = computeScoring({
+        metrics:         normMetrics,
+        difficultyScore: diffResult.difficulty,
+        deadlineDays,
+        daysEarly,
+        closedEarly:     false,
+      });
+
+      const outcome: CertificateOutcome =
+        scoring.state === 'full'    ? 'FULL'    :
+        scoring.state === 'partial' ? 'PARTIAL' : 'FAILED';
+      const proofPoints  = Math.round(scoring.leaderboardPoints);
+      const metricsMet   = scoring.perMetric.filter(m => m.met).length;
+      const metricsTotal = scoring.perMetric.length;
+      // ────────────────────────────────────────────────────────────────────
 
       const achieved = await attestAchievement({
         agentId:              pending.subject as `0x${string}`,
@@ -89,7 +115,7 @@ export async function GET(req: NextRequest) {
         periodStart:          pending.mintTimestamp,
         periodEnd:            pending.deadline,
         deadlineDays,
-        commitmentThresholds: extractThresholds(pending.claimType, params),
+        commitmentThresholds: thresholds,
         historicalRecords:    [],
       });
 
@@ -108,7 +134,7 @@ export async function GET(req: NextRequest) {
 
       results.achieved++;
       results.processed++;
-      console.log(`[cron] ✅ ${uid} ${pending.claimType} outcome=${outcome} proofPoints=${proofPoints} difficulty=${achieved.difficulty}`);
+      console.log(`[cron] ✅ ${uid} ${pending.claimType} outcome=${outcome} achievementScore=${scoring.achievementScore} proofPoints=${proofPoints} difficulty=${achieved.difficulty}`);
 
     } catch (err) {
       await redis.set(key, JSON.stringify({
@@ -142,10 +168,61 @@ async function runVerifier(pending: PendingAchievement, params: Record<string, a
   }
 }
 
-// ── Shared helpers ─────────────────────────────────────────────────────────────
-// These mirror route-handler.ts — both files import computeProofPoints from utils.ts.
-// The metric/text builders below are kept local to avoid a circular dep chain.
-// If you change logic here, change it in route-handler.ts too (or extract to utils).
+// ── Certificate metrics ───────────────────────────────────────────────────────
+// weight > 0  = scored metric (participates in achievement score)
+// weight = 0  = display-only row (shown in SVG table but not scored)
+
+function buildCertificateMetrics(claimType: string, raw: Record<string, number | string | boolean>, params: Record<string, any>): CertificateMetric[] {
+  const fmt = (v: unknown, d = 1) => typeof v === 'number' ? v.toFixed(d) : String(v ?? '—');
+
+  switch (claimType) {
+    case 'x402_payment_reliability':
+      return [
+        { label: 'Success Rate',        weight: 1.2, target: `${params.minSuccessRate ?? '?'}%`,           achieved: `${fmt(raw.successRate)}%`,          met: (raw.successRate as number) >= (params.minSuccessRate ?? 0) },
+        { label: 'Total Volume',        weight: 1.0, target: `$${params.minTotalUSD ?? '?'}`,              achieved: `$${fmt(raw.totalUSD, 0)}`,           met: (raw.totalUSD as number) >= (params.minTotalUSD ?? 0) },
+        { label: 'Distinct Recipients', weight: 0.9, target: String(params.requireDistinctRecipients ?? '—'), achieved: String(raw.distinctRecipients ?? '—'), met: !params.requireDistinctRecipients || (raw.distinctRecipients as number) >= params.requireDistinctRecipients },
+        { label: 'Payment Count',       weight: 0,   target: '—',                                          achieved: String(raw.paymentCount ?? '—'),      met: true },
+        { label: 'Failed Txns',         weight: 0,   target: '0',                                          achieved: String(raw.failedCount ?? '—'),       met: (raw.failedCount as number) === 0 },
+        { label: 'Chain',               weight: 0,   target: 'Base',                                       achieved: 'Base',                              met: true },
+      ];
+    case 'code_software_delivery':
+      return [
+        { label: 'Merged PRs',    weight: 1.2, target: String(params.minMergedPRs ?? '?'),    achieved: String(raw.mergedPRCount ?? '—'), met: (raw.mergedPRCount as number) >= (params.minMergedPRs ?? 0) },
+        { label: 'Commits',       weight: 0.9, target: String(params.minCommits ?? '?'),      achieved: String(raw.commitCount ?? '—'),   met: (raw.commitCount as number) >= (params.minCommits ?? 0) },
+        { label: 'CI Pass Rate',  weight: 0,   target: '100%',                                achieved: `${fmt(raw.ciPassRate)}%`,        met: (raw.ciPassRate as number) >= 100 },
+        { label: 'Lines Changed', weight: 0,   target: String(params.minLinesChanged ?? '?'), achieved: `+${raw.linesChanged ?? '—'}`,    met: (raw.linesChanged as number) >= (params.minLinesChanged ?? 0) },
+        { label: 'Reviews',       weight: 0,   target: '—',                                   achieved: String(raw.reviewCount ?? '—'),   met: true },
+        { label: 'Contributors',  weight: 0,   target: '—',                                   achieved: String(raw.contributorCount ?? '—'), met: true },
+      ];
+    case 'website_app_delivery':
+      return [
+        { label: 'Performance Score', weight: 1.0, target: String(params.minPerformanceScore ?? '?'), achieved: String(raw.performanceScore ?? '—'), met: (raw.performanceScore as number) >= (params.minPerformanceScore ?? 0) },
+        { label: 'Accessibility',     weight: 0.8, target: String(params.minAccessibility ?? '?'),    achieved: String(raw.accessibility ?? '—'),    met: !params.minAccessibility || (raw.accessibility as number) >= params.minAccessibility },
+        { label: 'HTTPS',             weight: 0,   target: 'Required',                                achieved: raw.httpsValid ? 'Yes' : 'No',       met: raw.httpsValid === true },
+        { label: 'DNS Verified',      weight: 0,   target: params.requireDnsVerify ? 'Required' : '—', achieved: raw.dnsVerified ? 'Yes' : 'No',     met: !params.requireDnsVerify || raw.dnsVerified === true },
+        { label: 'URL',               weight: 0,   target: '—',                                       achieved: String(params.url ?? '—'),           met: true },
+      ];
+    case 'defi_trading_performance':
+      return [
+        { label: 'Trade Count', weight: 1.0, target: String(params.minTradeCount ?? '?'), achieved: String(raw.tradeCount ?? '—'), met: (raw.tradeCount as number) >= (params.minTradeCount ?? 0) },
+        { label: 'Volume USD',  weight: 1.1, target: `$${params.minVolumeUSD ?? '?'}`,    achieved: `$${fmt(raw.volumeUSD, 0)}`,  met: (raw.volumeUSD as number) >= (params.minVolumeUSD ?? 0) },
+        { label: 'P&L %',       weight: 1.3, target: `${params.minPnlPercent ?? '?'}%`,   achieved: `${fmt(raw.pnlPercent)}%`,   met: (raw.pnlPercent as number) >= (params.minPnlPercent ?? 0) },
+        { label: 'Protocol',    weight: 0,   target: '—',                                  achieved: String(raw.protocol ?? '—'), met: true },
+      ];
+    case 'social_media_growth':
+      return [
+        { label: 'Follower Growth', weight: 1.0, target: `+${params.minFollowerGrowth ?? '?'}%`, achieved: `+${fmt(raw.followerGrowth)}%`, met: (raw.followerGrowth as number) >= (params.minFollowerGrowth ?? 0) },
+        { label: 'Engagement Rate', weight: 1.1, target: `${params.minEngagementRate ?? '?'}%`,  achieved: `${fmt(raw.engagementRate)}%`,  met: (raw.engagementRate as number) >= (params.minEngagementRate ?? 0) },
+        { label: 'Posts Published', weight: 0,   target: '—',                                    achieved: String(raw.postCount ?? '—'),   met: true },
+        { label: 'Replies',         weight: 0,   target: '—',                                    achieved: String(raw.replyCount ?? '—'),  met: true },
+        { label: 'Recasts',         weight: 0,   target: '—',                                    achieved: String(raw.recastCount ?? '—'), met: true },
+        { label: 'Platform',        weight: 0,   target: '—',                                    achieved: String(raw.platform ?? '—'),    met: true },
+      ];
+    default: return [];
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractThresholds(claimType: string, params: Record<string, any>): CommitmentThresholds {
   const pick = (keys: string[]) => Object.fromEntries(keys.filter(k => typeof params[k] === 'number').map(k => [k, params[k] as number]));
@@ -159,72 +236,24 @@ function extractThresholds(claimType: string, params: Record<string, any>): Comm
   }
 }
 
-function buildCertificateMetrics(claimType: string, raw: Record<string, number | string | boolean>, params: Record<string, any>): CertificateMetric[] {
-  const fmt = (v: unknown, d = 1) => typeof v === 'number' ? v.toFixed(d) : String(v ?? '—');
-  switch (claimType) {
-    case 'x402_payment_reliability': return [
-      { label: 'Success Rate',        target: `${params.minSuccessRate ?? '?'}%`,                    achieved: `${fmt(raw.successRate)}%`,              met: (raw.successRate as number) >= (params.minSuccessRate ?? 0) },
-      { label: 'Total Volume',        target: `$${params.minTotalUSD ?? '?'}`,                       achieved: `$${fmt(raw.totalUSD, 0)}`,               met: (raw.totalUSD as number) >= (params.minTotalUSD ?? 0) },
-      { label: 'Payment Count',       target: '—',                                                   achieved: String(raw.paymentCount ?? '—'),          met: true },
-      { label: 'Distinct Recipients', target: String(params.requireDistinctRecipients ?? '—'),       achieved: String(raw.distinctRecipients ?? '—'),    met: !params.requireDistinctRecipients || (raw.distinctRecipients as number) >= params.requireDistinctRecipients },
-      { label: 'Failed Txns',         target: '0',                                                   achieved: String(raw.failedCount ?? '—'),           met: (raw.failedCount as number) === 0 },
-      { label: 'Chain',               target: 'Base',                                                achieved: 'Base',                                  met: true },
-    ];
-    case 'code_software_delivery': return [
-      { label: 'Merged PRs',    target: String(params.minMergedPRs ?? '?'),    achieved: String(raw.mergedPRCount ?? '—'), met: (raw.mergedPRCount as number) >= (params.minMergedPRs ?? 0) },
-      { label: 'Commits',       target: String(params.minCommits ?? '?'),      achieved: String(raw.commitCount ?? '—'),  met: (raw.commitCount as number) >= (params.minCommits ?? 0) },
-      { label: 'CI Pass Rate',  target: '100%',                                achieved: `${fmt(raw.ciPassRate)}%`,       met: (raw.ciPassRate as number) >= 100 },
-      { label: 'Lines Changed', target: String(params.minLinesChanged ?? '?'), achieved: `+${raw.linesChanged ?? '—'}`,   met: (raw.linesChanged as number) >= (params.minLinesChanged ?? 0) },
-      { label: 'Reviews',       target: '—',                                   achieved: String(raw.reviewCount ?? '—'), met: true },
-      { label: 'Contributors',  target: '—',                                   achieved: String(raw.contributorCount ?? '—'), met: true },
-    ];
-    case 'website_app_delivery': return [
-      { label: 'Performance',   target: String(params.minPerformanceScore ?? '?'), achieved: String(raw.performance ?? '—'),  met: (raw.performance as number) >= (params.minPerformanceScore ?? 0) },
-      { label: 'Accessibility', target: String(params.minAccessibility ?? '?'),    achieved: String(raw.accessibility ?? '—'),met: (raw.accessibility as number) >= (params.minAccessibility ?? 0) },
-      { label: 'LCP',           target: '—',                                       achieved: `${fmt(raw.lcp, 1)}s`,           met: true },
-      { label: 'DNS Verified',  target: 'Yes',                                     achieved: raw.dnsVerified ? 'Yes' : 'No',  met: !!raw.dnsVerified },
-      { label: 'HTTPS',         target: 'Valid',                                   achieved: raw.https ? 'Valid' : 'No',      met: !!raw.https },
-      { label: 'URLScan',       target: 'OK',                                      achieved: String(raw.urlscanStatus ?? 'OK'), met: raw.urlscanStatus === 'OK' || !raw.urlscanStatus },
-    ];
-    case 'defi_trading_performance': return [
-      { label: 'Trade Count',  target: String(params.minTradeCount ?? '?'), achieved: String(raw.tradeCount ?? '—'),  met: (raw.tradeCount as number) >= (params.minTradeCount ?? 0) },
-      { label: 'Total Volume', target: `$${params.minVolumeUSD ?? '?'}`,    achieved: `$${fmt(raw.volumeUSD, 0)}`,    met: (raw.volumeUSD as number) >= (params.minVolumeUSD ?? 0) },
-      { label: 'Realised P&L', target: `${params.minPnlPercent ?? '?'}%`,  achieved: `${fmt(raw.pnlPercent)}%`,      met: (raw.pnlPercent as number) >= (params.minPnlPercent ?? 0) },
-      { label: 'Avg Trade',    target: '—',                                 achieved: `$${fmt(raw.avgTradeUSD, 0)}`, met: true },
-      { label: 'Protocols',    target: '—',                                 achieved: String(raw.protocolCount ?? '—'), met: true },
-      { label: 'Gas Spent',    target: '—',                                 achieved: `$${fmt(raw.gasUSD, 2)}`,      met: true },
-    ];
-    case 'social_media_growth': return [
-      { label: 'Follower Growth', target: `+${params.minFollowerGrowth ?? '?'}%`, achieved: `+${fmt(raw.followerGrowth)}%`,  met: (raw.followerGrowth as number) >= (params.minFollowerGrowth ?? 0) },
-      { label: 'Engagement Rate', target: `${params.minEngagementRate ?? '?'}%`,  achieved: `${fmt(raw.engagementRate)}%`,   met: (raw.engagementRate as number) >= (params.minEngagementRate ?? 0) },
-      { label: 'Posts Published', target: '—',                                    achieved: String(raw.postCount ?? '—'),    met: true },
-      { label: 'Replies',         target: '—',                                    achieved: String(raw.replyCount ?? '—'),   met: true },
-      { label: 'Recasts',         target: '—',                                    achieved: String(raw.recastCount ?? '—'),  met: true },
-      { label: 'Platform',        target: '—',                                    achieved: String(raw.platform ?? '—'),     met: true },
-    ];
-    default: return [];
-  }
-}
-
 function buildCommitmentText(claimType: string, p: Record<string, any>): string {
   switch (claimType) {
-    case 'x402_payment_reliability': return `Maintain a payment success rate above ${p.minSuccessRate ?? '?'}%` + (p.minTotalUSD ? ` processing a minimum of $${p.minTotalUSD} USDC` : '') + ' within the commitment window.';
-    case 'code_software_delivery':   return `Merge at least ${p.minMergedPRs ?? '?'} pull requests` + (p.repoName ? ` into ${p.repoOwner}/${p.repoName}` : '') + ' with CI passing.';
-    case 'website_app_delivery':     return `Achieve a PageSpeed score of ${p.minPerformanceScore ?? '?'} or above` + (p.url ? ` on ${p.url}` : '') + '.';
-    case 'defi_trading_performance': return `Execute at least ${p.minTradeCount ?? '?'} on-chain trades` + (p.minVolumeUSD ? ` with total volume exceeding $${p.minVolumeUSD}` : '') + '.';
-    case 'social_media_growth':      return `Grow following by ${p.minFollowerGrowth ?? '?'}% or more` + (p.minEngagementRate ? ` with an engagement rate above ${p.minEngagementRate}%` : '') + '.';
-    default: return 'Achievement commitment.';
+    case 'x402_payment_reliability': return `Maintain a payment success rate above ${p.minSuccessRate ?? '?'}%` + (p.minTotalUSD ? ` processing a minimum of $${p.minTotalUSD} USDC` : '') + (p.requireDistinctRecipients ? ` across ${p.requireDistinctRecipients}+ distinct recipients` : '') + ' within the commitment window.';
+    case 'code_software_delivery':   return `Merge at least ${p.minMergedPRs ?? '?'} pull requests` + (p.repoName ? ` into ${p.repoOwner}/${p.repoName}` : '') + ' with CI passing within the commitment window.';
+    case 'website_app_delivery':     return `Achieve a PageSpeed score of ${p.minPerformanceScore ?? '?'} or above` + (p.url ? ` on ${p.url}` : '') + (p.requireDnsVerify ? ', verified via DNS TXT record ownership.' : '.');
+    case 'defi_trading_performance': return `Execute at least ${p.minTradeCount ?? '?'} on-chain trades` + (p.minVolumeUSD ? ` with total volume exceeding $${p.minVolumeUSD}` : '') + (p.minPnlPercent ? ` and a positive P&L above ${p.minPnlPercent}%` : '') + ' within the commitment window.';
+    case 'social_media_growth':      return `Grow follower count by ${p.minFollowerGrowth ?? '?'}%` + (p.minEngagementRate ? ` with engagement above ${p.minEngagementRate}%` : '') + ` on ${p.platform || 'Farcaster'} within the commitment window.`;
+    default: return 'Complete the committed goal within the verification window.';
   }
 }
 
-function buildMetricString(claimType: string, m: Record<string, number | string | boolean>): string {
-  const n = (v: unknown, d = 1) => typeof v === 'number' ? v.toFixed(d) : String(v ?? '?');
+function buildMetricString(claimType: string, raw: Record<string, number | string | boolean>): string {
   switch (claimType) {
-    case 'x402_payment_reliability': return `${m.paymentCount} payments · ${n(m.successRate)}% success · $${n(m.totalUSD, 2)}`;
-    case 'defi_trading_performance': return `${m.tradeCount} trades · $${n(m.volumeUSD, 0)} volume · ${n(m.pnlPercent)}% PnL`;
-    case 'code_software_delivery':   return `${m.mergedPRCount} PRs · ${m.commitCount} commits · ${m.linesChanged} lines`;
-    case 'website_app_delivery':     return `perf=${m.performance}/100 · a11y=${m.accessibility}/100`;
-    case 'social_media_growth':      return `+${m.followerGrowth} followers · ${n(m.engagementRate)}% engagement`;
-    default: return 'Achievement verified';
+    case 'x402_payment_reliability': return `Success rate: ${raw.successRate}% · Volume: $${raw.totalUSD} · Payments: ${raw.paymentCount}`;
+    case 'code_software_delivery':   return `Merged PRs: ${raw.mergedPRCount} · Commits: ${raw.commitCount} · CI: ${raw.ciPassRate}%`;
+    case 'website_app_delivery':     return `Performance: ${raw.performanceScore} · Accessibility: ${raw.accessibility}`;
+    case 'defi_trading_performance': return `Trades: ${raw.tradeCount} · Volume: $${raw.volumeUSD} · P&L: ${raw.pnlPercent}%`;
+    case 'social_media_growth':      return `Follower growth: +${raw.followerGrowth}% · Engagement: ${raw.engagementRate}%`;
+    default: return JSON.stringify(raw);
   }
 }
