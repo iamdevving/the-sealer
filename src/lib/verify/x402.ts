@@ -92,7 +92,8 @@ async function getFailedTxsSinceMint(
   const apiKey = process.env.BASESCAN_API_KEY;
   if (!apiKey) return [];
 
-  const url = new URL('https://api.basescan.org/api');
+  const url = new URL('https://api.etherscan.io/v2/api');
+  url.searchParams.set('chainid', '8453');
   url.searchParams.set('module',     'account');
   url.searchParams.set('action',     'txlist');
   url.searchParams.set('address',    wallet);
