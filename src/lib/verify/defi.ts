@@ -122,19 +122,21 @@ async function fetchSolanaSwaps(
   mintTimestamp: number,
   solPriceUSD:   number,
 ): Promise<SolanaSwap[]> {
-  const heliusUrl = process.env.HELIUS_RPC_URL;
-  if (!heliusUrl) throw new Error('HELIUS_RPC_URL not set');
+  const heliusKey = process.env.HELIUS_API_KEY;
+  const heliusUrl = heliusKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusKey}` : (process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
 
   const connection = new Connection(heliusUrl, 'confirmed');
   const pubkey     = new PublicKey(wallet);
 
   // Fetch signatures since mintTimestamp
+  // Cap at 500 signatures max to avoid rate limits on Helius free tier
+  const MAX_SIGNATURES = 500;
   let signatures: any[] = [];
   let before: string | undefined;
 
-  while (true) {
+  while (signatures.length < MAX_SIGNATURES) {
     const batch = await connection.getSignaturesForAddress(pubkey, {
-      limit:  1000,
+      limit:  100,   // smaller batches = fewer rate limit hits
       before,
     });
     if (!batch.length) break;
@@ -147,13 +149,16 @@ async function fetchSolanaSwaps(
     const oldest = batch[batch.length - 1];
     if (!oldest.blockTime || oldest.blockTime < mintTimestamp) break;
     before = oldest.signature;
+
+    // Small delay between pagination calls to respect rate limits
+    await new Promise(r => setTimeout(r, 200));
   }
 
   if (!signatures.length) return [];
 
-  // Fetch parsed transactions in batches of 100
+  // Fetch parsed transactions in smaller batches with delay
   const swaps: SolanaSwap[] = [];
-  const batchSize = 100;
+  const batchSize = 25;   // reduced from 100 to avoid 429s
 
   for (let i = 0; i < signatures.length; i += batchSize) {
     const batch = signatures.slice(i, i + batchSize).map(s => s.signature);
@@ -162,6 +167,9 @@ async function fetchSolanaSwaps(
       maxSupportedTransactionVersion: 0,
       commitment: 'confirmed',
     });
+
+    // Delay between getParsedTransactions batches
+    if (i + batchSize < signatures.length) await new Promise(r => setTimeout(r, 300));
 
     for (let j = 0; j < txs.length; j++) {
       const tx = txs[j];
