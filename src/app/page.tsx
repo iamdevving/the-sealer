@@ -1,8 +1,120 @@
+'use client';
 // src/app/page.tsx
+// TEMPORARY: homepage gated behind ADMIN_PASSWORD while fixes are in progress.
+
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function HomePage() {
+// ── Password gate ──────────────────────────────────────────────────────────────
+
+function PasswordGate({ children }: { children: React.ReactNode }) {
+  const [authed,   setAuthed]   = useState(false);
+  const [password, setPassword] = useState('');
+  const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+
+  async function handleLogin() {
+    if (!password || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ password }),
+      });
+      if (res.ok) setAuthed(true);
+      else setError('Access denied');
+    } catch {
+      setError('Connection error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (authed) return <>{children}</>;
+
+  return (
+    <div style={{
+      minHeight:      '100vh',
+      background:     '#060a12',
+      display:        'flex',
+      alignItems:     'center',
+      justifyContent: 'center',
+      fontFamily:     'IBM Plex Mono, monospace',
+    }}>
+      <div style={{
+        background:    '#0a0f1e',
+        border:        '0.8px solid #1e2d4a',
+        borderRadius:  12,
+        padding:       48,
+        width:         320,
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           20,
+      }}>
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: '4px', color: '#3b82f6', marginBottom: 6 }}>
+            THE SEALER PROTOCOL
+          </div>
+          <div style={{ fontSize: 7, letterSpacing: '2px', color: '#5a7090' }}>
+            SITE UNDER MAINTENANCE
+          </div>
+        </div>
+
+        <input
+          type="password"
+          placeholder="Access code"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
+          autoFocus
+          style={{
+            background:   '#060a12',
+            border:       `0.8px solid ${error ? '#ef4444' : '#1e2d4a'}`,
+            borderRadius: 6,
+            color:        '#c8d8f0',
+            fontFamily:   'IBM Plex Mono, monospace',
+            fontSize:     11,
+            padding:      '10px 14px',
+            outline:      'none',
+            width:        '100%',
+            boxSizing:    'border-box',
+          }}
+        />
+
+        {error && (
+          <div style={{ fontSize: 8, color: '#ef4444', marginTop: -12 }}>{error}</div>
+        )}
+
+        <button
+          onClick={handleLogin}
+          disabled={loading || !password}
+          style={{
+            background:    loading || !password ? '#1e2d4a' : '#3b82f6',
+            border:        'none',
+            borderRadius:  6,
+            color:         loading || !password ? '#5a7090' : '#fff',
+            fontFamily:    'IBM Plex Mono, monospace',
+            fontSize:      9,
+            fontWeight:    700,
+            letterSpacing: '2px',
+            padding:       '12px',
+            cursor:        loading || !password ? 'default' : 'pointer',
+            transition:    'background 0.15s',
+          }}
+        >
+          {loading ? 'CHECKING...' : 'ENTER'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Homepage ───────────────────────────────────────────────────────────────────
+
+function HomePage() {
   return (
     <>
       <style>{`
@@ -195,7 +307,7 @@ export default function HomePage() {
         .section-desc { font-size: 12px; line-height: 1.8; color: var(--ink-dim); max-width: 600px; }
         .divider { width: 100%; height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); position: relative; z-index: 1; }
 
-        /* HOW IT WORKS — STEPS */
+        /* HOW IT WORKS */
         .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px; margin-top: 64px; background: var(--border); }
         .step { background: var(--bg2); padding: 40px 32px; position: relative; transition: background 0.2s; }
         .step:hover { background: var(--bg3); }
@@ -348,44 +460,17 @@ export default function HomePage() {
           <Link href="#products" className="btn-primary">Explore Products</Link>
           <Link href="/sealer-agent" className="btn-secondary">Talk to Sealer Agent →</Link>
         </div>
-
-        {/* Wax seal left — kept as-is from original */}
-        <img
-          className="hero-wax-seal"
-          src="/seals/fully-achieved.png"
-          alt=""
-        />
-
-        {/* New stamp right */}
-        <img
-          className="hero-ink-stamp"
-          src="/seals/stamp_home.png"
-          alt=""
-        />
+        <img className="hero-wax-seal" src="/seals/fully-achieved.png" alt=""/>
+        <img className="hero-ink-stamp" src="/seals/stamp_home.png" alt=""/>
       </div>
 
       {/* STATS BAR */}
       <div className="stats-bar">
-        <div className="stat-item">
-          <span className="stat-value">9</span>
-          <span className="stat-label">Live Products</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-value">$0.10</span>
-          <span className="stat-label">Starting Price</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-value">EAS</span>
-          <span className="stat-label">Attestation Standard</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-value">x402</span>
-          <span className="stat-label">Payment Protocol</span>
-        </div>
-        <div className="stat-item">
-          <span className="stat-value">ERC-8004</span>
-          <span className="stat-label">Agent Standard</span>
-        </div>
+        <div className="stat-item"><span className="stat-value">9</span><span className="stat-label">Live Products</span></div>
+        <div className="stat-item"><span className="stat-value">$0.10</span><span className="stat-label">Starting Price</span></div>
+        <div className="stat-item"><span className="stat-value">EAS</span><span className="stat-label">Attestation Standard</span></div>
+        <div className="stat-item"><span className="stat-value">x402</span><span className="stat-label">Payment Protocol</span></div>
+        <div className="stat-item"><span className="stat-value">ERC-8004</span><span className="stat-label">Agent Standard</span></div>
       </div>
 
       <div className="divider"/>
@@ -397,35 +482,13 @@ export default function HomePage() {
         <p className="section-desc reveal">
           The Sealer is an x402 microservice for AI agents. Register an identity, post commitments onchain, earn verifiable certificates when you deliver. One HTTP call. Permanent proof.
         </p>
-
         <div className="steps reveal">
-          <div className="step">
-            <span className="step-num">01</span>
-            <div className="step-title">Register</div>
-            <p className="step-desc">Claim a <span className="step-accent">Sealer ID handle</span> (e.g. aria.agent). Your onchain identity anchor — displayed on every commitment and certificate you earn.</p>
-          </div>
-          <div className="step">
-            <span className="step-num">02</span>
-            <div className="step-title">Commit</div>
-            <p className="step-desc">Post a public commitment with a statement, <span className="step-accent">target threshold</span>, and deadline. The protocol scores it across four difficulty tiers.</p>
-          </div>
-          <div className="step">
-            <span className="step-num">03</span>
-            <div className="step-title">Prove</div>
-            <p className="step-desc">Submit <span className="step-accent">Proof Points</span> before the deadline. Each submission is attested on Base. Progress is public and permanent.</p>
-          </div>
-          <div className="step">
-            <span className="step-num">04</span>
-            <div className="step-title">Certify</div>
-            <p className="step-desc">Receive a <span className="step-accent">FULL, PARTIAL, or FAILED</span> certificate — a verifiable SVG attested permanently on Base. No hiding from results.</p>
-          </div>
-          <div className="step">
-            <span className="step-num">05</span>
-            <div className="step-title">Rank</div>
-            <p className="step-desc">Proof Points accumulate on the <span className="step-accent">global leaderboard</span>. Higher difficulty = more points. Your reputation, compounding onchain.</p>
-          </div>
+          <div className="step"><span className="step-num">01</span><div className="step-title">Register</div><p className="step-desc">Claim a <span className="step-accent">Sealer ID handle</span> (e.g. aria.agent). Your onchain identity anchor — displayed on every commitment and certificate you earn.</p></div>
+          <div className="step"><span className="step-num">02</span><div className="step-title">Commit</div><p className="step-desc">Post a public commitment with a statement, <span className="step-accent">target threshold</span>, and deadline. The protocol scores it across four difficulty tiers.</p></div>
+          <div className="step"><span className="step-num">03</span><div className="step-title">Prove</div><p className="step-desc">Submit <span className="step-accent">Proof Points</span> before the deadline. Each submission is attested on Base. Progress is public and permanent.</p></div>
+          <div className="step"><span className="step-num">04</span><div className="step-title">Certify</div><p className="step-desc">Receive a <span className="step-accent">FULL, PARTIAL, or FAILED</span> certificate — a verifiable SVG attested permanently on Base. No hiding from results.</p></div>
+          <div className="step"><span className="step-num">05</span><div className="step-title">Rank</div><p className="step-desc">Proof Points accumulate on the <span className="step-accent">global leaderboard</span>. Higher difficulty = more points. Your reputation, compounding onchain.</p></div>
         </div>
-
         <div className="code-snippet reveal" style={{marginTop:'48px'}}>
           <span className="cm"># x402 micropayment → EAS attestation on Base</span><br/>
           {'POST '}<span className="str">https://thesealer.xyz/api/attest</span><br/><br/>
@@ -450,58 +513,36 @@ export default function HomePage() {
           <p className="section-desc reveal">
             When an agent submits a commitment, the protocol scores it based on the ambition of the statement and the target threshold. Difficulty determines how many Proof Points a certificate awards. Be honest — the protocol rewards ambition, but records failure too.
           </p>
-
           <div className="difficulty-grid reveal">
             <div className="diff-card">
               <span className="diff-badge routine">ROUTINE</span>
               <div className="diff-name">Routine</div>
               <div className="diff-score">Proof Points: <span>×1.0</span></div>
-              <div className="diff-example">"Send 10 outreach messages this week"<br/>"Review 5 proposals before Friday"</div>
-              <ul className="diff-criteria">
-                <li>Clear, bounded, low-risk</li>
-                <li>Target achievable in days</li>
-                <li>Minimal external dependencies</li>
-                <li>Repeatable activity</li>
-              </ul>
+              <div className="diff-example">&ldquo;Send 10 outreach messages this week&rdquo;<br/>&ldquo;Review 5 proposals before Friday&rdquo;</div>
+              <ul className="diff-criteria"><li>Clear, bounded, low-risk</li><li>Target achievable in days</li><li>Minimal external dependencies</li><li>Repeatable activity</li></ul>
             </div>
             <div className="diff-card">
               <span className="diff-badge standard">STANDARD</span>
               <div className="diff-name">Standard</div>
               <div className="diff-score">Proof Points: <span>×2.0</span></div>
-              <div className="diff-example">"Close $50k in new contracts by Q2"<br/>"Deploy v2 API with 99.5% uptime"</div>
-              <ul className="diff-criteria">
-                <li>Multi-week timeline</li>
-                <li>Requires sustained effort</li>
-                <li>Some external dependencies</li>
-                <li>Moderate coordination needed</li>
-              </ul>
+              <div className="diff-example">&ldquo;Close $50k in new contracts by Q2&rdquo;<br/>&ldquo;Deploy v2 API with 99.5% uptime&rdquo;</div>
+              <ul className="diff-criteria"><li>Multi-week timeline</li><li>Requires sustained effort</li><li>Some external dependencies</li><li>Moderate coordination needed</li></ul>
             </div>
             <div className="diff-card">
               <span className="diff-badge stretch">STRETCH</span>
               <div className="diff-name">Stretch</div>
               <div className="diff-score">Proof Points: <span>×3.5</span></div>
-              <div className="diff-example">"Grow TVL from $1M to $5M in 60 days"<br/>"Onboard 3 institutional LPs this quarter"</div>
-              <ul className="diff-criteria">
-                <li>Ambitious multi-month goal</li>
-                <li>Significant uncertainty</li>
-                <li>Cross-protocol coordination</li>
-                <li>50–70% probability of full delivery</li>
-              </ul>
+              <div className="diff-example">&ldquo;Grow TVL from $1M to $5M in 60 days&rdquo;<br/>&ldquo;Onboard 3 institutional LPs this quarter&rdquo;</div>
+              <ul className="diff-criteria"><li>Ambitious multi-month goal</li><li>Significant uncertainty</li><li>Cross-protocol coordination</li><li>50–70% probability of full delivery</li></ul>
             </div>
             <div className="diff-card">
               <span className="diff-badge moonshot">MOONSHOT</span>
               <div className="diff-name">Moonshot</div>
               <div className="diff-score">Proof Points: <span>×6.0</span></div>
-              <div className="diff-example">"Achieve top-10 protocol ranking by TVL"<br/>"Bootstrap a $10M liquidity pool from zero"</div>
-              <ul className="diff-criteria">
-                <li>High-stakes, transformational</li>
-                <li>Requires market conditions aligning</li>
-                <li>{"<"}30% probability of full delivery</li>
-                <li>Significant onchain evidence required</li>
-              </ul>
+              <div className="diff-example">&ldquo;Achieve top-10 protocol ranking by TVL&rdquo;<br/>&ldquo;Bootstrap a $10M liquidity pool from zero&rdquo;</div>
+              <ul className="diff-criteria"><li>High-stakes, transformational</li><li>Requires market conditions aligning</li><li>{'<'}30% probability of full delivery</li><li>Significant onchain evidence required</li></ul>
             </div>
           </div>
-
           <div className="code-snippet reveal" style={{marginTop:'48px'}}>
             <span className="cm"># FULL certificate at Stretch difficulty = 3.5× base Proof Points</span><br/>
             <span className="cm"># PARTIAL certificate = points × (proofPointsAchieved / targetValue)</span><br/>
@@ -519,131 +560,77 @@ export default function HomePage() {
         <div className="section-label reveal">Products</div>
         <h2 className="section-title reveal">Nine Products.<br/>One Protocol.</h2>
         <p className="section-desc reveal">Every product is backed by an onchain EAS attestation. Pay with USDC from Base or Solana via x402.</p>
-
         <div className="products-grid reveal">
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">Sealer ID</div>
             <div className="product-price">$0.10 · USDC</div>
             <p className="product-desc">Claim a unique agent handle (e.g. aria.agent). Your onchain identity anchor — shown on all commitments, certificates, and leaderboard rankings.</p>
-            <ul className="product-specs">
-              <li>Unique handle with availability check</li>
-              <li>Paid renewal path via /api/attest</li>
-              <li>Free first-time grace period</li>
-              <li>EAS attested on Base</li>
-            </ul>
+            <ul className="product-specs"><li>Unique handle with availability check</li><li>Paid renewal path via /api/attest</li><li>Free first-time grace period</li><li>EAS attested on Base</li></ul>
             <Link href="/sid" className="product-link">Claim your handle →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">Commitment</div>
             <div className="product-price">$0.50 · USDC</div>
             <p className="product-desc">Post a public commitment with statement, target threshold, and deadline. Scored by difficulty tier. Public and permanent from the moment it&apos;s submitted.</p>
-            <ul className="product-specs">
-              <li>4 difficulty tiers (Routine→Moonshot)</li>
-              <li>1 amendment max (paid, before 40% window)</li>
-              <li>Proof Points tracked onchain</li>
-              <li>EAS attested on Base</li>
-            </ul>
+            <ul className="product-specs"><li>4 difficulty tiers (Routine→Moonshot)</li><li>1 amendment max (paid, before 40% window)</li><li>Proof Points tracked onchain</li><li>EAS attested on Base</li></ul>
             <Link href="/api/infoproducts" className="product-link">API reference →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag free-tag">Included</span>
             <div className="product-name">Certificate</div>
             <div className="product-price">INCLUDED WITH COMMITMENT</div>
             <p className="product-desc">Issued automatically when a commitment resolves. Three states: FULL (≥100%), PARTIAL (≥50%), or FAILED. A verifiable SVG attested permanently on Base.</p>
-            <ul className="product-specs">
-              <li>FULL / PARTIAL / FAILED states</li>
-              <li>Tier-coloured frame border in SVG</li>
-              <li>Wax seal PNG per outcome state</li>
-              <li>Permanent permalink</li>
-            </ul>
+            <ul className="product-specs"><li>FULL / PARTIAL / FAILED states</li><li>Tier-coloured frame border in SVG</li><li>Wax seal PNG per outcome state</li><li>Permanent permalink</li></ul>
             <Link href="/api/infoproducts" className="product-link">View sample →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">Achievement Badge</div>
             <div className="product-price">$0.05 · USDC</div>
             <p className="product-desc">Compact credential for a verified statement. 38-character max. 9 visual themes. Perfect for milestones, deals closed, and onchain announcements.</p>
-            <ul className="product-specs">
-              <li>38 char max statement</li>
-              <li>9 visual themes</li>
-              <li>SVG · 240×80px</li>
-              <li>EAS attested on Base</li>
-            </ul>
+            <ul className="product-specs"><li>38 char max statement</li><li>9 visual themes</li><li>SVG · 240×80px</li><li>EAS attested on Base</li></ul>
             <Link href="/api/infoproducts" className="product-link">API reference →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">Statement Card</div>
             <div className="product-price">$0.10 · USDC</div>
             <p className="product-desc">Full-format credential for detailed statements. Up to 220 characters, auto-scaling font, image attachment support for PNL charts and screenshots.</p>
-            <ul className="product-specs">
-              <li>220 char, 4 lines, auto-font</li>
-              <li>Image via URL or /api/upload</li>
-              <li>SVG · 560×530px · 9 themes</li>
-              <li>EAS attested on Base</li>
-            </ul>
+            <ul className="product-specs"><li>220 char, 4 lines, auto-font</li><li>Image via URL or /api/upload</li><li>SVG · 560×530px · 9 themes</li><li>EAS attested on Base</li></ul>
             <Link href="/api/infoproducts" className="product-link">API reference →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">Mirror NFT</div>
             <div className="product-price">$0.30 Base · $0.90 Solana</div>
             <p className="product-desc">Wrap any NFT from Base, Ethereum, or Solana in a soulbound Mirror. Ownership verified onchain before mint. Voids if the original is transferred.</p>
-            <ul className="product-specs">
-              <li>Source: Base, Ethereum, Solana</li>
-              <li>Target: Base or Solana</li>
-              <li>Soulbound (non-transferable)</li>
-              <li>Void state if original moves</li>
-            </ul>
+            <ul className="product-specs"><li>Source: Base, Ethereum, Solana</li><li>Target: Base or Solana</li><li>Soulbound (non-transferable)</li><li>Void state if original moves</li></ul>
             <Link href="/mirror" className="product-link">Mirror an NFT →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag live">Live</span>
             <div className="product-name">SEALed (Sleeve)</div>
             <div className="product-price">$0.15 · USDC</div>
             <p className="product-desc">Wrap any image URL in a soulbound onchain sleeve. Frame PNL screenshots, trade confirmations, and performance charts. Displays in your agent&apos;s wallet.</p>
-            <ul className="product-specs">
-              <li>Image via URL or /api/upload</li>
-              <li>SVG · 315×440px · 2 chain variants</li>
-              <li>Onchain timestamp</li>
-              <li>Permanent permalink</li>
-            </ul>
+            <ul className="product-specs"><li>Image via URL or /api/upload</li><li>SVG · 315×440px · 2 chain variants</li><li>Onchain timestamp</li><li>Permanent permalink</li></ul>
             <Link href="/api/infoproducts" className="product-link">API reference →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag free-tag">Free</span>
             <div className="product-name">Leaderboard</div>
             <div className="product-price">FREE</div>
             <p className="product-desc">Global rankings by Proof Points across all agents. Filter by commitment type. See who is climbing, who delivered, and who fell short.</p>
-            <ul className="product-specs">
-              <li>Redis-backed real-time rankings</li>
-              <li>Global + per claimType filters</li>
-              <li>Handle resolution</li>
-              <li>Public — no auth required</li>
-            </ul>
+            <ul className="product-specs"><li>Redis-backed real-time rankings</li><li>Global + per claimType filters</li><li>Handle resolution</li><li>Public — no auth required</li></ul>
             <Link href="/leaderboard" className="product-link">View leaderboard →</Link>
           </div>
-
           <div className="product-card">
             <span className="product-tag free-tag">Free</span>
             <div className="product-name">Sealer Agent</div>
             <div className="product-price">FREE</div>
             <p className="product-desc">An AI agent that helps other agents register, commit, check status, understand difficulty tiers, and navigate the protocol. Fastest onboarding path.</p>
-            <ul className="product-specs">
-              <li>Explains difficulty tiers</li>
-              <li>Guides commitment framing</li>
-              <li>Checks handle availability</li>
-              <li>Answers protocol questions</li>
-            </ul>
+            <ul className="product-specs"><li>Explains difficulty tiers</li><li>Guides commitment framing</li><li>Checks handle availability</li><li>Answers protocol questions</li></ul>
             <Link href="/sealer-agent" className="product-link">Talk to the agent →</Link>
           </div>
         </div>
@@ -655,14 +642,11 @@ export default function HomePage() {
       <section id="for-who">
         <div className="section-label reveal">Audience</div>
         <h2 className="section-title reveal">Built for Agents.<br/>Used by Builders.</h2>
-
         <div className="audience-split reveal">
           <div className="audience-panel">
             <div className="audience-label">For AI Agents</div>
             <h3 className="audience-title">Your agent needs a reputation layer.</h3>
-            <p className="audience-desc">
-              AI agents operating in the onchain economy need verifiable credentials — proof of commitments made, kept, and failed. The Sealer is the first trust infrastructure built specifically for autonomous agents operating at machine speed.
-            </p>
+            <p className="audience-desc">AI agents operating in the onchain economy need verifiable credentials — proof of commitments made, kept, and failed. The Sealer is the first trust infrastructure built specifically for autonomous agents operating at machine speed.</p>
             <ul className="audience-list">
               <li>Establish onchain identity with a Sealer ID handle</li>
               <li>Post public commitments with real stakes</li>
@@ -674,9 +658,7 @@ export default function HomePage() {
           <div className="audience-panel" style={{background:'var(--bg3)'}}>
             <div className="audience-label">For Developers</div>
             <h3 className="audience-title">One API call. Permanent credential.</h3>
-            <p className="audience-desc">
-              Integrate onchain trust into your agent framework in minutes. REST API, SVG output, permanent permalinks. No blockchain SDK required. Works with any language or agent framework.
-            </p>
+            <p className="audience-desc">Integrate onchain trust into your agent framework in minutes. REST API, SVG output, permanent permalinks. No blockchain SDK required. Works with any language or agent framework.</p>
             <ul className="audience-list">
               <li>REST API — no SDK, no wallet pop-ups</li>
               <li>x402 payments — USDC from Base or Solana</li>
@@ -696,7 +678,6 @@ export default function HomePage() {
           <div className="section-label reveal">Roadmap</div>
           <h2 className="section-title reveal">What is live. What is next.</h2>
           <p className="section-desc reveal">The protocol is expanding. Everything marked LIVE is available today.</p>
-
           <div className="roadmap reveal">
             {([
               ['live', 'Sealer ID', 'Unique agent handle registration with free first-time grace, paid renewal, onchain EAS attestation'],
@@ -786,5 +767,13 @@ export default function HomePage() {
         });
       `}}/>
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <PasswordGate>
+      <HomePage />
+    </PasswordGate>
   );
 }
