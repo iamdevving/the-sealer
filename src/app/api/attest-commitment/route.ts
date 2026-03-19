@@ -15,7 +15,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
   'defi_trading_performance',
   'code_software_delivery',
   'website_app_delivery',
-  'social_media_growth',
+  // 'social_media_growth' — temporarily disabled, coming soon as a full category
 ];
 
 /**
@@ -23,7 +23,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
  *
  * Required body fields:
  *   commitment  string   — the goal statement (min 10 chars)
- *   agentId     string   — agent wallet address (0x...)
+ *   agentId     string   — agent wallet address (0x...) or Solana pubkey
  *   claimType   string   — one of VALID_CLAIM_TYPES
  *   deadline    string   — ISO date or "YYYY-MM-DD", e.g. "2026-06-01"
  *   metric      string   — measurable target description
@@ -34,7 +34,11 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
  *   windowDays  number   — override verification window (default: derived from deadline)
  *   difficultyVersion number — scoring version (default: 1)
  *
- *   + per-claimType verification params (see extractVerificationParams)
+ * Per-claimType verification params (see extractVerificationParams):
+ *   x402_payment_reliability: minSuccessRate, minTotalUSD, requireDistinctRecipients, maxGapHours
+ *   defi_trading_performance:  chain ('base'|'solana'), minTradeCount, minVolumeUSD, minPnlPercent, protocol
+ *   code_software_delivery:    repoOwner, repoName, githubUsername, walletGithubSig, minMergedPRs, minCommits, requireCIPass, minLinesChanged
+ *   website_app_delivery:      url, minPerformanceScore, minAccessibility, requireDnsVerify, dnsVerifyRecord
  *
  * Headers:
  *   PAYMENT-SIGNATURE  <base tx hash or solana sig>
@@ -50,13 +54,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Validate required fields ──────────────────────────────────────────
-    const commitment       = (body.commitment as string)?.trim();
-    const agentId          = (body.agentId   as string)?.trim();
-    const claimType        = (body.claimType as string)?.trim();
-    const deadline         = (body.deadline  as string)?.trim();
-    const metric           = (body.metric    as string)?.trim();
-    const evidence         = (body.evidence  as string)?.trim() || '';
-    const theme            = (body.theme     as string)?.trim() || 'dark';
+    const commitment        = (body.commitment as string)?.trim();
+    const agentId           = (body.agentId   as string)?.trim();
+    const claimType         = (body.claimType as string)?.trim();
+    const deadline          = (body.deadline  as string)?.trim();
+    const metric            = (body.metric    as string)?.trim();
+    const evidence          = (body.evidence  as string)?.trim() || '';
+    const theme             = (body.theme     as string)?.trim() || 'dark';
     const difficultyVersion = Number(body.difficultyVersion) || 1;
 
     if (!commitment || commitment.length < 10) {
@@ -83,16 +87,15 @@ export async function POST(req: NextRequest) {
       : '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
     // ── Parse deadline → windowDays + unix timestamp ──────────────────────
-    const deadlineDate    = parseDeadline(deadline);
-    const deadlineUnix    = Math.floor(deadlineDate.getTime() / 1000);
-    const nowUnix         = Math.floor(Date.now() / 1000);
-    const windowDays      = body.windowDays
+    const deadlineDate = parseDeadline(deadline);
+    const deadlineUnix = Math.floor(deadlineDate.getTime() / 1000);
+    const nowUnix      = Math.floor(Date.now() / 1000);
+    const windowDays   = body.windowDays
       ? Number(body.windowDays)
       : Math.max(1, Math.ceil((deadlineUnix - nowUnix) / 86400));
 
     // ── EAS commitment attestation ────────────────────────────────────────
-    // Issues onchain record with discrete schema fields
-    let easTxHash: string;
+    let easTxHash:    string;
     let commitmentUid: string;
     try {
       const receipt = await issueCommitmentAttestation({
@@ -122,7 +125,7 @@ export async function POST(req: NextRequest) {
     try {
       const nft = await mintCommitment(
         walletAddress,
-        easTxHash,       // attestationTx
+        easTxHash,
         claimType,
         deadlineUnix,
         commitmentUid,
@@ -138,8 +141,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Register pending achievement in Redis ─────────────────────────────
-    // mintTimestamp is set inside registerPendingAchievement (Math.floor(Date.now()/1000))
-    // commitmentUid is the EAS UID — used as the Redis key for later lookups
     try {
       await registerPendingAchievement({
         attestationUID:     commitmentUid,
@@ -161,22 +162,22 @@ export async function POST(req: NextRequest) {
 
     // ── Response ──────────────────────────────────────────────────────────
     return NextResponse.json({
-      success:          true,
+      success:        true,
       commitmentUid,
       easTxHash,
       nftTxHash,
-      tokenId:          tokenId.toString(),
+      tokenId:        tokenId.toString(),
       tokenUri,
       commitment,
       claimType,
       metric,
       evidence,
-      deadline:         deadlineDate.toISOString(),
+      deadline:       deadlineDate.toISOString(),
       windowDays,
       agentId,
-      paymentChain:     paymentChain || 'base',
-      easExplorer:      `https://base.easscan.org/attestation/view/${commitmentUid}`,
-      message:          'Commitment sealed onchain. Certificate will be issued after verification.',
+      paymentChain:   paymentChain || 'base',
+      easExplorer:    `https://base.easscan.org/attestation/view/${commitmentUid}`,
+      message:        'Commitment sealed onchain. Certificate will be issued after verification.',
       verifyEndpoint: `/api/verify/${claimType}`,
     });
   }, COMMITMENT_PRICE);
@@ -187,14 +188,13 @@ export async function POST(req: NextRequest) {
 function parseDeadline(deadline: string): Date {
   const d = new Date(deadline);
   if (!isNaN(d.getTime())) return d;
-  // Fallback: 30 days from now
   const fallback = new Date();
   fallback.setDate(fallback.getDate() + 30);
   return fallback;
 }
 
 function extractVerificationParams(
-  body: Record<string, unknown>,
+  body:      Record<string, unknown>,
   claimType: string,
 ): Record<string, unknown> {
   const common = { windowDays: body.windowDays };
@@ -209,50 +209,56 @@ function extractVerificationParams(
         requireDistinctRecipients: body.requireDistinctRecipients,
         maxGapHours:               body.maxGapHours,
       };
+
     case 'defi_trading_performance':
       return {
         ...common,
+        chain:         body.chain ?? 'base',   // 'base' | 'solana'
         protocol:      body.protocol,
-        chain:         body.chain,
-        walletAddress: body.agentWallet || body.agentId,
-        metric:        body.metric,
-        target:        body.target,
-        minCollateral: body.minCollateral,
+        agentWallet:   body.agentWallet || body.agentId,
         minTradeCount: body.minTradeCount,
-        maxDrawdown:   body.maxDrawdown,
+        minVolumeUSD:  body.minVolumeUSD,
+        minPnlPercent: body.minPnlPercent,
+        maxDrawdownPct: body.maxDrawdownPct,
       };
+
     case 'code_software_delivery':
       return {
         ...common,
-        repoUrl:           body.repoUrl,
-        githubUsername:    body.githubUsername,
-        walletGithubSig:   body.walletGithubSig,
-        metric:            body.metric,
-        targetCount:       body.targetCount,
-        requireCIPass:     body.requireCIPass,
-        minDiffLinesPerPR: body.minDiffLinesPerPR,
+        repoOwner:       body.repoOwner,
+        repoName:        body.repoName,
+        githubUsername:  body.githubUsername,
+        walletGithubSig: body.walletGithubSig,  // Gist ID for wallet ownership proof
+        minMergedPRs:    body.minMergedPRs,
+        minCommits:      body.minCommits,
+        requireCIPass:   body.requireCIPass,
+        minLinesChanged: body.minLinesChanged,
       };
+
     case 'website_app_delivery':
       return {
         ...common,
         url:                body.url,
         dnsVerifyRecord:    body.dnsVerifyRecord,
-        lighthouseMinScore: body.lighthouseMinScore,
-        uptimeMonitorId:    body.uptimeMonitorId,
-        uptimeWindowDays:   body.uptimeWindowDays,
-        indexedPagesMin:    body.indexedPagesMin,
+        requireDnsVerify:   body.requireDnsVerify,
+        minPerformanceScore: body.minPerformanceScore,
+        minAccessibility:   body.minAccessibility,
       };
+
+    // social_media_growth params kept here so existing Redis entries
+    // (committed before the category was disabled) can still be read by cron
     case 'social_media_growth':
       return {
         ...common,
         platform:          body.platform,
         handle:            body.handle,
-        platformId:        body.platformId,
+        fid:               body.fid,
         baselineFollowers: body.baselineFollowers,
-        targetFollowers:   body.targetFollowers,
+        minFollowerGrowth: body.minFollowerGrowth,
         minEngagementRate: body.minEngagementRate,
         minPostsPerWeek:   body.minPostsPerWeek,
       };
+
     default:
       return common;
   }

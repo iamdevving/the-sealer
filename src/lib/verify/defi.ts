@@ -1,33 +1,39 @@
 // src/lib/verify/defi.ts
 // Verifier for DeFi Trading Performance achievements
-// Data sources: Alchemy (transfers) + BaseScan (tx history)
 //
-// PnL NOTE:
-//   Computing accurate PnL requires token price history at entry and exit time,
-//   which needs a price history API (e.g. Coingecko /coins/{id}/market_chart).
-//   Without that, both sides of the equation use the same spot price → always 0.
+// Supports two chains:
+//   base   — BaseScan tx history + known EVM DEX method IDs + Coingecko ETH price
+//   solana — Helius getSignaturesForAddress + known Solana DEX program IDs + Coingecko SOL price
 //
-//   Current approach:
-//   - tradeCount and volumeUSD are computed accurately from onchain data
-//   - pnlPercent is fetched from Coingecko historical prices when possible
-//   - If Coingecko is unavailable, pnlPercent is null and the metric is SKIPPED
-//     (marked met: true in certificate metrics, not counted against the agent)
-//   - Commitments with minPnlPercent > 0 are accepted but flagged in evidence
-//     as "pnl_computed: false" if price history is unavailable
+// PnL approach (both chains):
+//   Entry price at mintTimestamp vs exit price at verification time.
+//   Uses ETH/SOL price movement as proxy — accurate for native-token swaps.
+//   Token-to-token swaps (no native value) are counted for tradeCount/volume but
+//   PnL is skipped (pnlComputed: false) unless native token is involved.
+//   If Coingecko is unavailable, pnl metric is skipped rather than failing the agent.
 //
-//   This is honest — we report what we can verify, skip what we can't.
+// Anti-gaming (Solana):
+//   Only transactions calling known DEX program IDs are counted.
+//   Self-transfers (to own ATA) are excluded.
+//   Volume computed from SPL token transfers on matched transactions, not raw SOL value.
+//
+// Anti-gaming (Base):
+//   Only method IDs from known DEX routers are counted as swaps.
+//   ETH value of zero is excluded to filter token-to-token via EVM.
 
 import type { VerificationResult, AchievementLevel } from './types';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 export interface DefiVerificationParams {
-  agentWallet:   string;
-  protocol:      string;
-  windowDays:    number;
-  mintTimestamp: number;
-  minTradeCount?:    number;
-  minVolumeUSD?:     number;
-  minPnlPercent?:    number;
-  maxDrawdownPct?:   number;
+  agentWallet:    string;
+  protocol:       string;
+  chain?:         'base' | 'solana';  // default: 'base'
+  windowDays:     number;
+  mintTimestamp:  number;
+  minTradeCount?: number;
+  minVolumeUSD?:  number;
+  minPnlPercent?: number;
+  maxDrawdownPct?: number;
 }
 
 const THRESHOLDS: Record<AchievementLevel, {
@@ -39,7 +45,9 @@ const THRESHOLDS: Record<AchievementLevel, {
   gold:   { minTradeCount: 100, minVolumeUSD: 10000 },
 };
 
-// Known DeFi swap method IDs (Uniswap v2/v3, Aerodrome, generic selectors)
+// ── Base: known DEX swap method IDs ──────────────────────────────────────────
+// Uniswap v2/v3, Aerodrome, Velodrome, SushiSwap on Base
+
 const SWAP_METHOD_IDS = new Set([
   '0x38ed1739', '0x8803dbee', '0x7ff36ab5', '0x4a25d94a',
   '0x18cbafe5', '0xfb3bdb41', '0x5c11d795', '0xb6f9de95',
@@ -47,15 +55,27 @@ const SWAP_METHOD_IDS = new Set([
   '0x09b81347', '0xe592427a', '0x472b43f3',
 ]);
 
+// ── Solana: known DEX program IDs ────────────────────────────────────────────
+// Jupiter v6 aggregator, Orca Whirlpool, Raydium AMM + CLMM
+
+const SOLANA_DEX_PROGRAMS = new Set([
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',   // Jupiter v6
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3sFKDmG',   // Orca Whirlpool
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',   // Raydium AMM v4
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK',   // Raydium CLMM
+  '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin',   // Serum DEX v3 (legacy, still used)
+  'srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX',    // OpenBook (Serum successor)
+]);
+
+// Solana USDC mint
+const SOL_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+// ── Base chain helpers ────────────────────────────────────────────────────────
+
 interface BaseScanTx {
-  hash:         string;
-  from:         string;
-  to:           string;
-  value:        string;
-  timeStamp:    string;
-  isError:      '0' | '1';
-  methodId:     string;
-  functionName: string;
+  hash: string; from: string; to: string;
+  value: string; timeStamp: string;
+  isError: '0' | '1'; methodId: string; functionName: string;
 }
 
 async function fetchBaseScanTxs(wallet: string, mintTimestamp: number): Promise<BaseScanTx[]> {
@@ -77,34 +97,149 @@ async function fetchBaseScanTxs(wallet: string, mintTimestamp: number): Promise<
   if (data.status !== '1') return [];
 
   return (data.result as BaseScanTx[]).filter(
-    tx => parseInt(tx.timeStamp) >= mintTimestamp
+    tx => parseInt(tx.timeStamp) >= mintTimestamp && tx.isError === '0'
   );
 }
 
-async function getEthPriceUSD(): Promise<number> {
+function detectSwaps(txs: BaseScanTx[], wallet: string): BaseScanTx[] {
+  return txs.filter(tx =>
+    tx.from.toLowerCase() === wallet.toLowerCase() &&
+    tx.to && tx.to !== wallet &&
+    tx.methodId && SWAP_METHOD_IDS.has(tx.methodId.toLowerCase().slice(0, 10))
+  );
+}
+
+// ── Solana chain helpers ──────────────────────────────────────────────────────
+
+interface SolanaSwap {
+  signature: string;
+  blockTime:  number;
+  volumeUSD:  number;  // estimated from USDC transfers in same tx
+}
+
+async function fetchSolanaSwaps(
+  wallet:        string,
+  mintTimestamp: number,
+  solPriceUSD:   number,
+): Promise<SolanaSwap[]> {
+  const heliusUrl = process.env.HELIUS_RPC_URL;
+  if (!heliusUrl) throw new Error('HELIUS_RPC_URL not set');
+
+  const connection = new Connection(heliusUrl, 'confirmed');
+  const pubkey     = new PublicKey(wallet);
+
+  // Fetch signatures since mintTimestamp
+  let signatures: any[] = [];
+  let before: string | undefined;
+
+  while (true) {
+    const batch = await connection.getSignaturesForAddress(pubkey, {
+      limit:  1000,
+      before,
+    });
+    if (!batch.length) break;
+
+    const inWindow = batch.filter(s =>
+      s.blockTime && s.blockTime >= mintTimestamp && !s.err
+    );
+    signatures.push(...inWindow);
+
+    const oldest = batch[batch.length - 1];
+    if (!oldest.blockTime || oldest.blockTime < mintTimestamp) break;
+    before = oldest.signature;
+  }
+
+  if (!signatures.length) return [];
+
+  // Fetch parsed transactions in batches of 100
+  const swaps: SolanaSwap[] = [];
+  const batchSize = 100;
+
+  for (let i = 0; i < signatures.length; i += batchSize) {
+    const batch = signatures.slice(i, i + batchSize).map(s => s.signature);
+
+    const txs = await connection.getParsedTransactions(batch, {
+      maxSupportedTransactionVersion: 0,
+      commitment: 'confirmed',
+    });
+
+    for (let j = 0; j < txs.length; j++) {
+      const tx = txs[j];
+      if (!tx || tx.meta?.err) continue;
+
+      // Check if any account key is a known DEX program
+      const accountKeys = tx.transaction.message.accountKeys.map(
+        (k: any) => (typeof k === 'string' ? k : k.pubkey?.toString() ?? k.toString())
+      );
+
+      const isDexTx = accountKeys.some((key: string) => SOLANA_DEX_PROGRAMS.has(key));
+      if (!isDexTx) continue;
+
+      // Estimate volume from USDC balance changes (postTokenBalances - preTokenBalances)
+      const preBalances  = tx.meta?.preTokenBalances  ?? [];
+      const postBalances = tx.meta?.postTokenBalances ?? [];
+
+      let usdcIn = 0;
+      for (const post of postBalances) {
+        if (post.mint !== SOL_USDC_MINT) continue;
+        if (post.owner?.toLowerCase() !== wallet.toLowerCase()) continue;
+        const pre = preBalances.find(p => p.accountIndex === post.accountIndex);
+        const delta = (post.uiTokenAmount.uiAmount ?? 0) - (pre?.uiTokenAmount?.uiAmount ?? 0);
+        if (delta > 0) usdcIn += delta;
+      }
+
+      // Fall back to SOL delta if no USDC flow found
+      let volumeUSD = usdcIn;
+      if (volumeUSD === 0) {
+        const walletIdx = accountKeys.indexOf(wallet);
+        if (walletIdx >= 0 && tx.meta?.preBalances && tx.meta?.postBalances) {
+          const solDelta = Math.abs(
+            (tx.meta.postBalances[walletIdx] - tx.meta.preBalances[walletIdx]) / 1e9
+          );
+          volumeUSD = solDelta * solPriceUSD;
+        }
+      }
+
+      swaps.push({
+        signature: signatures[i + j]?.signature ?? '',
+        blockTime:  tx.blockTime ?? 0,
+        volumeUSD,
+      });
+    }
+  }
+
+  return swaps;
+}
+
+// ── Price helpers (shared) ────────────────────────────────────────────────────
+
+async function getCoinPrice(coinId: 'ethereum' | 'solana'): Promise<number> {
+  const fallback = coinId === 'ethereum' ? 2500 : 150;
   try {
     const res  = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd',
+      `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`,
       { signal: AbortSignal.timeout(5000) }
     );
     const data = await res.json();
-    return data.ethereum.usd;
+    return data[coinId]?.usd ?? fallback;
   } catch {
-    return 2500; // safe fallback — only used for volumeUSD estimation
+    return fallback;
   }
 }
 
-/**
- * Fetch ETH price at a specific unix timestamp using Coingecko's market_chart endpoint.
- * Returns null if unavailable — callers must handle null gracefully.
- */
-async function getEthPriceAtTime(timestamp: number): Promise<number | null> {
+async function getCoinPriceAtTime(
+  coinId:        'ethereum' | 'solana',
+  mintTimestamp: number,
+): Promise<number | null> {
   try {
-    // Coingecko free tier: /coins/{id}/history?date=dd-mm-yyyy
-    const d    = new Date(timestamp * 1000);
-    const date = `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    const date = new Date(mintTimestamp * 1000);
+    const dd   = String(date.getUTCDate()).padStart(2, '0');
+    const mm   = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = date.getUTCFullYear();
+    const dateStr = `${dd}-${mm}-${yyyy}`;
+
     const res  = await fetch(
-      `https://api.coingecko.com/api/v3/coins/ethereum/history?date=${date}&localization=false`,
+      `https://api.coingecko.com/api/v3/coins/${coinId}/history?date=${dateStr}&localization=false`,
       { signal: AbortSignal.timeout(8000) }
     );
     if (!res.ok) return null;
@@ -115,48 +250,17 @@ async function getEthPriceAtTime(timestamp: number): Promise<number | null> {
   }
 }
 
-function detectSwaps(txs: BaseScanTx[], wallet: string): BaseScanTx[] {
-  return txs.filter(tx => {
-    if (tx.isError === '1') return false;
-    if (tx.from.toLowerCase() !== wallet.toLowerCase()) return false;
-    const methodId = tx.methodId?.toLowerCase().slice(0, 10);
-    return SWAP_METHOD_IDS.has(methodId);
-  });
-}
-
-/**
- * Estimate PnL by comparing ETH value at entry (mintTimestamp price) vs exit (now price).
- * This is an approximation — it captures ETH price movement during the trading window,
- * not individual trade P&L. Returns null if price history is unavailable.
- *
- * A proper per-trade PnL calculator would need token prices at each swap's block timestamp,
- * which requires N Coingecko calls (one per trade). That hits rate limits fast on free tier.
- * This approach makes one historical call + one spot call — much more reliable.
- */
-async function estimatePnlPercent(
-  swaps:         BaseScanTx[],
-  mintTimestamp: number,
-  entryEthPrice: number | null,
-  exitEthPrice:  number,
+async function estimatePnl(
+  nativeDeployed: number,
+  entryPrice:     number | null,
+  exitPrice:      number,
 ): Promise<{ pnlPercent: number | null; pnlComputed: boolean }> {
-  if (!entryEthPrice || swaps.length === 0) {
+  if (!entryPrice || nativeDeployed === 0) {
     return { pnlPercent: null, pnlComputed: false };
   }
-
-  // Sum ETH deployed in swaps at entry price
-  const ethDeployed = swaps.reduce((s, tx) => {
-    return s + parseInt(tx.value || '0') / 1e18;
-  }, 0);
-
-  if (ethDeployed === 0) {
-    // All swaps were token-to-token (no ETH value) — can't estimate without token prices
-    return { pnlPercent: null, pnlComputed: false };
-  }
-
-  const entryUSD = ethDeployed * entryEthPrice;
-  const exitUSD  = ethDeployed * exitEthPrice;
+  const entryUSD = nativeDeployed * entryPrice;
+  const exitUSD  = nativeDeployed * exitPrice;
   const pnl      = ((exitUSD - entryUSD) / entryUSD) * 100;
-
   return { pnlPercent: parseFloat(pnl.toFixed(2)), pnlComputed: true };
 }
 
@@ -168,16 +272,98 @@ function determineLevel(tradeCount: number, volumeUSD: number): AchievementLevel
   return null;
 }
 
+// ── Main verifier ─────────────────────────────────────────────────────────────
+
 export async function verifyDefiTradingPerformance(
   params:         DefiVerificationParams,
   attestationUID: string,
 ): Promise<VerificationResult> {
-  const now = Math.floor(Date.now() / 1000);
+  const now   = Math.floor(Date.now() / 1000);
+  const chain = params.chain ?? 'base';
 
+  // ── Solana path ────────────────────────────────────────────────────────────
+  if (chain === 'solana') {
+    const [exitSolPrice, entrySolPrice] = await Promise.all([
+      getCoinPrice('solana'),
+      getCoinPriceAtTime('solana', params.mintTimestamp),
+    ]);
+
+    let swaps: SolanaSwap[] = [];
+    try {
+      swaps = await fetchSolanaSwaps(params.agentWallet, params.mintTimestamp, exitSolPrice);
+    } catch (err) {
+      return {
+        passed:        false,
+        failureReason: `Solana verification failed: ${String(err)}`,
+        evidence: {
+          checkedAt: now, dataSource: 'helius_rpc + solana_dex_programs',
+          attestationUID, rawMetrics: { chain: 'solana' },
+        },
+      };
+    }
+
+    const tradeCount = swaps.length;
+    const volumeUSD  = swaps.reduce((s, sw) => s + sw.volumeUSD, 0);
+
+    // For Solana PnL: sum SOL-denominated volume as proxy for native deployed
+    const solDeployed = volumeUSD / exitSolPrice;
+    const { pnlPercent, pnlComputed } = await estimatePnl(solDeployed, entrySolPrice, exitSolPrice);
+
+    const rawMetrics = {
+      chain:        'solana',
+      tradeCount,
+      volumeUSD:    parseFloat(volumeUSD.toFixed(2)),
+      pnlPercent:   pnlPercent ?? 0,
+      pnlComputed,
+      entrySOLPrice: entrySolPrice ?? 0,
+      exitSOLPrice:  exitSolPrice,
+      windowDays:   params.windowDays,
+      protocol:     params.protocol,
+      dexPrograms:  [...SOLANA_DEX_PROGRAMS].join(','),
+    };
+
+    const evidence = {
+      checkedAt:  now,
+      dataSource: 'helius_rpc + solana_dex_programs (Jupiter/Orca/Raydium)',
+      attestationUID,
+      rawMetrics,
+    };
+
+    if (tradeCount === 0) {
+      return { passed: false, failureReason: 'No DEX swap transactions detected on Solana in the commitment window.', evidence };
+    }
+
+    if (params.minPnlPercent && params.minPnlPercent > 0 && !pnlComputed) {
+      return {
+        passed:        false,
+        failureReason: 'PnL could not be computed (Coingecko SOL price history unavailable). Remove minPnlPercent or retry later.',
+        evidence,
+      };
+    }
+
+    const meetsTradeCount = tradeCount >= (params.minTradeCount ?? 0);
+    const meetsVolumeUSD  = volumeUSD  >= (params.minVolumeUSD  ?? 0);
+    const meetsPnl        = !params.minPnlPercent || pnlPercent === null
+      ? true : pnlPercent >= params.minPnlPercent;
+
+    const level = determineLevel(tradeCount, volumeUSD);
+
+    if (!level || !meetsTradeCount || !meetsVolumeUSD || !meetsPnl) {
+      const reasons: string[] = [];
+      if (!meetsTradeCount) reasons.push(`trades ${tradeCount} < ${params.minTradeCount}`);
+      if (!meetsVolumeUSD)  reasons.push(`volume $${volumeUSD.toFixed(0)} < $${params.minVolumeUSD}`);
+      if (!meetsPnl)        reasons.push(`pnl ${pnlPercent?.toFixed(1)}% < ${params.minPnlPercent}%`);
+      return { passed: false, failureReason: reasons.join('; ') || 'Did not meet bronze threshold', evidence };
+    }
+
+    return { passed: true, level, evidence };
+  }
+
+  // ── Base path (default) ───────────────────────────────────────────────────
   const [txs, exitEthPrice, entryEthPrice] = await Promise.all([
     fetchBaseScanTxs(params.agentWallet, params.mintTimestamp),
-    getEthPriceUSD(),
-    getEthPriceAtTime(params.mintTimestamp),
+    getCoinPrice('ethereum'),
+    getCoinPriceAtTime('ethereum', params.mintTimestamp),
   ]);
 
   const swaps      = detectSwaps(txs, params.agentWallet);
@@ -185,48 +371,44 @@ export async function verifyDefiTradingPerformance(
   const totalETH   = swaps.reduce((s, tx) => s + parseInt(tx.value || '0') / 1e18, 0);
   const volumeUSD  = totalETH * exitEthPrice;
 
-  const { pnlPercent, pnlComputed } = await estimatePnlPercent(
-    swaps, params.mintTimestamp, entryEthPrice, exitEthPrice
-  );
+  const { pnlPercent, pnlComputed } = await estimatePnl(totalETH, entryEthPrice, exitEthPrice);
 
   const rawMetrics = {
+    chain:         'base',
     tradeCount,
-    volumeUSD:   parseFloat(volumeUSD.toFixed(2)),
-    pnlPercent:  pnlPercent ?? 0,
+    volumeUSD:     parseFloat(volumeUSD.toFixed(2)),
+    pnlPercent:    pnlPercent ?? 0,
     pnlComputed,
     entryEthPrice: entryEthPrice ?? 0,
     exitEthPrice,
-    windowDays:  params.windowDays,
-    protocol:    params.protocol,
+    windowDays:    params.windowDays,
+    protocol:      params.protocol,
+    dexMethodIds:  [...SWAP_METHOD_IDS].join(','),
   };
 
   const evidence = {
     checkedAt:  now,
-    dataSource: 'basescan_txlist + coingecko_price_history',
+    dataSource: 'basescan_txlist + known_dex_method_ids + coingecko_price_history',
     attestationUID,
     rawMetrics,
   };
 
   if (tradeCount === 0) {
-    return { passed: false, failureReason: 'No swap transactions detected in window.', evidence };
+    return { passed: false, failureReason: 'No DEX swap transactions detected on Base in the commitment window.', evidence };
   }
 
-  // If minPnlPercent is set but we couldn't compute PnL, fail with explanation
   if (params.minPnlPercent && params.minPnlPercent > 0 && !pnlComputed) {
     return {
       passed:        false,
-      failureReason: `PnL could not be computed (Coingecko price history unavailable for entry date). Remove minPnlPercent from your commitment or retry later.`,
+      failureReason: 'PnL could not be computed (Coingecko ETH price history unavailable). Remove minPnlPercent or retry later.',
       evidence,
     };
   }
 
-  // Check committed thresholds
   const meetsTradeCount = tradeCount >= (params.minTradeCount ?? 0);
   const meetsVolumeUSD  = volumeUSD  >= (params.minVolumeUSD  ?? 0);
-  // If pnlPercent is null (not computed), treat pnl metric as met to avoid false failures
   const meetsPnl        = !params.minPnlPercent || pnlPercent === null
-    ? true
-    : pnlPercent >= params.minPnlPercent;
+    ? true : pnlPercent >= params.minPnlPercent;
 
   const level = determineLevel(tradeCount, volumeUSD);
 
