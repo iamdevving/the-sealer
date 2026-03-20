@@ -77,57 +77,67 @@ interface BaseTx {
   value: string; blockTimestamp: string;
 }
 
-// Uses Alchemy alchemy_getAssetTransfers — same API already used in x402 verifier
-// BaseScan/Etherscan free tier dropped Base support in Nov 2025
+// Uses Alchemy alchemy_getAssetTransfers with multiple categories to catch
+// all outgoing transactions including token-only DEX swaps.
+// We fetch both 'external' (ETH txs) and 'erc20' (token txs), deduplicate
+// by tx hash, and check if the destination is a known DEX router.
+// BaseScan/Etherscan free tier dropped Base support in Nov 2025.
 async function fetchBaseTxs(wallet: string, mintTimestamp: number): Promise<BaseTx[]> {
   const alchemyUrl = process.env.ALCHEMY_RPC_URL;
   if (!alchemyUrl) throw new Error('ALCHEMY_RPC_URL not set');
 
-  const fromBlock = '0x' + Math.max(0, mintTimestamp - 86400).toString(16); // rough lower bound
-  const txs: BaseTx[] = [];
-  let pageKey: string | undefined;
+  const secondsAgo   = Math.floor(Date.now() / 1000) - mintTimestamp;
+  const blocksAgo    = Math.ceil(secondsAgo / 2);      // ~2s Base block time
+  const tipBlock     = 30_000_000;
+  const fromBlock    = '0x' + Math.max(0, tipBlock - blocksAgo).toString(16);
 
-  do {
-    const body = {
-      jsonrpc: '2.0', id: 1,
-      method:  'alchemy_getAssetTransfers',
-      params:  [{
-        fromBlock,
-        toBlock:       'latest',
-        fromAddress:   wallet,
-        category:      ['external'],   // EOA-initiated txs only
-        withMetadata:  true,
-        excludeZeroValue: false,
-        maxCount:      '0x3e8',        // 1000 per page
-        ...(pageKey ? { pageKey } : {}),
-      }],
-    };
+  // Fetch external + erc20 — dedup by hash to get unique txs sent to DEX routers
+  const seenHashes = new Map<string, BaseTx>();
 
-    const res  = await fetch(alchemyUrl, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Alchemy API ${res.status}`);
-    const data = await res.json();
+  for (const category of [['external'], ['erc20']] as const) {
+    let pageKey: string | undefined;
 
-    const transfers = data.result?.transfers ?? [];
-    for (const tx of transfers) {
-      const ts = new Date(tx.metadata?.blockTimestamp ?? 0).getTime() / 1000;
-      if (ts >= mintTimestamp && tx.to) {
-        txs.push({
-          hash:           tx.hash,
-          from:           tx.from,
-          to:             tx.to,
-          value:          tx.value?.toString() ?? '0',
-          blockTimestamp: tx.metadata?.blockTimestamp ?? '',
-        });
+    do {
+      const body = {
+        jsonrpc: '2.0', id: 1,
+        method:  'alchemy_getAssetTransfers',
+        params:  [{
+          fromBlock,
+          toBlock:          'latest',
+          fromAddress:      wallet,
+          category,
+          withMetadata:     true,
+          excludeZeroValue: false,
+          maxCount:         '0x3e8',
+          ...(pageKey ? { pageKey } : {}),
+        }],
+      };
+
+      const res = await fetch(alchemyUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`Alchemy API ${res.status}`);
+      const data = await res.json();
+
+      for (const tx of data.result?.transfers ?? []) {
+        const ts = new Date(tx.metadata?.blockTimestamp ?? 0).getTime() / 1000;
+        if (ts >= mintTimestamp && tx.to && !seenHashes.has(tx.hash)) {
+          seenHashes.set(tx.hash, {
+            hash:           tx.hash,
+            from:           tx.from,
+            to:             tx.to,
+            value:          tx.value?.toString() ?? '0',
+            blockTimestamp: tx.metadata?.blockTimestamp ?? '',
+          });
+        }
       }
-    }
-    pageKey = data.result?.pageKey;
-  } while (pageKey);
+      pageKey = data.result?.pageKey;
+    } while (pageKey);
+  }
 
-  return txs;
+  return Array.from(seenHashes.values());
 }
 
 function detectSwaps(txs: BaseTx[], wallet: string): BaseTx[] {
@@ -367,14 +377,14 @@ export async function verifyDefiTradingPerformance(
     const meetsPnl        = !params.minPnlPercent || pnlPercent === null
       ? true : pnlPercent >= params.minPnlPercent;
 
-    const level = determineLevel(tradeCount, volumeUSD);
+    const level = determineLevel(tradeCount, volumeUSD) ?? 'bronze'; // best-effort, not a gate
 
-    if (!level || !meetsTradeCount || !meetsVolumeUSD || !meetsPnl) {
+    if (!meetsTradeCount || !meetsVolumeUSD || !meetsPnl) {
       const reasons: string[] = [];
       if (!meetsTradeCount) reasons.push(`trades ${tradeCount} < ${params.minTradeCount}`);
       if (!meetsVolumeUSD)  reasons.push(`volume $${volumeUSD.toFixed(0)} < $${params.minVolumeUSD}`);
       if (!meetsPnl)        reasons.push(`pnl ${pnlPercent?.toFixed(1)}% < ${params.minPnlPercent}%`);
-      return { passed: false, failureReason: reasons.join('; ') || 'Did not meet bronze threshold', evidence };
+      return { passed: false, failureReason: reasons.join('; '), evidence };
     }
 
     return { passed: true, level, evidence };
@@ -430,14 +440,14 @@ export async function verifyDefiTradingPerformance(
   const meetsPnl        = !params.minPnlPercent || pnlPercent === null
     ? true : pnlPercent >= params.minPnlPercent;
 
-  const level = determineLevel(tradeCount, volumeUSD);
+  const level = determineLevel(tradeCount, volumeUSD) ?? 'bronze'; // best-effort, not a gate
 
-  if (!level || !meetsTradeCount || !meetsVolumeUSD || !meetsPnl) {
+  if (!meetsTradeCount || !meetsVolumeUSD || !meetsPnl) {
     const reasons: string[] = [];
     if (!meetsTradeCount) reasons.push(`trades ${tradeCount} < ${params.minTradeCount}`);
     if (!meetsVolumeUSD)  reasons.push(`volume $${volumeUSD.toFixed(0)} < $${params.minVolumeUSD}`);
     if (!meetsPnl)        reasons.push(`pnl ${pnlPercent?.toFixed(1)}% < ${params.minPnlPercent}%`);
-    return { passed: false, failureReason: reasons.join('; ') || 'Did not meet bronze threshold', evidence };
+    return { passed: false, failureReason: reasons.join('; '), evidence };
   }
 
   return { passed: true, level, evidence };
