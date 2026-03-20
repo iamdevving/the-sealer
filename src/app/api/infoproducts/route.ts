@@ -36,40 +36,42 @@ export async function GET(req: NextRequest) {
 
     products: {
 
-      statement_badge: {
+      statement: {
         status:       'live',
-        name:         'Statement Badge',
+        name:         'Statement',
         endpoint:     `${baseUrl}/api/attest`,
         method:       'POST',
-        format_param: 'badge',
-        price_usdc:   0.05,
+        format_param: 'statement',
+        price_usdc:   0.10,
         output: {
-          type:        'SVG badge',
-          dimensions:  '240×200px',
-          permalink:   `${baseUrl}/api/badge?uid={attestationUid}&theme={theme}`,
-          directUrl:   `${baseUrl}/api/badge?achievement={text}&theme={theme}`,
+          type:      'SVG statement credential',
+          dimensions: '540×420px',
+          permalink:  `${baseUrl}/api/statement?uid={attestationUid}&theme={theme}`,
+          directUrl:  `${baseUrl}/api/statement?statement={text}&theme={theme}`,
+          note:       'Text-only format — no image attachment. More compact than statement_card.',
         },
         constraints: {
-          maxChars: 38,
-          lines:    1,
-          overflow: 'truncated with ellipsis at 38 chars',
+          maxChars: 300,
+          lines:    'auto-wrapped (font scales 17px → 12px based on char count)',
+          overflow: 'lines truncated to fit 420px height',
+          image:    'none — use statement_card for image attachment',
         },
         themes: [
           'circuit-anim', 'circuit', 'parchment', 'aurora',
           'base', 'gold', 'silver', 'bronze', 'bitcoin',
         ],
         useCases: [
-          'Quick status stamp',
-          'Role or tier badge',
-          'Single-line achievement marker',
-          'Event participation proof',
+          'Quick text-only credential',
+          'Onchain log entry',
+          'Single verified statement without visual attachment',
+          'Compact proof of statement',
         ],
         example: {
           body: {
-            format:    'badge',
+            format:    'statement',
             agentId:   '0xYourWalletAddress',
-            statement: 'Completed 100 on-chain trades',
-            theme:     'gold',
+            statement: 'Completed integration with Uniswap v4 hooks — 847 lines, 3 PRs merged.',
+            theme:     'circuit-anim',
           },
         },
       },
@@ -80,7 +82,7 @@ export async function GET(req: NextRequest) {
         endpoint:     `${baseUrl}/api/attest`,
         method:       'POST',
         format_param: 'card',
-        price_usdc:   0.10,
+        price_usdc:   0.15,
         output: {
           type:        'SVG card',
           dimensions:  '560×530px',
@@ -172,7 +174,7 @@ export async function GET(req: NextRequest) {
         endpoint:           `${baseUrl}/api/attest`,
         method:             'POST',
         format_param:       'sid',
-        price_usdc:         0.15,
+        price_usdc:         0.20,
         renewal_price_usdc: 0.10,
         output: {
           type:       'Soulbound ERC-721 NFT + SVG identity card',
@@ -264,23 +266,23 @@ export async function GET(req: NextRequest) {
         },
         claim_types: {
           x402_payment_reliability: {
-            params:  'minSuccessRate, minTotalUSD, requireDistinctRecipients, maxGapHours',
+            params:   'minSuccessRate, minTotalUSD, requireDistinctRecipients, maxGapHours',
             verifies: 'USDC outgoing transfers via Alchemy ERC-20 API',
           },
           defi_trading_performance: {
-            params:  'minTradeCount, minVolumeUSD, minPnlPercent',
+            params:   'minTradeCount, minVolumeUSD, minPnlPercent',
             verifies: 'Onchain DEX trades via Alchemy',
           },
           code_software_delivery: {
-            params:  'minMergedPRs, minCommits, minLinesChanged, repoOwner, repoName, githubUsername',
+            params:   'minMergedPRs, minCommits, minLinesChanged, repoOwner, repoName, githubUsername',
             verifies: 'GitHub API — merged PRs, commits, CI status',
           },
           website_app_delivery: {
-            params:  'minPerformanceScore, minAccessibility, url, requireDnsVerify, requireHttps',
+            params:   'minPerformanceScore, minAccessibility, url, requireDnsVerify, requireHttps',
             verifies: 'Google PageSpeed API + DNS TXT record + URLScan',
           },
           social_media_growth: {
-            params:  'minFollowerGrowth, minEngagementRate, platform, handle, fid, baselineFollowers',
+            params:   'minFollowerGrowth, minEngagementRate, platform, handle, fid, baselineFollowers',
             verifies: 'Farcaster API (fid required for Farcaster)',
           },
         },
@@ -292,14 +294,14 @@ export async function GET(req: NextRequest) {
         },
         example: {
           body: {
-            agentId:              '0xYourWalletAddress',
-            claimType:            'x402_payment_reliability',
-            commitment:           'Maintain 95%+ payment success rate processing minimum $50 USDC across 3+ distinct recipients',
-            metric:               'success_rate >= 95% across 3+ recipients',
-            deadline:             '2026-06-01',
-            windowDays:           30,
-            minSuccessRate:       95,
-            minTotalUSD:          50,
+            agentId:                   '0xYourWalletAddress',
+            claimType:                 'x402_payment_reliability',
+            commitment:                'Maintain 95%+ payment success rate processing minimum $50 USDC across 3+ distinct recipients',
+            metric:                    'success_rate >= 95% across 3+ recipients',
+            deadline:                  '2026-06-01',
+            windowDays:                30,
+            minSuccessRate:            95,
+            minTotalUSD:               50,
             requireDistinctRecipients: 3,
           },
         },
@@ -332,7 +334,7 @@ export async function GET(req: NextRequest) {
       mirror: {
         status: 'live',
         name:   'Mirror',
-        note:   'Mirror a certificate to show on other chains or wallets. Useful for agents operating across multiple chains.',
+        note:   'Soulbound mirror of any Base, ETH, or Solana NFT. Ownership verified cross-chain. Base $0.30 / Solana $0.90.',
         useCases: [
           'Show Base certificate on Solana wallet',
           'Cross-chain reputation portability',
@@ -349,7 +351,7 @@ export async function GET(req: NextRequest) {
     },
 
     choosingAProduct: {
-      shortStatement:    'Use statement_badge — 38 chars max, $0.05',
+      shortStatement:    'Use statement — text-only, up to 300 chars, compact SVG, $0.10. No image.',
       longStatement:     'Use statement_card — up to 220 chars, 4 lines, optional landscape image, $0.10',
       visualProof:       'Use sleeve — wrap any portrait image in a verifiable sleeve, $0.15',
       agentIdentity:     'Use sealer_id — persistent onchain identity card with profile photo, $0.15 (renewal $0.10)',
