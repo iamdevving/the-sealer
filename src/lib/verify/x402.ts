@@ -1,6 +1,8 @@
 // src/lib/verify/x402.ts
 // Verifier for x402 Payment Reliability achievements
-// Data sources: Alchemy Token Transfers API + BaseScan failed tx API
+// Data sources: Alchemy Token Transfers API
+// Note: BaseScan/Etherscan free tier dropped Base (chainid=8453) support Nov 2025.
+// Failed tx detection is disabled — does not affect core x402 payment scoring.
 
 import type { X402VerificationParams, VerificationResult } from './types';
 // Note: AchievementLevel and X402_THRESHOLDS removed — outcome is now computed
@@ -78,39 +80,16 @@ async function getUSDCTransfersSinceMint(
   });
 }
 
-// ── Failed txs via BaseScan ───────────────────────────────────────────────────
-
-interface BaseScanTx {
-  hash: string; from: string; to: string;
-  timeStamp: string; isError: '0' | '1';
-}
+// ── Failed txs ────────────────────────────────────────────────────────────────
+// Disabled: Etherscan/BaseScan free tier dropped Base (chainid 8453) in Nov 2025.
+// Failed tx count is non-critical — success rate is computed from confirmed
+// USDC payments only, which is the primary x402 reliability signal.
 
 async function getFailedTxsSinceMint(
-  wallet:        string,
-  mintTimestamp: number,
-): Promise<BaseScanTx[]> {
-  const apiKey = process.env.BASESCAN_API_KEY;
-  if (!apiKey) return [];
-
-  const url = new URL('https://api.etherscan.io/v2/api');
-  url.searchParams.set('chainid', '8453');
-  url.searchParams.set('module',     'account');
-  url.searchParams.set('action',     'txlist');
-  url.searchParams.set('address',    wallet);
-  url.searchParams.set('startblock', '0');
-  url.searchParams.set('endblock',   '99999999');
-  url.searchParams.set('sort',       'asc');
-  url.searchParams.set('apikey',     apiKey);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
-
-  const data = await res.json();
-  if (data.status !== '1') return [];
-
-  return (data.result as BaseScanTx[]).filter(tx =>
-    tx.isError === '1' && parseInt(tx.timeStamp) >= mintTimestamp,
-  );
+  _wallet:        string,
+  _mintTimestamp: number,
+): Promise<[]> {
+  return [];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -181,11 +160,11 @@ export async function verifyX402PaymentReliability(
 
   const baseEvidence = {
     checkedAt:      now,
-    dataSource:     'alchemy_erc20_transfers + basescan_failed_txs',
+    dataSource:     'alchemy_erc20_transfers',
     attestationUID,
     rawMetrics: {
       paymentCount:       payments.length,
-      failedCount:        failedTxs.length,
+      failedCount:        0,
       totalAttempted,
       successRate:        parseFloat(successRate.toFixed(2)),
       totalUSD:           parseFloat(totalUSD.toFixed(4)),

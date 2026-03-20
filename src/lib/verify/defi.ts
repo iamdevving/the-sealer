@@ -72,44 +72,71 @@ const SOL_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 // ── Base chain helpers ────────────────────────────────────────────────────────
 
-interface BaseScanTx {
+interface BaseTx {
   hash: string; from: string; to: string;
-  value: string; timeStamp: string;
-  isError: '0' | '1'; methodId: string; functionName: string;
+  value: string; blockTimestamp: string;
 }
 
-async function fetchBaseScanTxs(wallet: string, mintTimestamp: number): Promise<BaseScanTx[]> {
-  const apiKey = process.env.BASESCAN_API_KEY;
-  if (!apiKey) throw new Error('BASESCAN_API_KEY not set');
+// Uses Alchemy alchemy_getAssetTransfers — same API already used in x402 verifier
+// BaseScan/Etherscan free tier dropped Base support in Nov 2025
+async function fetchBaseTxs(wallet: string, mintTimestamp: number): Promise<BaseTx[]> {
+  const alchemyUrl = process.env.ALCHEMY_RPC_URL;
+  if (!alchemyUrl) throw new Error('ALCHEMY_RPC_URL not set');
 
-  // Etherscan API V2 — V1 (api.basescan.org) is deprecated
-  const url = new URL('https://api.etherscan.io/v2/api');
-  url.searchParams.set('chainid',    '8453');   // Base mainnet
-  url.searchParams.set('module',     'account');
-  url.searchParams.set('action',     'txlist');
-  url.searchParams.set('address',    wallet);
-  url.searchParams.set('startblock', '0');
-  url.searchParams.set('endblock',   '99999999');
-  url.searchParams.set('sort',       'asc');
-  url.searchParams.set('apikey',     apiKey);
+  const fromBlock = '0x' + Math.max(0, mintTimestamp - 86400).toString(16); // rough lower bound
+  const txs: BaseTx[] = [];
+  let pageKey: string | undefined;
 
-  const res  = await fetch(url.toString());
-  if (!res.ok) throw new Error(`BaseScan API error: ${res.status}`);
-  const data = await res.json();
-  if (data.status !== '1') return [];
+  do {
+    const body = {
+      jsonrpc: '2.0', id: 1,
+      method:  'alchemy_getAssetTransfers',
+      params:  [{
+        fromBlock,
+        toBlock:       'latest',
+        fromAddress:   wallet,
+        category:      ['external'],   // EOA-initiated txs only
+        withMetadata:  true,
+        excludeZeroValue: false,
+        maxCount:      '0x3e8',        // 1000 per page
+        ...(pageKey ? { pageKey } : {}),
+      }],
+    };
 
-  return (data.result as BaseScanTx[]).filter(
-    tx => parseInt(tx.timeStamp) >= mintTimestamp && tx.isError === '0'
-  );
+    const res  = await fetch(alchemyUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Alchemy API ${res.status}`);
+    const data = await res.json();
+
+    const transfers = data.result?.transfers ?? [];
+    for (const tx of transfers) {
+      const ts = new Date(tx.metadata?.blockTimestamp ?? 0).getTime() / 1000;
+      if (ts >= mintTimestamp && tx.to) {
+        txs.push({
+          hash:           tx.hash,
+          from:           tx.from,
+          to:             tx.to,
+          value:          tx.value?.toString() ?? '0',
+          blockTimestamp: tx.metadata?.blockTimestamp ?? '',
+        });
+      }
+    }
+    pageKey = data.result?.pageKey;
+  } while (pageKey);
+
+  return txs;
 }
 
-function detectSwaps(txs: BaseScanTx[], wallet: string): BaseScanTx[] {
+function detectSwaps(txs: BaseTx[], wallet: string): BaseTx[] {
   return txs.filter(tx =>
     tx.from.toLowerCase() === wallet.toLowerCase() &&
     tx.to &&
     tx.to.toLowerCase() !== wallet.toLowerCase() &&
-    tx.isError === '0' &&
     DEX_ROUTER_ADDRESSES.has(tx.to.toLowerCase())
+    // Note: Alchemy alchemy_getAssetTransfers only returns successful txs by default
   );
 }
 
@@ -355,14 +382,14 @@ export async function verifyDefiTradingPerformance(
 
   // ── Base path (default) ───────────────────────────────────────────────────
   const [txs, exitEthPrice, entryEthPrice] = await Promise.all([
-    fetchBaseScanTxs(params.agentWallet, params.mintTimestamp),
+    fetchBaseTxs(params.agentWallet, params.mintTimestamp),
     getCoinPrice('ethereum'),
     getCoinPriceAtTime('ethereum', params.mintTimestamp),
   ]);
 
   const swaps      = detectSwaps(txs, params.agentWallet);
   const tradeCount = swaps.length;
-  const totalETH   = swaps.reduce((s, tx) => s + parseInt(tx.value || '0') / 1e18, 0);
+  const totalETH   = swaps.reduce((s, tx) => s + parseFloat(tx.value || '0'), 0); // Alchemy returns ETH value directly
   const volumeUSD  = totalETH * exitEthPrice;
 
   const { pnlPercent, pnlComputed } = await estimatePnl(totalETH, entryEthPrice, exitEthPrice);
