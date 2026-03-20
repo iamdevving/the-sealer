@@ -1,7 +1,7 @@
 'use client';
 // src/app/page.tsx
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -80,6 +80,26 @@ function PasswordGate({ children }: { children: React.ReactNode }) {
 // ── Homepage ───────────────────────────────────────────────────────────────────
 
 function HomePage() {
+  useEffect(() => {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) e.target.classList.add('visible');
+      });
+    }, { threshold: 0.07 });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+    const handleScroll = () => {
+      const nav = document.getElementById('nav');
+      if (nav) nav.style.borderBottomColor = window.scrollY > 60 ? 'rgba(59,130,246,0.25)' : '#1e2d4a';
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   return (
     <>
       <style>{`
@@ -346,7 +366,7 @@ function HomePage() {
         @keyframes fadeInUp  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeInDown{ from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
         @keyframes blink     { 50%{opacity:0} }
-        .reveal { opacity:0; transform:translateY(20px); transition:opacity 0.55s ease,transform 0.55s ease; }
+        .reveal { opacity:1; transform:translateY(0); transition:opacity 0.55s ease,transform 0.55s ease; }
         .reveal.visible { opacity:1; transform:translateY(0); }
 
         /* RESPONSIVE */
@@ -768,19 +788,6 @@ function HomePage() {
           </div>
         </div>
       </footer>
-
-      <script dangerouslySetInnerHTML={{ __html: `
-        const obs = new IntersectionObserver((entries) => {
-          entries.forEach((e, i) => {
-            if (e.isIntersecting) setTimeout(() => e.target.classList.add('visible'), i * 55);
-          });
-        }, { threshold: 0.07 });
-        document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
-        window.addEventListener('scroll', () => {
-          const nav = document.getElementById('nav');
-          if (nav) nav.style.borderBottomColor = window.scrollY > 60 ? 'rgba(59,130,246,0.25)' : '#1e2d4a';
-        }, { passive: true });
-      `}} />
     </>
   );
 }
