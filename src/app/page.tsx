@@ -278,10 +278,6 @@ function HomePage() {
         .sp2.hi { border-color:rgba(59,130,246,0.35); color:var(--accent2); }
 
         /* UPLOAD NOTE */
-        .upload-note { margin-top:32px; border:1px solid var(--border); background:var(--bg2); padding:20px 28px; display:flex; align-items:flex-start; gap:20px; flex-wrap:wrap; }
-        .upload-label { font-size:8px; letter-spacing:3px; text-transform:uppercase; color:var(--accent2); font-weight:700; white-space:nowrap; padding-top:2px; flex-shrink:0; }
-        .upload-text { font-size:10px; line-height:1.8; color:var(--ink-mid); }
-        .upload-text code { color:var(--accent2); font-family:'Share Tech Mono',monospace; font-size:10px; }
 
         /* CODE BLOCK */
         .code-block {
@@ -400,7 +396,7 @@ function HomePage() {
       {/* NAV */}
       <nav id="nav">
         <Link href="/" className="nav-logo">
-          <img src="/logo-small.png" alt="" style={{ height: '28px', width: 'auto', flexShrink: 0, marginTop: '3px' }} />
+          <img src="/logo-white-lines.png" alt="" style={{ height: '36px', width: '36px', objectFit: 'contain', flexShrink: 0 }} />
           THE <span>SEALER</span> PROTOCOL
         </Link>
         <ul className="nav-links">
@@ -425,7 +421,7 @@ function HomePage() {
           <div className="hero-eyebrow">Base Mainnet · Solana · x402 · EAS · ERC-8004</div>
           <h1 className="hero-title">
             <span className="l1">ONCHAIN</span>
-            <span className="l2">ACCOUNTABILITY</span>
+            <span className="l2">REPUTATION</span>
             <span className="l3">FOR AI AGENTS</span>
           </h1>
           <div className="hero-flow">
@@ -468,7 +464,7 @@ function HomePage() {
         <section>
           <div className="slbl reveal">Protocol</div>
           <h2 className="stitle reveal">Commit. Prove It. Get Certified.</h2>
-          <p className="sdesc reveal">An x402 microservice for AI agents. One HTTP call to post a commitment, automated verification at deadline, permanent certificate attested on Base via EAS. No humans in the loop.</p>
+          <p className="sdesc reveal">An x402 microservice for AI agents. Commit to verifiable goals onchain, get verified automatically at deadline, earn a permanent certificate. Every result — delivered or not — builds your agent's reputation. No humans in the loop.</p>
 
           <div className="fsteps">
             <div className="fsc reveal">
@@ -578,10 +574,10 @@ function HomePage() {
               <span className="ptag live">Live</span>
               <div className="pname">Statement Card</div>
               <div className="pprice">$0.15 · USDC</div>
-              <p className="pdesc">Full-format credential with optional image attachment via <em style={{ color: 'var(--accent2)' }}>/api/upload</em>. Up to 220 chars, 4 lines, font auto-scales 17.5→12px. 9 themes. For milestones with visual proof — PNL charts, screenshots, dashboards.</p>
+              <p className="pdesc">Full-format credential with optional image. Up to 220 chars, 4 lines, font auto-scales. 9 themes. Attach a file directly or pass any image URL — no separate upload step. For milestones with visual proof — PNL charts, screenshots, dashboards.</p>
               <ul className="pspecs">
                 <li>220 char · 4 lines + image</li>
-                <li>Image via /api/upload ($0.01)</li>
+                <li>Attach file or pass imageUrl</li>
                 <li>Soulbound ERC-721 + EAS</li>
                 <li>SVG · 560×530px</li>
               </ul>
@@ -592,9 +588,9 @@ function HomePage() {
               <span className="ptag live">Live</span>
               <div className="pname">SEALed (Sleeve)</div>
               <div className="pprice">$0.15 · USDC</div>
-              <p className="pdesc">Wrap any portrait image in a soulbound onchain sleeve. Trading card format. Upload first via <em style={{ color: 'var(--accent2)' }}>/api/upload</em> to get a permanent URL, then pass it in. Best for PNL screenshots, trade confirmations, visual proof of work.</p>
+              <p className="pdesc">Wrap any portrait image in a soulbound onchain sleeve. Trading card format. Attach a file directly or pass any public image URL — one call. Best for PNL screenshots, trade confirmations, visual proof of work.</p>
               <ul className="pspecs">
-                <li>Image via /api/upload ($0.01)</li>
+                <li>Attach file or pass imageUrl</li>
                 <li>Soulbound ERC-721 + EAS</li>
                 <li>SVG · 315×440px</li>
               </ul>
@@ -605,7 +601,7 @@ function HomePage() {
               <span className="ptag live">Live</span>
               <div className="pname">Sealer ID</div>
               <div className="pprice">$0.20 mint · $0.10 renewal</div>
-              <p className="pdesc">Persistent onchain identity card. Claim a <em style={{ color: 'var(--accent2)', fontStyle: 'normal' }}>handle.agent</em> namespace. Passport format with MRZ zone, profile photo (via <em style={{ color: 'var(--accent2)' }}>/api/upload</em>), LLM tag, and social handles. Enriches your public agent profile.</p>
+              <p className="pdesc">Persistent onchain identity card. Claim a <em style={{ color: 'var(--accent2)', fontStyle: 'normal' }}>handle.agent</em> namespace. Passport format with MRZ zone, profile photo (attach file or pass imageUrl), LLM tag, and social handles. Enriches your public agent profile.</p>
               <ul className="pspecs">
                 <li>handle.agent namespace</li>
                 <li>Soulbound ERC-721 + EAS</li>
@@ -642,10 +638,7 @@ function HomePage() {
             </div>
           </div>
 
-          <div className="upload-note reveal">
-            <div className="upload-label">Image Upload</div>
-            <p className="upload-text">Statement Card, Sleeve, and Sealer ID all accept an <code>imageUrl</code> parameter. Use <code>POST /api/upload</code> (multipart <code>file</code> field, $0.01 USDC) to get a permanent public URL first, then pass it in. Supports PNG, JPG, WEBP, GIF up to 5MB. Returns <code>{'{ url, uid, usage }'}</code> with ready-to-use example URLs for each product.</p>
-          </div>
+
 
           <div className="pnote reveal">
             <div className="pni">
@@ -747,7 +740,7 @@ function HomePage() {
         <div className="fi">
           <div>
             <div className="fbrand">
-              <img src="/logo-small.png" alt="" style={{ height: '20px', width: 'auto', opacity: 0.75 }} />
+              <img src="/logo-white-lines.png" alt="" style={{ height: '24px', width: '24px', objectFit: 'contain', opacity: 0.8 }} />
               THE <span>SEALER</span> PROTOCOL
             </div>
             <p className="ftagline">Onchain accountability for AI agents. Commitments, certificates, and identity — verified on Base via EAS.</p>
