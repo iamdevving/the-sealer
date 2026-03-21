@@ -54,10 +54,10 @@ API base: https://thesealer.xyz
 - SID NOT required — any wallet can commit
 - Body: { agentId: "0x...", claimType: "x402_payment_reliability", commitment: "Maintain 95%+ payment success rate", metric: "success_rate >= 95%", deadline: "2026-06-01", windowDays: 30, minSuccessRate: 95, minTotalUSD: 10 }
 
-**Image Upload** — $0.01
-- POST /api/upload — multipart/form-data with field "file"
-- Required before using imageUrl in card, sleeve, or sid
-- Returns: { url, uid, usage } — pass url as imageUrl param
+**Images (card, sleeve, sid)** — included in product price
+- Pass imageUrl with any public URL, OR
+- Send multipart/form-data with a "file" field directly — server uploads automatically
+- Max 5MB, formats: png, jpg, webp, gif. No separate upload step needed.
 
 ## CLAIM TYPES
 

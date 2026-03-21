@@ -3,18 +3,87 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
-import { mintBadge, mintCard, mintSID, renewSID, mintSleeve } from '@/lib/nft';
+import { mintCard, mintSID, renewSID, mintSleeve } from '@/lib/nft';
 import { createPublicClient, http, parseAbi } from 'viem';
 import { base } from 'viem/chains';
 import { Redis } from '@upstash/redis';
 import { nanoid } from 'nanoid';
+import { put } from '@vercel/blob';
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 
-const HANDLE_REGEX = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
+const HANDLE_REGEX  = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
+const MAX_IMG_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
+
+// ── Parse request body — JSON or multipart ────────────────────────────────────
+// Returns { fields, file? } where fields mirrors what body.x would give in JSON mode.
+// File is only present when a multipart 'file' field is included.
+
+async function parseBody(req: NextRequest): Promise<{
+  fields: Record<string, string>;
+  file?: File;
+}> {
+  const ct = req.headers.get('content-type') || '';
+
+  if (ct.includes('multipart/form-data')) {
+    const form   = await req.formData();
+    const fields: Record<string, string> = {};
+    let file: File | undefined;
+
+    for (const [key, value] of form.entries()) {
+      if (key === 'file' && value instanceof File) {
+        file = value;
+      } else if (typeof value === 'string') {
+        fields[key] = value;
+      }
+    }
+    return { fields, file };
+  }
+
+  // Default: JSON
+  const body = await req.json();
+  // Normalise — convert all values to strings for uniform access below
+  const fields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== undefined && v !== null) fields[k] = String(v);
+  }
+  return { fields };
+}
+
+// ── Upload a File to Vercel Blob, return permanent public URL ─────────────────
+
+async function uploadFileToBlobIfPresent(
+  file: File | undefined,
+  format: string,
+): Promise<string> {
+  if (!file) return '';
+
+  if (!ALLOWED_TYPES.has(file.type)) {
+    throw Object.assign(
+      new Error(`Unsupported image type: ${file.type}. Allowed: png, jpg, webp, gif`),
+      { status: 415 },
+    );
+  }
+  if (file.size > MAX_IMG_BYTES) {
+    throw Object.assign(
+      new Error(`Image too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Max 5MB.`),
+      { status: 413 },
+    );
+  }
+
+  const uid  = nanoid(12);
+  const ext  = file.type.split('/')[1].replace('jpeg', 'jpg');
+  const path = `uploads/${format}/${uid}.${ext}`;
+
+  const result = await put(path, file, { access: 'public', contentType: file.type });
+  console.log(`[attest] Image uploaded to Blob: ${result.url}`);
+  return result.url;
+}
+
+// ── Handle claim ──────────────────────────────────────────────────────────────
 
 async function claimHandle(handle: string, walletAddress: string): Promise<void> {
-  // Free old handle if wallet already had one
   const oldHandle = await redis.get(`sid:wallet:${walletAddress}`) as string | null;
   if (oldHandle && oldHandle !== handle) {
     await redis.del(`sid:handle:${oldHandle}`);
@@ -26,13 +95,16 @@ async function claimHandle(handle: string, walletAddress: string): Promise<void>
   ]);
 }
 
-export async function POST(req: NextRequest) {
-  const body   = await req.json();
-  const format = body.format || 'card';
+// ── Route handler ─────────────────────────────────────────────────────────────
 
-  // Badge is closed as a standalone product — reserved for the post-launch achievement layer.
-  // Existing attestation permalinks at /api/badge?uid=... continue to render (GET route is live).
-  // New mints are blocked with 410 Gone.
+export async function POST(req: NextRequest) {
+  // Peek at format before consuming body — need it for price + badge check.
+  // For JSON we can't peek without consuming, so we parse once and carry fields forward.
+  const { fields, file } = await parseBody(req);
+
+  const format = fields.format || 'card';
+
+  // Badge closed — 410
   if (format === 'badge') {
     return NextResponse.json(
       {
@@ -45,18 +117,18 @@ export async function POST(req: NextRequest) {
         },
         docs: 'https://thesealer.xyz/api/infoproducts',
       },
-      { status: 410 }
+      { status: 410 },
     );
   }
 
   const price = format === 'sleeve' ? '0.15'
-              : format === 'sid'    ? '0.15'
+              : format === 'sid'    ? '0.20'
               : '0.10';
 
   return withX402Payment(req, async (paymentChain) => {
     try {
-      const theme         = body.theme || 'dark';
-      const agentId       = body.agentId || req.headers.get('X-WALLET') || '????';
+      const theme         = fields.theme || 'dark';
+      const agentId       = fields.agentId || req.headers.get('X-WALLET') || '????';
       const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
 
       const walletAddress = agentId.startsWith('0x')
@@ -66,25 +138,41 @@ export async function POST(req: NextRequest) {
       const baseUrl = new URL(req.url).origin;
       const uid     = nanoid(12);
 
-      // ── SID flow ────────────────────────────────────────────────────────
-      if (format === 'sid') {
-        const name       = body.name?.trim()       || 'UNNAMED AGENT';
-        const entityType = body.entityType?.trim() || 'UNKNOWN';
-        const chain      = body.chain?.trim()      || 'Base';
-        const imageUrl   = body.imageUrl?.trim()   || '';
-        const owner      = body.owner?.trim()      || '';
-        const llm        = body.llm?.trim()        || '';
-        const social     = body.social?.trim()     || '';
-        const tags       = body.tags?.trim()       || '';
-        const firstSeen  = body.firstSeen?.trim()  || '';
-        const handle     = body.handle?.trim().toLowerCase() || '';
+      // ── Upload image if file was provided inline ──────────────────────────
+      // imageUrl can come from:
+      //   a) multipart file field   → uploaded here to Blob
+      //   b) imageUrl string field  → passed directly (agent pre-uploaded or has a URL)
+      let imageUrl = fields.imageUrl?.trim() || '';
+      if (file) {
+        try {
+          imageUrl = await uploadFileToBlobIfPresent(file, format);
+        } catch (err: any) {
+          return NextResponse.json(
+            { error: err.message || 'Image upload failed' },
+            { status: err.status || 400 },
+          );
+        }
+      }
 
-        // Validate handle if provided
+      // ── SID flow ──────────────────────────────────────────────────────────
+      if (format === 'sid') {
+        const name       = fields.name?.trim()       || 'UNNAMED AGENT';
+        const entityType = fields.entityType?.trim() || 'UNKNOWN';
+        const chain      = fields.chain?.trim()      || 'Base';
+        const owner      = fields.owner?.trim()      || '';
+        const llm        = fields.llm?.trim()        || '';
+        const social     = fields.social?.trim()     || '';
+        const tags       = fields.tags?.trim()       || '';
+        const firstSeen  = fields.firstSeen?.trim()  || '';
+        const handle     = fields.handle?.trim().toLowerCase() || '';
+
         if (handle && !HANDLE_REGEX.test(handle)) {
-          return NextResponse.json({ error: 'Invalid handle format. Use 3-32 chars, lowercase letters, numbers, dots and hyphens only.' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Invalid handle format. Use 3-32 chars, lowercase letters, numbers, dots and hyphens only.' },
+            { status: 400 },
+          );
         }
 
-        // Check handle availability if provided
         if (handle) {
           const existing = await redis.get(`sid:handle:${handle}`);
           if (existing && (existing as string).toLowerCase() !== walletAddress.toLowerCase()) {
@@ -135,7 +223,6 @@ export async function POST(req: NextRequest) {
           console.warn('[attest] SID NFT mint failed (non-fatal):', err);
         }
 
-        // Claim handle in Redis if provided
         if (handle) {
           try {
             await claimHandle(handle, walletAddress);
@@ -163,6 +250,7 @@ export async function POST(req: NextRequest) {
           tokenId:          tokenId?.toString() ?? null,
           nftRenewed,
           handle:           handle || null,
+          imageUrl:         imageUrl || null,
           nftContract:      process.env.SEALER_ID_CONTRACT_ADDRESS,
           attestationChain: 'Base',
           paymentChain:     paymentSource,
@@ -173,9 +261,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Statement flow (card / sleeve / statement) ──────────────────────
-      const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
-      const uploadedImg      = body.uploadedImg || null;
+      // ── Statement / Card / Sleeve flow ────────────────────────────────────
+      const statement        = fields.statement?.trim() || 'Agent statement (no description provided)';
       const attestationChain = 'Base';
       const entityType       = await checkEntityType(walletAddress);
 
@@ -185,13 +272,13 @@ export async function POST(req: NextRequest) {
       const attestParams = new URLSearchParams({
         statement, theme, agentId, txHash,
         chain: attestationChain, entityType,
-        ...(uploadedImg ? { uploadedImg } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
       });
 
       const sleeveParams = new URLSearchParams({
         statement, theme, agentId, txHash,
         chain: paymentSource, entityType,
-        ...(uploadedImg ? { uploadedImg } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
       });
 
       const cardUrl       = `${baseUrl}/api/card?${attestParams}`;
@@ -233,6 +320,7 @@ export async function POST(req: NextRequest) {
         statement, theme, agentId, entityType, format, uid, txHash,
         nftTxHash,
         tokenId:          tokenId?.toString() ?? null,
+        imageUrl:         imageUrl || null,
         nftContract:      format === 'sleeve'
                             ? process.env.SLEEVE_CONTRACT_ADDRESS
                             : process.env.STATEMENT_CONTRACT_ADDRESS,
