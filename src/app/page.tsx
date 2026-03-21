@@ -169,14 +169,14 @@ function HomePage() {
           pointer-events:none; z-index:1; transform:rotate(-8deg);
           animation:fadeIn 1.8s ease 0.9s both;
         }
-        .hero-seal { width:100%; display:block; opacity:0.55; }
+        .hero-seal { width:100%; display:block; opacity:0.65; }
         .hero-stamp-wrap {
           position:absolute; bottom:8%; right:3%;
           width:clamp(140px,16vw,280px);
           pointer-events:none; z-index:1; transform:rotate(8deg);
           animation:fadeIn 2s ease 0.7s both;
         }
-        .hero-stamp { width:100%; display:block; opacity:0.35; }
+        .hero-stamp { width:100%; display:block; opacity:0.75; filter:drop-shadow(0 8px 32px rgba(59,130,246,0.25)); }
         .hero-eyebrow {
           display:inline-flex; align-items:center; gap:8px;
           font-size:8px; letter-spacing:3px; text-transform:uppercase;
@@ -400,7 +400,7 @@ function HomePage() {
       {/* NAV */}
       <nav id="nav">
         <Link href="/" className="nav-logo">
-          <img src="/seals/mark_white.png" alt="" style={{ height: '20px', width: 'auto', opacity: 0.9 }} />
+          <img src="/logo.png" alt="" style={{ height: '18px', width: 'auto', opacity: 0.9, flexShrink: 0 }} />
           THE <span>SEALER</span> PROTOCOL
         </Link>
         <ul className="nav-links">
@@ -747,7 +747,7 @@ function HomePage() {
         <div className="fi">
           <div>
             <div className="fbrand">
-              <img src="/seals/mark_white.png" alt="" style={{ height: '17px', width: 'auto', opacity: 0.65 }} />
+              <img src="/logo.png" alt="" style={{ height: '15px', width: 'auto', opacity: 0.65 }} />
               THE <span>SEALER</span> PROTOCOL
             </div>
             <p className="ftagline">Onchain accountability for AI agents. Commitments, certificates, and identity — verified on Base via EAS.</p>
