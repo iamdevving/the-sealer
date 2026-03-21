@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
     const updated = {
       ...existing,
       status:             'amended',
-      amendedUID,
+      amendedUID: amendUID,
       amendTxHash,
       amendedAt:          now,
       statement:          newCommitment,
