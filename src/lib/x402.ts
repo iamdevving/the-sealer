@@ -33,6 +33,7 @@ const EAS_ADDRESS           = '0x4200000000000000000000000000000000000021';
 const SCHEMA_UID            = process.env.EAS_SCHEMA_UID!;
 const IDENTITY_SCHEMA_UID   = process.env.EAS_IDENTITY_SCHEMA_UID!;
 const COMMITMENT_SCHEMA_UID = process.env.EAS_COMMITMENT_SCHEMA_UID!;
+const AMENDMENT_SCHEMA_UID  = process.env.EAS_AMENDMENT_SCHEMA_UID!;
 const eas                   = new EAS(EAS_ADDRESS);
 
 // ── Shared attestation helper ─────────────────────────────────────────────────
@@ -80,6 +81,55 @@ async function sendAttestation(
     : txHash;
 
   console.log(`[The Sealer] ✅ Attestation mined — tx: ${txHash}, uid: ${uid}`);
+  return { transactionHash: txHash, uid };
+}
+
+// ── Attestation with refUID (for amendments — chains to original commitment) ──
+
+async function sendAttestationWithRef(
+  schemaUid:   string,
+  encodedData: string,
+  recipient:   `0x${string}`,
+  refUID:      `0x${string}`,
+): Promise<{ transactionHash: string; uid: string }> {
+  const account      = privateKeyToAccount(privateKey as `0x${string}`);
+  const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
+
+  (eas as any).connect(walletClient);
+
+  const txResponse = await eas.attest({
+    schema: schemaUid,
+    data: {
+      recipient,
+      expirationTime: BigInt(0),
+      revocable:      false,
+      refUID,
+      data:           encodedData,
+    },
+  });
+
+  let txHash: string;
+
+  if (typeof txResponse === 'string' && (txResponse as string).startsWith('0x')) {
+    txHash = txResponse;
+  } else {
+    const preparedTx = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
+    txHash = await walletClient.sendTransaction(preparedTx as any);
+  }
+
+  const receipt = await client.waitForTransactionReceipt({
+    hash: txHash as Hash, pollingInterval: 1000, timeout: 90_000,
+  });
+  txHash = receipt.transactionHash;
+
+  const attestedLog = receipt.logs?.find(log =>
+    log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
+  );
+  const uid = attestedLog?.data
+    ? `0x${attestedLog.data.slice(2, 66)}`
+    : txHash;
+
+  console.log(`[The Sealer] ✅ Attestation (with ref) mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
 }
 
@@ -132,16 +182,12 @@ async function verifyPaymentProof(
       }
 
       if (tx) {
-        // USDC transfers go through Associated Token Accounts (ATAs)
-        // so we check postTokenBalances for the recipient's ATA receiving USDC
-        const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+        const USDC_MINT       = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
         const recipientPubkey = PAYMENT_CONFIG.solanaRecipient;
 
-        // Method 1: Check token balance changes — find USDC credit to recipient's ATA
-        const postBalances  = tx.meta?.postTokenBalances  || [];
-        const preBalances   = tx.meta?.preTokenBalances   || [];
+        const postBalances = tx.meta?.postTokenBalances || [];
+        const preBalances  = tx.meta?.preTokenBalances  || [];
 
-        // Get account keys for owner lookup
         const accountKeys = tx.transaction.message.getAccountKeys
           ? tx.transaction.message.getAccountKeys().staticAccountKeys
           : (tx.transaction.message as any).accountKeys;
@@ -153,7 +199,7 @@ async function verifyPaymentProof(
           const pre    = preBalances.find((p: any) => p.accountIndex === post.accountIndex);
           const preAmt = pre ? Number(pre.uiTokenAmount?.amount || 0) : 0;
           const postAmt = Number(post.uiTokenAmount?.amount || 0);
-          return postAmt > preAmt; // received USDC
+          return postAmt > preAmt;
         });
 
         if (usdcCredit) {
@@ -161,7 +207,6 @@ async function verifyPaymentProof(
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
 
-        // Method 2: Fallback — check if recipient address appears anywhere
         const recipientKey = new PublicKey(recipientPubkey);
         const allKeys = accountKeys.map((k: any) => k.toBase58 ? k.toBase58() : k.toString());
         if (allKeys.includes(recipientKey.toBase58())) {
@@ -242,6 +287,35 @@ export async function issueCommitmentAttestation(params: {
   ]);
 
   return sendAttestation(COMMITMENT_SCHEMA_UID, encodedData, params.agentId);
+}
+
+export async function issueAmendmentAttestation(params: {
+  agentId:       `0x${string}`;
+  claimType:     ClaimType;
+  originalUID:   string;
+  newMetric:     string;
+  newDifficulty: number;
+  bootstrapped:  boolean;
+}): Promise<{ transactionHash: string; uid: string }> {
+  console.log(`[The Sealer] Issuing amendment attestation — originalUID: ${params.originalUID}`);
+
+  const schemaEncoder = new SchemaEncoder(
+    'string claimType,string originalUID,string newMetric,uint8 newDifficulty,bool bootstrapped',
+  );
+  const encodedData = schemaEncoder.encodeData([
+    { name: 'claimType',     value: params.claimType,     type: 'string' },
+    { name: 'originalUID',   value: params.originalUID,   type: 'string' },
+    { name: 'newMetric',     value: params.newMetric,     type: 'string' },
+    { name: 'newDifficulty', value: params.newDifficulty, type: 'uint8'  },
+    { name: 'bootstrapped',  value: params.bootstrapped,  type: 'bool'   },
+  ]);
+
+  // Use refUID to chain to the original commitment attestation on EAS
+  const refUID = params.originalUID.startsWith('0x') && params.originalUID.length === 66
+    ? params.originalUID as `0x${string}`
+    : '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
+
+  return sendAttestationWithRef(AMENDMENT_SCHEMA_UID, encodedData, params.agentId, refUID);
 }
 
 // ── x402 payment middleware ───────────────────────────────────────────────────
