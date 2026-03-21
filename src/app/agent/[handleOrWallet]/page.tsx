@@ -15,11 +15,11 @@ function medalColor(rank: number): string {
 }
 const STATUS_COLORS: Record<string, string> = {
   achieved: '#22c55e', failed: '#ef4444', pending: '#f59e0b',
-  verifying: '#3b82f6', expired: '#6b7280',
+  verifying: '#3b82f6', expired: '#6b7280', amended:   '#e09020',
 };
 const STATUS_LABELS: Record<string, string> = {
   achieved: '✓ Achieved', failed: '✗ Failed', pending: '⏳ Pending',
-  verifying: '🔍 Verifying', expired: '— Expired',
+  verifying: '🔍 Verifying', expired: '— Expired', amended:   '✎ Amended',
 };
 
 export default function AgentProfilePage() {

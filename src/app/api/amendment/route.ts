@@ -117,6 +117,7 @@ export async function GET(req: NextRequest) {
   let difficultyTier     = 'bronze';
   let committedDate      = formatDate(new Date());
   let amendedDate        = formatDate(new Date());
+  let deadline           = '';
   const themeKey         = searchParams.get('theme') || 'parchment';
 
   const uid         = searchParams.get('uid');         // amendment EAS UID
@@ -154,6 +155,8 @@ export async function GET(req: NextRequest) {
     amendedDate    = formatDate(new Date(amendData.time * 1000));
     newDifficulty  = parseInt(amendParsed.newDifficulty || amendParsed.difficulty || '0', 10);
     difficultyTier = newDifficulty >= 70 ? 'gold' : newDifficulty >= 40 ? 'silver' : 'bronze';
+    // deadline comes from original commitment params
+    deadline       = origParsed.deadline || '';
   } else {
     // Preview mode — direct query params
     originalStatement  = truncate(searchParams.get('originalStatement') || 'Original commitment statement', CHAR_LIMIT);
@@ -169,6 +172,7 @@ export async function GET(req: NextRequest) {
     difficultyTier     = newDifficulty >= 70 ? 'gold' : newDifficulty >= 40 ? 'silver' : 'bronze';
     committedDate      = searchParams.get('committedDate') || formatDate(new Date());
     amendedDate        = searchParams.get('amendedDate')   || formatDate(new Date());
+    deadline           = searchParams.get('deadline') || '';
   }
 
   const t          = THEMES[themeKey] ?? THEMES['parchment'];
@@ -203,23 +207,23 @@ export async function GET(req: NextRequest) {
   const newBoxH      = Math.max(newLines.length, 2) * newLineH + 20;
   const NEW_BOX_Y    = ORIG_BOX_Y + origBoxH + 12;
 
-  // Metric comparison section
-  const METRIC_Y = NEW_BOX_Y + newBoxH + 16;
+  // Metric + difficulty in one combined box (tighter layout)
+  const METRIC_Y   = NEW_BOX_Y + newBoxH + 14;
   const metricBoxH = 80;
 
-  // Difficulty comparison
-  const DIFF_Y   = METRIC_Y + metricBoxH + 12;
-  const DIFF_H   = 50;
+  // Deadline row
+  const DEAD_Y  = METRIC_Y + metricBoxH + 10;
+  const deadlineH = deadline ? 18 : 0;
 
   // Bottom info row
-  const BOTTOM_Y = DIFF_Y + DIFF_H + 12;
+  const BOTTOM_Y = DEAD_Y + deadlineH + 12;
   const footerY  = BOTTOM_Y + 36;
   const totalH   = footerY + 22;
 
-  // Stamp
-  const stampSize = 72;
-  const stampX    = W - PAD - stampSize + 10;
-  const stampY    = BOTTOM_Y - stampSize + 20;
+  // Stamp: overlaps bottom-right of metric box — same pattern as commitment card
+  const stampSize = 80;
+  const stampX    = W - PAD - stampSize + 20;
+  const stampY    = BOTTOM_Y - stampSize + 23;
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${W}" height="${totalH}" viewBox="0 0 ${W} ${totalH}"
@@ -319,6 +323,14 @@ export async function GET(req: NextRequest) {
   <text x="${W / 2 + 36}" y="${METRIC_Y + 72}" font-family="monospace" font-size="6"
     fill="${tierCol}" letter-spacing="1">${tierLabel}</text>
 
+  <!-- Deadline -->
+  ${deadline ? `
+  <text x="${PAD}" y="${DEAD_Y + 11}" font-family="monospace" font-size="5.5"
+    letter-spacing="3.5" fill="${t.accentDim}">DEADLINE</text>
+  <text x="${PAD + 72}" y="${DEAD_Y + 11}" font-family="Georgia,serif" font-size="9.5"
+    font-weight="600" fill="${t.bodyText}">${esc(deadline)}</text>
+  ` : ''}
+
   <!-- Bottom row -->
   <line x1="${PAD}" y1="${BOTTOM_Y}" x2="${W - PAD}" y2="${BOTTOM_Y}"
     stroke="${t.ruleLine}" stroke-width="0.6" opacity="0.5"/>
@@ -337,7 +349,7 @@ export async function GET(req: NextRequest) {
 
   <!-- Stamp -->
   <image href="${STAMP_COMMITTED}" x="${stampX}" y="${stampY}"
-    width="${stampSize}" height="${stampSize}" opacity="0.70"
+    width="${stampSize}" height="${stampSize}" opacity="0.90"
     transform="rotate(8, ${stampX + stampSize / 2}, ${stampY + stampSize / 2})"/>
 
   <!-- Footer -->

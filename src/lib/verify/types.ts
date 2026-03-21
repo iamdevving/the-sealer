@@ -5,6 +5,7 @@ export type VerificationStatus =
   | "pending"      // Statement minted, window not yet closed
   | "verifying"    // Check in progress
   | "achieved"     // Conditions met — ready to upgrade to Achievement
+  | "amended"
   | "failed"       // Window closed, conditions not met
   | "expired"      // Deadline passed with no verification attempt
 
