@@ -125,7 +125,7 @@ export async function handleVerifyRoute(
       metricsTotal,
       proofPoints,
       sid:                  params.sid || '',
-      commitmentText:       params.commitmentText || buildCommitmentText(claimType, params),
+      commitmentText: pending.statement || params.commitmentText || buildCommitmentText(pending.claimType, params),
       certificateMetrics:   metrics,
       issuedAt:             now,
       periodStart:          pending.mintTimestamp,

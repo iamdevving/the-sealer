@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
         metricsTotal,
         proofPoints,
         sid:                  params.sid || '',
-        commitmentText:       params.commitmentText || buildCommitmentText(pending.claimType, params),
+        commitmentText: pending.statement || params.commitmentText || buildCommitmentText(pending.claimType, params),
         certificateMetrics:   metrics,
         issuedAt:             now,
         periodStart:          pending.mintTimestamp,
