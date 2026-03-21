@@ -2,6 +2,7 @@
 // src/app/admin/page.tsx
 import { useState } from 'react';
 import SocialQueuePanel from '@/components/SocialQueuePanel';
+import FeedbackPanel    from '@/components/FeedbackPanel';
 
 const colors = {
   bg:      '#0a0a0f',
@@ -16,6 +17,7 @@ const colors = {
 export default function AdminPage() {
   const [authed,   setAuthed]   = useState(false);
   const [password, setPassword] = useState('');
+  const [pwInput,  setPwInput]  = useState('');
   const [error,    setError]    = useState('');
 
   async function handleLogin() {
@@ -23,10 +25,15 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/auth', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ password }),
+        body:    JSON.stringify({ password: pwInput }),
       });
-      if (res.ok) { setAuthed(true); setError(''); }
-      else { setError('Invalid password'); }
+      if (res.ok) {
+        setAuthed(true);
+        setPassword(pwInput); // keep password in state for panel auth
+        setError('');
+      } else {
+        setError('Invalid password');
+      }
     } catch { setError('Auth error'); }
   }
 
@@ -41,22 +48,22 @@ export default function AdminPage() {
         fontFamily:     'Space Mono, monospace',
       }}>
         <div style={{
-          background:   colors.surface,
-          border:       `0.8px solid ${colors.border}`,
-          borderRadius: 12,
-          padding:      40,
-          width:        320,
-          display:      'flex',
+          background:    colors.surface,
+          border:        `0.8px solid ${colors.border}`,
+          borderRadius:  12,
+          padding:       40,
+          width:         320,
+          display:       'flex',
           flexDirection: 'column',
-          gap:          16,
+          gap:           16,
         }}>
-          <div style={{fontSize:11, letterSpacing:'3px', color:colors.inkDim}}>SEALER ADMIN</div>
-          <div style={{fontSize:9, color:colors.inkDim}}>Internal tools — restricted access</div>
+          <div style={{ fontSize: 11, letterSpacing: '3px', color: colors.inkDim }}>SEALER ADMIN</div>
+          <div style={{ fontSize: 9,  color: colors.inkDim }}>Internal tools — restricted access</div>
           <input
             type="password"
             placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
+            value={pwInput}
+            onChange={e => setPwInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             autoFocus
             style={{
@@ -70,7 +77,7 @@ export default function AdminPage() {
               outline:      'none',
             }}
           />
-          {error && <div style={{fontSize:8, color:colors.danger}}>{error}</div>}
+          {error && <div style={{ fontSize: 8, color: colors.danger }}>{error}</div>}
           <button
             onClick={handleLogin}
             style={{
@@ -110,11 +117,11 @@ export default function AdminPage() {
         borderBottom:   `0.8px solid ${colors.border}`,
       }}>
         <div>
-          <div style={{fontSize:11, letterSpacing:'3px', color:colors.ink}}>SEALER ADMIN</div>
-          <div style={{fontSize:8, color:colors.inkDim, marginTop:4}}>THE SEALER PROTOCOL · INTERNAL TOOLS</div>
+          <div style={{ fontSize: 11, letterSpacing: '3px', color: colors.ink }}>SEALER ADMIN</div>
+          <div style={{ fontSize: 8,  color: colors.inkDim, marginTop: 4 }}>THE SEALER PROTOCOL · INTERNAL TOOLS</div>
         </div>
         <button
-          onClick={() => setAuthed(false)}
+          onClick={() => { setAuthed(false); setPassword(''); setPwInput(''); }}
           style={{
             background:    'transparent',
             border:        `0.8px solid ${colors.border}`,
@@ -131,27 +138,23 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* Sections */}
-      <div style={{maxWidth: 800, margin: '0 auto', display:'flex', flexDirection:'column', gap:32}}>
+      {/* Panels */}
+      <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
         {/* Social Queue */}
         <div>
-          <div style={{fontSize:9, letterSpacing:'2px', color:colors.inkDim, marginBottom:12}}>
+          <div style={{ fontSize: 9, letterSpacing: '2px', color: colors.inkDim, marginBottom: 12 }}>
             SOCIAL MEDIA
           </div>
           <SocialQueuePanel />
         </div>
 
-        {/* More sections can go here */}
-        <div style={{
-          background:   colors.surface,
-          border:       `0.8px solid ${colors.border}`,
-          borderRadius: 8,
-          padding:      20,
-          opacity:      0.4,
-        }}>
-          <div style={{fontSize:9, letterSpacing:'2px', color:colors.inkDim}}>MORE TOOLS COMING</div>
-          <div style={{fontSize:8, color:colors.inkDim, marginTop:6}}>Protocol stats, agent registry, cron logs</div>
+        {/* Agent Feedback */}
+        <div>
+          <div style={{ fontSize: 9, letterSpacing: '2px', color: colors.inkDim, marginBottom: 12 }}>
+            SEALER AGENT FEEDBACK
+          </div>
+          <FeedbackPanel password={password} />
         </div>
 
       </div>
