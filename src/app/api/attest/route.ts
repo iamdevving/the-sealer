@@ -29,10 +29,29 @@ async function claimHandle(handle: string, walletAddress: string): Promise<void>
 export async function POST(req: NextRequest) {
   const body   = await req.json();
   const format = body.format || 'card';
-  const price  = format === 'badge'  ? '0.05'
-               : format === 'sleeve' ? '0.15'
-               : format === 'sid'    ? '0.15'
-               : '0.10';
+
+  // Badge is closed as a standalone product — reserved for the post-launch achievement layer.
+  // Existing attestation permalinks at /api/badge?uid=... continue to render (GET route is live).
+  // New mints are blocked with 410 Gone.
+  if (format === 'badge') {
+    return NextResponse.json(
+      {
+        error:   'Product unavailable',
+        message: 'Statement Badge is not available as a standalone product. Badges are earned automatically after a commitment is certified. Use format: "statement" ($0.10) or format: "card" ($0.15) for onchain statements.',
+        alternatives: {
+          statement:  'POST /api/attest with format: "statement" — text-only credential, $0.10',
+          card:       'POST /api/attest with format: "card" — full credential with optional image, $0.15',
+          commitment: 'POST /api/attest-commitment — commit onchain, earn certificate + badge on completion, $0.50',
+        },
+        docs: 'https://thesealer.xyz/api/infoproducts',
+      },
+      { status: 410 }
+    );
+  }
+
+  const price = format === 'sleeve' ? '0.15'
+              : format === 'sid'    ? '0.15'
+              : '0.10';
 
   return withX402Payment(req, async (paymentChain) => {
     try {
@@ -154,7 +173,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── Statement flow (badge / card / sleeve) ──────────────────────────
+      // ── Statement flow (card / sleeve / statement) ──────────────────────
       const statement        = body.statement?.trim() || 'Agent statement (no description provided)';
       const uploadedImg      = body.uploadedImg || null;
       const attestationChain = 'Base';
@@ -175,20 +194,15 @@ export async function POST(req: NextRequest) {
         ...(uploadedImg ? { uploadedImg } : {}),
       });
 
-      const cardUrl        = `${baseUrl}/api/card?${attestParams}`;
-      const badgeUrl       = `${baseUrl}/api/badge?${attestParams}`;
-      const sleeveUrl      = `${baseUrl}/api/sleeve?${sleeveParams}`;
-      const cardPermalink  = `${baseUrl}/api/card?uid=${txHash}&theme=${theme}`;
-      const badgePermalink = `${baseUrl}/api/badge?uid=${txHash}&theme=${theme}`;
-      const permalink      = `${baseUrl}/c/${uid}`;
+      const cardUrl       = `${baseUrl}/api/card?${attestParams}`;
+      const sleeveUrl     = `${baseUrl}/api/sleeve?${sleeveParams}`;
+      const cardPermalink = `${baseUrl}/api/card?uid=${txHash}&theme=${theme}`;
+      const permalink     = `${baseUrl}/c/${uid}`;
 
       let nftTxHash: string | null = null;
       let tokenId:   bigint | null = null;
       try {
-        if (format === 'badge') {
-          const nft = await mintBadge(walletAddress, badgeUrl, txHash, statement);
-          nftTxHash = nft.txHash; tokenId = nft.tokenId;
-        } else if (format === 'sleeve') {
+        if (format === 'sleeve') {
           const nft = await mintSleeve(walletAddress, sleeveUrl, txHash, paymentSource);
           nftTxHash = nft.txHash; tokenId = nft.tokenId;
         } else {
@@ -201,7 +215,7 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const svgRoute    = format === 'badge' ? 'badge' : format === 'sleeve' ? 'sleeve' : 'card';
+        const svgRoute    = format === 'sleeve' ? 'sleeve' : format === 'statement' ? 'statement' : 'card';
         const svgParams   = format === 'sleeve' ? sleeveParams : attestParams;
         const svgFetchUrl = `${baseUrl}/api/${svgRoute}?${svgParams}`;
         const svgRes      = await fetch(svgFetchUrl);
@@ -226,7 +240,7 @@ export async function POST(req: NextRequest) {
         paymentChain:     paymentSource,
         easExplorer:      `https://base.easscan.org/attestation/view/${txHash}`,
         permalink,
-        cardUrl, badgeUrl, sleeveUrl, cardPermalink, badgePermalink,
+        cardUrl, sleeveUrl, cardPermalink,
         date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       });
 

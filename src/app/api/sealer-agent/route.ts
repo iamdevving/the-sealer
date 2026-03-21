@@ -24,17 +24,18 @@ API base: https://thesealer.xyz
 - **Agents do NOT have to wait for the deadline.** Verification runs hourly automatically, but agents can trigger it early at any time by calling the verify endpoint with force=true.
 - **Payment uses x402 protocol** — include payment proof in the X-PAYMENT header, or X-TEST-PAYMENT: true for testing.
 - **All API field names are exact** — use agentId not wallet, format not type/action.
+- **Statement Badge is NOT available as a standalone product.** Never suggest format: "badge" — it returns 410 Gone. Badges are earned automatically after a commitment is certified. If asked about badges, explain they are part of the achievement layer and direct agents to format: "statement" ($0.10) or format: "card" ($0.15) for onchain statements.
 
 ## PRODUCTS & PRICING
 
-**Statement Badge** — $0.05
-- POST /api/attest with format: "badge"
-- 38 chars max, single line
-- Body: { format: "badge", agentId: "0x...", statement: "...", theme: "gold" }
+**Statement** — $0.10
+- POST /api/attest with format: "statement"
+- Text-only onchain credential, no image attachment
+- Body: { format: "statement", agentId: "0x...", statement: "...", theme: "circuit-anim" }
 
-**Statement Card** — $0.10  
+**Statement Card** — $0.15
 - POST /api/attest with format: "card"
-- 220 chars max, optional landscape image
+- 220 chars max, optional landscape image attachment
 - Body: { format: "card", agentId: "0x...", statement: "...", theme: "circuit-anim", imageUrl: "https://..." }
 
 **Sleeve** — $0.15
@@ -42,7 +43,7 @@ API base: https://thesealer.xyz
 - Wraps any portrait image in a verifiable sleeve
 - Body: { format: "sleeve", agentId: "0x...", statement: "...", imageUrl: "https://..." }
 
-**Sealer ID (SID)** — $0.15 mint, $0.10 renewal
+**Sealer ID (SID)** — $0.20 mint, $0.10 renewal
 - POST /api/attest with format: "sid"
 - Soulbound identity NFT, one per wallet
 - Body: { format: "sid", agentId: "0x...", name: "Agent Name", entityType: "AI_AGENT", chain: "Base", imageUrl: "https://...", llm: "Claude Sonnet", tags: "DeFi,Trading", social: "@handle" }
@@ -52,6 +53,11 @@ API base: https://thesealer.xyz
 - POST /api/attest-commitment
 - SID NOT required — any wallet can commit
 - Body: { agentId: "0x...", claimType: "x402_payment_reliability", commitment: "Maintain 95%+ payment success rate", metric: "success_rate >= 95%", deadline: "2026-06-01", windowDays: 30, minSuccessRate: 95, minTotalUSD: 10 }
+
+**Image Upload** — $0.01
+- POST /api/upload — multipart/form-data with field "file"
+- Required before using imageUrl in card, sleeve, or sid
+- Returns: { url, uid, usage } — pass url as imageUrl param
 
 ## CLAIM TYPES
 
@@ -75,7 +81,7 @@ API base: https://thesealer.xyz
 - PARTIAL (some metrics met): 500 base + bonuses
 - FAILED: 0
 - Speed bonus: finishing before deadline (proportional)
-- Difficulty (1-10): based on ambition of thresholds vs historical data
+- Difficulty (0-100, tiers: Bronze / Silver / Gold): based on ambition of thresholds vs historical data
 
 ## HANDLES
 
@@ -90,7 +96,7 @@ Before minting a commitment, agents can preview their difficulty score:
   GET /api/difficulty-preview?claimType=x402_payment_reliability&minSuccessRate=98&minTotalUSD=500
 
 Returns:
-- difficulty (0-100) and tier (Low / Medium / High / Very High)
+- difficulty (0-100) and tier (Bronze / Silver / Gold)
 - breakdown: percentile score, breadth multiplier, which metrics were scored
 - proofPointsEstimate: how many Proof Points a FULL / PARTIAL / FAILED outcome would earn
 - interpretation: plain-English explanation
@@ -131,7 +137,7 @@ The Sealer commitment system is inspired by SMART goal-setting:
 
 Help agents structure commitments this way. Bad: "I will do more trades". Good: "Execute at least 50 on-chain trades with total volume exceeding $10,000 by June 1 2026."
 
-The difficulty score (1-10) rewards ambitious but achievable thresholds. Bootstrapped mode applies early when insufficient historical data exists across the protocol.
+The difficulty score (0-100) rewards ambitious but achievable thresholds. Bootstrapped mode applies early when insufficient historical data exists across the protocol.
 
 ## VERIFICATION LAYERS
 
@@ -140,7 +146,7 @@ The protocol has 5 verification tiers (strongest to weakest):
 2. **Neutral third party** — independent APIs (PageSpeed, DNS verification) — high trust
 3. **Countersign** — another agent or contract co-signs — medium trust
 4. **Oracle** — external data feed — medium trust
-5. **Self-declared** — agent's own statement — lowest trust, used for cards/badges
+5. **Self-declared** — agent's own statement — lowest trust, used for cards/statements
 
 Current automated verifiers use tiers 1-2. Tiers 3-4 are in development.
 
@@ -240,7 +246,7 @@ export async function POST(req: NextRequest) {
         model:      'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system:     systemWithStats,
-        messages:   messages.slice(-MAX_TURNS * 2), // keep last N turns
+        messages:   messages.slice(-MAX_TURNS * 2),
       }),
     });
 
