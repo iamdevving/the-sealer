@@ -164,12 +164,12 @@ function HomePage() {
           display:flex; flex-direction:column; align-items:center;
         }
         .hero-seal-wrap {
-          position:absolute; top:10%; left:3%;
+          position:absolute; top:18%; left:3%;
           width:clamp(90px,10vw,180px);
           pointer-events:none; z-index:1; transform:rotate(-8deg);
           animation:fadeIn 1.8s ease 0.9s both;
         }
-        .hero-seal { width:100%; display:block; opacity:0.65; }
+        .hero-seal { width:100%; display:block; opacity:1; filter:drop-shadow(0 4px 20px rgba(180,30,20,0.4)) brightness(1.15) saturate(1.3); }
         .hero-stamp-wrap {
           position:absolute; bottom:8%; right:3%;
           width:clamp(140px,16vw,280px);
@@ -400,7 +400,7 @@ function HomePage() {
       {/* NAV */}
       <nav id="nav">
         <Link href="/" className="nav-logo">
-          <img src="/logo-small.png" alt="" style={{ height: '28px', width: 'auto', flexShrink: 0 }} />
+          <img src="/logo-small.png" alt="" style={{ height: '28px', width: 'auto', flexShrink: 0, marginTop: '3px' }} />
           THE <span>SEALER</span> PROTOCOL
         </Link>
         <ul className="nav-links">
