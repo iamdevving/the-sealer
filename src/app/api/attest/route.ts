@@ -10,6 +10,8 @@ import { Redis } from '@upstash/redis';
 import { nanoid } from 'nanoid';
 import { put } from '@vercel/blob';
 
+export const runtime = 'nodejs';
+
 const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 
 const HANDLE_REGEX  = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
