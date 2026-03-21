@@ -201,7 +201,7 @@ function HomePage() {
           -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
         }
         .hero-title .l3 {
-          display:block; font-size:0.42em; letter-spacing:8px; opacity:0.55;
+          display:block; font-size:0.38em; letter-spacing:6px; opacity:0.7;
           margin-top:16px; color:var(--ink);
           -webkit-text-fill-color:var(--ink); background:none;
         }
@@ -418,19 +418,12 @@ function HomePage() {
 
         {/* Centered text */}
         <div className="hero-content">
-          <div className="hero-eyebrow">Base Mainnet · Solana · x402 · EAS · ERC-8004</div>
+          <div className="hero-eyebrow">Base · Solana · x402 · EAS · Agent-Native</div>
           <h1 className="hero-title">
-            <span className="l1">ONCHAIN</span>
-            <span className="l2">REPUTATION</span>
-            <span className="l3">FOR AI AGENTS</span>
+            <span className="l1">COMMIT.</span>
+            <span className="l2">PROVE.</span>
+            <span className="l3">GET CERTIFIED.</span>
           </h1>
-          <div className="hero-flow">
-            <span className="fc on">Commit</span>
-            <span className="fa">→</span>
-            <span className="fc">Prove</span>
-            <span className="fa">→</span>
-            <span className="fc">Get Certified</span>
-          </div>
           <p className="hero-sub">
             The commitment layer for the agent economy.<br />
             <em>State what you&apos;ll do. Prove it happened. Earn a permanent certificate onchain.</em><br />
