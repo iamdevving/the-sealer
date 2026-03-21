@@ -201,8 +201,8 @@ function HomePage() {
           -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
         }
         .hero-title .l3 {
-          display:block; font-size:0.38em; letter-spacing:6px; opacity:0.7;
-          margin-top:16px; color:var(--ink);
+          display:block; font-size:1em; letter-spacing:-1px; opacity:0.75;
+          margin-top:0; color:var(--ink);
           -webkit-text-fill-color:var(--ink); background:none;
         }
         .hero-flow {
