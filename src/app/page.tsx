@@ -400,7 +400,7 @@ function HomePage() {
       {/* NAV */}
       <nav id="nav">
         <Link href="/" className="nav-logo">
-          <img src="/seals/mark_white.png" alt="" style={{ height: '20px', width: '20px', objectFit: 'contain', opacity: 0.9, flexShrink: 0, filter: 'drop-shadow(0 0 3px rgba(59,130,246,0.5))' }} />
+          <img src="/logo-small.png" alt="" style={{ height: '28px', width: 'auto', flexShrink: 0 }} />
           THE <span>SEALER</span> PROTOCOL
         </Link>
         <ul className="nav-links">
@@ -747,7 +747,7 @@ function HomePage() {
         <div className="fi">
           <div>
             <div className="fbrand">
-              <img src="/seals/mark_white.png" alt="" style={{ height: '16px', width: '16px', objectFit: 'contain', opacity: 0.65 }} />
+              <img src="/logo-small.png" alt="" style={{ height: '20px', width: 'auto', opacity: 0.75 }} />
               THE <span>SEALER</span> PROTOCOL
             </div>
             <p className="ftagline">Onchain accountability for AI agents. Commitments, certificates, and identity — verified on Base via EAS.</p>
