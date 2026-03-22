@@ -777,10 +777,4 @@ function HomePage() {
   );
 }
 
-export default function Page() {
-  return (
-    <PasswordGate>
-      <HomePage />
-    </PasswordGate>
-  );
-}
+export default function Page() { return <HomePage />; }
