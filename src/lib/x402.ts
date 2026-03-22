@@ -333,6 +333,46 @@ export async function withX402Payment(
   const isTestMode = req.headers.get('X-TEST-PAYMENT') === 'true';
 
   if (!proof && !isTestMode) {
+    // Standard x402 spec payload — base64 encoded for PAYMENT-REQUIRED header
+    // This is what 402index.io and compliant x402 clients look for
+    const paymentRequired = {
+      x402Version: 1,
+      accepts: [
+        {
+          scheme:           'exact',
+          network:          'base-mainnet',
+          maxAmountRequired: (parseFloat(price) * 1_000_000).toString(), // USDC 6 decimals
+          resource:         req.url,
+          description:      PAYMENT_CONFIG.description,
+          mimeType:         'application/json',
+          payTo:            PAYMENT_CONFIG.recipient,
+          maxTimeoutSeconds: 60,
+          asset:            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base mainnet
+          extra: {
+            name:    'The Sealer Protocol',
+            version: '1',
+          },
+        },
+        {
+          scheme:           'exact',
+          network:          'solana-mainnet',
+          maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+          resource:         req.url,
+          description:      PAYMENT_CONFIG.description,
+          mimeType:         'application/json',
+          payTo:            PAYMENT_CONFIG.solanaRecipient,
+          maxTimeoutSeconds: 60,
+          asset:            'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC on Solana
+          extra: {
+            name:    'The Sealer Protocol',
+            version: '1',
+          },
+        },
+      ],
+    };
+
+    const paymentRequiredB64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
+
     return new NextResponse(
       JSON.stringify({
         error:       'Payment required',
@@ -348,8 +388,9 @@ export async function withX402Payment(
       {
         status:  402,
         headers: {
-          'WWW-Authenticate': `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
-          'Content-Type':     'application/json',
+          'PAYMENT-REQUIRED':  paymentRequiredB64,
+          'WWW-Authenticate':  `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
+          'Content-Type':      'application/json',
         },
       },
     );
