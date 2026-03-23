@@ -45,7 +45,13 @@ async function parseBody(req: NextRequest): Promise<{
   }
 
   // Default: JSON
-  const body = await req.json();
+  let body: Record<string, any> = {};
+try {
+  const text = await req.text();
+  if (text) body = JSON.parse(text);
+} catch {
+  body = {};
+}
   // Normalise — convert all values to strings for uniform access below
   const fields: Record<string, string> = {};
   for (const [k, v] of Object.entries(body)) {
