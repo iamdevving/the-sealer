@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { withX402Payment } from '@/lib/x402'
 import { nanoid } from 'nanoid'
+import { x402Challenge } from '@/lib/x402'
 
 // Max file size: 5MB
 const MAX_BYTES = 5 * 1024 * 1024
@@ -124,4 +125,10 @@ export async function POST(req: NextRequest) {
     },
     UPLOAD_PRICE_USDC
   )
+}
+
+export async function GET(req: NextRequest) {
+
+  return x402Challenge(req.url, '0.01');
+
 }

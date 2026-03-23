@@ -318,6 +318,61 @@ export async function issueAmendmentAttestation(params: {
   return sendAttestationWithRef(AMENDMENT_SCHEMA_UID, encodedData, params.agentId, refUID);
 }
 
+// ── Exported 402 challenge builder — use in GET handlers for crawler discovery ─
+export function x402Challenge(url: string, price: string): NextResponse {
+  const paymentRequired = {
+    x402Version: 1,
+    accepts: [
+      {
+        scheme:            'exact',
+        network:           'base-mainnet',
+        maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+        resource:          url,
+        description:       PAYMENT_CONFIG.description,
+        mimeType:          'application/json',
+        payTo:             PAYMENT_CONFIG.recipient,
+        maxTimeoutSeconds: 60,
+        asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        extra: { name: 'The Sealer Protocol', version: '1' },
+      },
+      {
+        scheme:            'exact',
+        network:           'solana-mainnet',
+        maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+        resource:          url,
+        description:       PAYMENT_CONFIG.description,
+        mimeType:          'application/json',
+        payTo:             PAYMENT_CONFIG.solanaRecipient,
+        maxTimeoutSeconds: 60,
+        asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        extra: { name: 'The Sealer Protocol', version: '1' },
+      },
+    ],
+  };
+  const b64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
+  return new NextResponse(
+    JSON.stringify({
+      error:       'Payment required',
+      amount:      price,
+      currency:    'USDC',
+      description: PAYMENT_CONFIG.description,
+      paymentOptions: [
+        { chain: 'base',   token: 'USDC', recipient: PAYMENT_CONFIG.recipient,       amount: price },
+        { chain: 'solana', token: 'USDC', recipient: PAYMENT_CONFIG.solanaRecipient, amount: price },
+      ],
+      x402: { version: 1, schemes: ['exact'], network: ['base', 'solana'] },
+    }),
+    {
+      status: 402,
+      headers: {
+        'PAYMENT-REQUIRED': b64,
+        'WWW-Authenticate': `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
+        'Content-Type':     'application/json',
+      },
+    },
+  );
+}
+
 // ── x402 payment middleware ───────────────────────────────────────────────────
 
 export async function withX402Payment(

@@ -4,6 +4,7 @@ import { withX402Payment, issueCommitmentAttestation } from '@/lib/x402';
 import { registerPendingAchievement } from '@/lib/verify/register';
 import { mintCommitment } from '@/lib/nft';
 import type { ClaimType } from '@/lib/verify/types';
+import { x402Challenge } from '@/lib/x402';
 
 export const runtime = 'nodejs';
 
@@ -262,4 +263,10 @@ function extractVerificationParams(
     default:
       return common;
   }
+}
+
+export async function GET(req: NextRequest) {
+
+  return x402Challenge(req.url, '0.50');
+
 }

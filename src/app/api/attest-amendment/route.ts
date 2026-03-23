@@ -26,6 +26,7 @@ import { withX402Payment, issueAmendmentAttestation } from '@/lib/x402';
 import { Redis } from '@upstash/redis';
 import { computeDifficulty } from '@/lib/difficulty';
 import type { ClaimType } from '@/lib/verify/types';
+import { x402Challenge } from '@/lib/x402';
 
 export const runtime = 'nodejs';
 
@@ -256,4 +257,10 @@ export async function POST(req: NextRequest) {
       message: 'Amendment sealed onchain. Verification at deadline will use the amended thresholds.',
     });
   }, AMENDMENT_PRICE);
+}
+
+export async function GET(req: NextRequest) {
+
+  return x402Challenge(req.url, '0.25');
+
 }

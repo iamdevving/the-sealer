@@ -9,6 +9,7 @@ import { base } from 'viem/chains';
 import { Redis } from '@upstash/redis';
 import { nanoid } from 'nanoid';
 import { put } from '@vercel/blob';
+import { x402Challenge } from '@/lib/x402';
 
 export const runtime = 'nodejs';
 
@@ -339,4 +340,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to issue attestation' }, { status: 500 });
     }
   }, price);
+}
+
+export async function GET(req: NextRequest) {
+
+  return x402Challenge(req.url, '0.10');
+
 }

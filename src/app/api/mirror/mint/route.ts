@@ -6,6 +6,7 @@ import { base, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { withX402Payment } from '@/lib/x402';
 import { mintSolanaMirror } from '@/lib/solana-mint';
+import { x402Challenge } from '@/lib/x402';
 
 export const runtime = 'nodejs';
 
@@ -301,4 +302,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mint failed', details: String(err) }, { status: 500 });
     }
   }, price);
+}
+
+export async function GET(req: NextRequest) {
+
+  return x402Challenge(req.url, '0.30');
+
 }
