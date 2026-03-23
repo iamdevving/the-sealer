@@ -333,7 +333,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
         payTo:             PAYMENT_CONFIG.recipient,
         maxTimeoutSeconds: 60,
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        extra: { name: 'The Sealer Protocol', version: '1' },
+        extra: { name: 'USDC', version: '2' },
       },
       {
         scheme:            'exact',
@@ -345,7 +345,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
         payTo:             PAYMENT_CONFIG.solanaRecipient,
         maxTimeoutSeconds: 60,
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        extra: { name: 'The Sealer Protocol', version: '1' },
+        extra: { name: 'USDC', version: '2' },
       },
     ],
   };
@@ -403,10 +403,7 @@ export async function withX402Payment(
           payTo:            PAYMENT_CONFIG.recipient,
           maxTimeoutSeconds: 60,
           asset:            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base mainnet
-          extra: {
-            name:    'The Sealer Protocol',
-            version: '1',
-          },
+          extra: { name: 'USDC', version: '2' },
         },
         {
           scheme:           'exact',
@@ -418,10 +415,7 @@ export async function withX402Payment(
           payTo:            PAYMENT_CONFIG.solanaRecipient,
           maxTimeoutSeconds: 60,
           asset:            'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC on Solana
-          extra: {
-            name:    'The Sealer Protocol',
-            version: '1',
-          },
+          extra: { name: 'USDC', version: '2' },
         },
       ],
     };
