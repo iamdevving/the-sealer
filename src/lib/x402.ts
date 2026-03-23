@@ -326,7 +326,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
       {
         scheme:            'exact',
         network:           'base-mainnet',
-        maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+        maxAmountRequired: price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
         mimeType:          'application/json',
@@ -338,7 +338,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
       {
         scheme:            'exact',
         network:           'solana-mainnet',
-        maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+        maxAmountRequired: price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
         mimeType:          'application/json',
@@ -396,7 +396,7 @@ export async function withX402Payment(
         {
           scheme:           'exact',
           network:          'base-mainnet',
-          maxAmountRequired: (parseFloat(price) * 1_000_000).toString(), // USDC 6 decimals
+          maxAmountRequired: price,
           resource:         req.url,
           description:      PAYMENT_CONFIG.description,
           mimeType:         'application/json',
@@ -408,7 +408,7 @@ export async function withX402Payment(
         {
           scheme:           'exact',
           network:          'solana-mainnet',
-          maxAmountRequired: (parseFloat(price) * 1_000_000).toString(),
+          maxAmountRequired: price,
           resource:         req.url,
           description:      PAYMENT_CONFIG.description,
           mimeType:         'application/json',
