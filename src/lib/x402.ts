@@ -325,7 +325,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
     accepts: [
       {
         scheme:            'exact',
-        network:           'base-mainnet',
+        network: 'eip155:8453',
         maxAmountRequired: price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
@@ -337,7 +337,7 @@ export function x402Challenge(url: string, price: string): NextResponse {
       },
       {
         scheme:            'exact',
-        network:           'solana-mainnet',
+        network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
         maxAmountRequired: price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
@@ -389,7 +389,7 @@ export async function withX402Payment(
       accepts: [
         {
           scheme:           'exact',
-          network:          'base-mainnet',
+          network: 'eip155:8453',
           maxAmountRequired: price,
           resource:         req.url,
           description:      PAYMENT_CONFIG.description,
@@ -401,7 +401,7 @@ export async function withX402Payment(
         },
         {
           scheme:           'exact',
-          network:          'solana-mainnet',
+          network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
           maxAmountRequired: price,
           resource:         req.url,
           description:      PAYMENT_CONFIG.description,
