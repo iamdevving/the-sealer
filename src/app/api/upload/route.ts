@@ -21,7 +21,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
-import { withX402Payment } from '@/lib/x402'
+import { withZauthX402Payment } from '@/lib/zauth'
 import { nanoid } from 'nanoid'
 import { x402Challenge } from '@/lib/x402'
 
@@ -42,9 +42,7 @@ const UPLOAD_PRICE_USDC = '0.01'
 export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
-  return withX402Payment(
-    req,
-    async (paymentChain) => {
+  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
       // Parse multipart form
       let formData: FormData
       try {

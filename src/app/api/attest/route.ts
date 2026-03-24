@@ -1,6 +1,6 @@
 // src/app/api/attest/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { withX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/x402';
+import { withZauthX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/zauth';
 import { checkEntityType } from '@/lib/agentRegistry';
 import { snapshotSVG } from '@/lib/snapshot';
 import { mintCard, mintSID, renewSID, mintSleeve } from '@/lib/nft';
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
               : format === 'sid'    ? '0.20'
               : '0.10';
 
-  return withX402Payment(req, async (paymentChain) => {
+  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     try {
       const theme         = fields.theme || 'dark';
       const agentId       = fields.agentId || req.headers.get('X-WALLET') || '????';

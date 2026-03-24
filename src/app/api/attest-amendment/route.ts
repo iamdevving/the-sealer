@@ -22,7 +22,7 @@
 //   [claimType-specific threshold params — same as attest-commitment but lowered]
 
 import { NextRequest, NextResponse } from 'next/server';
-import { withX402Payment, issueAmendmentAttestation } from '@/lib/x402';
+import { withZauthX402Payment, issueAmendmentAttestation } from '@/lib/zauth';
 import { Redis } from '@upstash/redis';
 import { computeDifficulty } from '@/lib/difficulty';
 import type { ClaimType } from '@/lib/verify/types';
@@ -38,7 +38,7 @@ const redis = new Redis({
 });
 
 export async function POST(req: NextRequest) {
-  return withX402Payment(req, async (paymentChain) => {
+  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     let body: Record<string, unknown>;
     try {
       body = await req.json();

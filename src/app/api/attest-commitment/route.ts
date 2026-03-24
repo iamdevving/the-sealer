@@ -1,6 +1,6 @@
 // src/app/api/attest-commitment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { withX402Payment, issueCommitmentAttestation } from '@/lib/x402';
+import { withZauthX402Payment, issueCommitmentAttestation } from '@/lib/zauth';
 import { registerPendingAchievement } from '@/lib/verify/register';
 import { mintCommitment } from '@/lib/nft';
 import type { ClaimType } from '@/lib/verify/types';
@@ -46,7 +46,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
  *   X-TEST-PAYMENT: true   (bypass in dev)
  */
 export async function POST(req: NextRequest) {
-  return withX402Payment(req, async (paymentChain) => {
+  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     let body: Record<string, unknown>;
     try {
       body = await req.json();
