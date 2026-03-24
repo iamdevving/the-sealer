@@ -27,7 +27,8 @@ function getZauthClient(): InstanceType<typeof ZauthClient> | null {
   if (!process.env.ZAUTH_API_KEY) return null;
   if (_zauthClient) return _zauthClient;
   try {
-    _zauthClient = new ZauthClient({
+    console.log('[zauth] Initialising with key:', process.env.ZAUTH_API_KEY ? 'SET' : 'MISSING');
+      _zauthClient = new ZauthClient({
       apiKey:      process.env.ZAUTH_API_KEY,
       mode:        'provider',
       environment: process.env.NODE_ENV || 'production',
