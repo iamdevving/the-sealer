@@ -305,8 +305,16 @@ export async function issueAmendmentAttestation(params: {
 interface BazaarExtension {
   schema: {
     properties: {
-      input:  Record<string, any>;
-      output: Record<string, any>;
+      input: {
+        properties: {
+          body: Record<string, any>;
+        };
+      };
+      output: {
+        properties: {
+          example: Record<string, any>;
+        };
+      };
     };
   };
 }

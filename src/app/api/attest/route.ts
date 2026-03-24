@@ -353,26 +353,31 @@ export async function GET(req: NextRequest) {
     schema: {
       properties: {
         input: {
-          type: 'object',
-          required: ['format', 'agentId'],
           properties: {
-            format:     { type: 'string', enum: ['statement', 'card', 'sleeve', 'sid'] },
-            agentId:    { type: 'string', description: 'Agent wallet address (0x...)' },
-            statement:  { type: 'string', description: 'Statement text' },
-            theme:      { type: 'string', description: 'Visual theme' },
-            imageUrl:   { type: 'string', description: 'Image URL (optional)' },
-            name:       { type: 'string', description: 'Agent name (for sid)' },
-            entityType: { type: 'string', enum: ['AI_AGENT', 'HUMAN', 'UNKNOWN'] },
-            handle:     { type: 'string', description: 'Handle e.g. aria.agent (for sid)' },
+            body: {
+              type:       'object',
+              required:   ['format', 'agentId'],
+              properties: {
+                format:     { type: 'string', enum: ['statement', 'card', 'sleeve', 'sid'] },
+                agentId:    { type: 'string' },
+                statement:  { type: 'string' },
+                theme:      { type: 'string' },
+                imageUrl:   { type: 'string' },
+                name:       { type: 'string' },
+                entityType: { type: 'string' },
+                handle:     { type: 'string' },
+              },
+            },
           },
         },
         output: {
-          type: 'object',
           properties: {
-            status:    { type: 'string' },
-            txHash:    { type: 'string' },
-            uid:       { type: 'string' },
-            permalink: { type: 'string' },
+            example: {
+              status:    'success',
+              txHash:    '0xabc...',
+              uid:       'abc123',
+              permalink: 'https://thesealer.xyz/c/abc123',
+            },
           },
         },
       },

@@ -264,19 +264,24 @@ export async function GET(req: NextRequest) {
     schema: {
       properties: {
         input: {
-          type: 'object',
-          required: ['agentId', 'commitmentUID'],
           properties: {
-            agentId:       { type: 'string', description: 'Agent wallet address (0x...)' },
-            commitmentUID: { type: 'string', description: 'Original commitment UID' },
+            body: {
+              type:       'object',
+              required:   ['agentId', 'commitmentUID'],
+              properties: {
+                agentId:       { type: 'string' },
+                commitmentUID: { type: 'string' },
+              },
+            },
           },
         },
         output: {
-          type: 'object',
           properties: {
-            status:       { type: 'string' },
-            amendmentUID: { type: 'string' },
-            txHash:       { type: 'string' },
+            example: {
+              status:       'success',
+              amendmentUID: '0xabc...',
+              txHash:       '0xdef...',
+            },
           },
         },
       },

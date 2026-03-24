@@ -270,25 +270,30 @@ export async function GET(req: NextRequest) {
     schema: {
       properties: {
         input: {
-          type: 'object',
-          required: ['agentId', 'claimType', 'commitment', 'metric', 'deadline'],
           properties: {
-            agentId:    { type: 'string', description: 'Agent wallet address (0x...)' },
-            claimType:  { type: 'string', enum: ['x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery'] },
-            commitment: { type: 'string', description: 'SMART commitment statement' },
-            metric:     { type: 'string', description: 'Measurable target description' },
-            deadline:   { type: 'string', description: 'Deadline YYYY-MM-DD' },
-            evidence:   { type: 'string', description: 'Supporting URL (optional)' },
+            body: {
+              type:       'object',
+              required:   ['agentId', 'claimType', 'commitment', 'metric', 'deadline'],
+              properties: {
+                agentId:    { type: 'string' },
+                claimType:  { type: 'string', enum: ['x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery'] },
+                commitment: { type: 'string' },
+                metric:     { type: 'string' },
+                deadline:   { type: 'string' },
+                evidence:   { type: 'string' },
+              },
+            },
           },
         },
         output: {
-          type: 'object',
           properties: {
-            status:          { type: 'string' },
-            commitmentUID:   { type: 'string' },
-            txHash:          { type: 'string' },
-            difficultyScore: { type: 'number' },
-            permalink:       { type: 'string' },
+            example: {
+              status:          'success',
+              commitmentUID:   '0xabc...',
+              txHash:          '0xdef...',
+              difficultyScore: 65,
+              permalink:       'https://thesealer.xyz/c/abc123',
+            },
           },
         },
       },

@@ -309,21 +309,26 @@ export async function GET(req: NextRequest) {
     schema: {
       properties: {
         input: {
-          type: 'object',
-          required: ['agentId', 'sourceChain', 'contractAddress', 'tokenId'],
           properties: {
-            agentId:         { type: 'string', description: 'Agent wallet address' },
-            sourceChain:     { type: 'string', enum: ['base', 'ethereum', 'solana'] },
-            contractAddress: { type: 'string', description: 'NFT contract address' },
-            tokenId:         { type: 'string', description: 'Token ID' },
+            body: {
+              type:       'object',
+              required:   ['agentId', 'sourceChain', 'contractAddress', 'tokenId'],
+              properties: {
+                agentId:         { type: 'string' },
+                sourceChain:     { type: 'string', enum: ['base', 'ethereum', 'solana'] },
+                contractAddress: { type: 'string' },
+                tokenId:         { type: 'string' },
+              },
+            },
           },
         },
         output: {
-          type: 'object',
           properties: {
-            status:    { type: 'string' },
-            mirrorUID: { type: 'string' },
-            txHash:    { type: 'string' },
+            example: {
+              status:    'success',
+              mirrorUID: '0xabc...',
+              txHash:    '0xdef...',
+            },
           },
         },
       },

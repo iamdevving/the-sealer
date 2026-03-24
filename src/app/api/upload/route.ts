@@ -132,18 +132,23 @@ export async function GET(req: NextRequest) {
     schema: {
       properties: {
         input: {
-          type: 'object',
-          required: ['file'],
           properties: {
-            file: { type: 'string', format: 'binary', description: 'Image file (PNG, JPG, WEBP, GIF, max 5MB)' },
+            body: {
+              type:       'object',
+              required:   ['imageUrl'],
+              properties: {
+                imageUrl: { type: 'string' },
+              },
+            },
           },
         },
         output: {
-          type: 'object',
           properties: {
-            url:   { type: 'string', description: 'Permanent public image URL' },
-            uid:   { type: 'string' },
-            bytes: { type: 'number' },
+            example: {
+              url:   'https://blob.vercel-storage.com/uploads/abc123.png',
+              uid:   'abc123',
+              bytes: 204800,
+            },
           },
         },
       },
