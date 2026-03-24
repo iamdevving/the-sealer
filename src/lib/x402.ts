@@ -134,13 +134,65 @@ async function sendAttestationWithRef(
 }
 
 // ── Payment verification ──────────────────────────────────────────────────────
+// ── Payment verification ──────────────────────────────────────────────────────
+// Supports three formats:
+//   1. Raw EVM tx hash (0x + 64 chars) — direct on-chain check
+//   2. Solana signature (base58, 85-90 chars) — direct on-chain check
+//   3. Base64-encoded JSON (Coinbase facilitator / standard x402 clients) — forward to facilitator
+
+const COINBASE_FACILITATOR_URL = 'https://facilitator.x402.org';
 
 function isSolanaSignature(str: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{85,90}$/.test(str.trim());
 }
 
+function isBase64Json(str: string): boolean {
+  // Base64 strings don't start with 0x and aren't Solana signatures
+  // They're typically 100+ chars of base64 characters
+  return /^[A-Za-z0-9+/=]{20,}$/.test(str.trim()) &&
+    !str.startsWith('0x') &&
+    !isSolanaSignature(str.trim());
+}
+
+async function verifyWithFacilitator(
+  paymentPayload: unknown,
+  paymentRequirements: unknown,
+): Promise<{ valid: boolean; chain?: 'base' | 'solana' }> {
+  try {
+    const res = await fetch(`${COINBASE_FACILITATOR_URL}/verify`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ x402Version: 2, paymentPayload, paymentRequirements }),
+      signal:  AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      console.log('[The Sealer] Facilitator verify returned', res.status);
+      return { valid: false };
+    }
+
+    const data = await res.json();
+    console.log('[The Sealer] Facilitator verify result:', data);
+
+    if (data.isValid || data.valid || data.success) {
+      // Determine chain from network field in payload
+      const network = (paymentPayload as any)?.network ||
+                      (paymentPayload as any)?.accepted?.network || '';
+      const chain = network.startsWith('solana') ? 'solana' : 'base';
+      return { valid: true, chain };
+    }
+
+    return { valid: false };
+  } catch (err) {
+    console.error('[The Sealer] Facilitator verify error:', err);
+    return { valid: false };
+  }
+}
+
 async function verifyPaymentProof(
   proof: string,
+  reqUrl?: string,
+  price?: string,
 ): Promise<{ valid: boolean; txHash?: string; chain?: 'base' | 'solana' }> {
   try {
     const cleanProof = proof.trim();
@@ -150,6 +202,7 @@ async function verifyPaymentProof(
       return { valid: true };
     }
 
+    // ── Format 1: Raw EVM tx hash ─────────────────────────────────────────
     if (cleanProof.startsWith('0x') && cleanProof.length === 66) {
       const txHash = cleanProof as Hash;
       const [receipt, tx] = await Promise.all([
@@ -160,13 +213,15 @@ async function verifyPaymentProof(
       if (receipt?.status === 'success' && tx) {
         const isCorrectRecipient = tx.to?.toLowerCase() === PAYMENT_CONFIG.recipient.toLowerCase();
         if (isCorrectRecipient) {
-          console.log('[The Sealer] Base verification OK');
+          console.log('[The Sealer] Base verification OK (direct)');
           return { valid: true, txHash: cleanProof, chain: 'base' };
         }
-        return { valid: false };
+        console.log('[The Sealer] Base TX recipient mismatch — trying facilitator');
+        // Fall through to facilitator check in case it went via a contract
       }
     }
 
+    // ── Format 2: Solana signature ────────────────────────────────────────
     if (isSolanaSignature(cleanProof)) {
       const conn = getSolanaConnection();
       let tx = null;
@@ -201,28 +256,75 @@ async function verifyPaymentProof(
         });
 
         if (usdcCredit) {
+          console.log('[The Sealer] Solana USDC verification OK (direct)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
 
         const recipientKey = new PublicKey(recipientPubkey);
         const allKeys = accountKeys.map((k: any) => k.toBase58 ? k.toBase58() : k.toString());
         if (allKeys.includes(recipientKey.toBase58())) {
+          console.log('[The Sealer] Solana verification OK (account key)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
 
         return { valid: false };
       }
 
+      console.log('[The Sealer] Solana TX not found after retries');
       return { valid: false };
     }
 
+    // ── Format 3: Base64-encoded JSON (Coinbase facilitator / standard x402) ─
+    if (isBase64Json(cleanProof)) {
+      console.log('[The Sealer] Detected base64 payload — forwarding to facilitator');
+      try {
+        const decoded        = Buffer.from(cleanProof, 'base64').toString('utf-8');
+        const paymentPayload = JSON.parse(decoded);
+
+        // Build paymentRequirements from our config to pass to facilitator
+        // Use the first (Base) accept entry as the requirements
+        const amountAtomic = String(Math.round(parseFloat(price || '0.10') * 1_000_000));
+        const paymentRequirements = {
+          scheme:            'exact',
+          network:           'eip155:8453',
+          amount:            amountAtomic,
+          payTo:             PAYMENT_CONFIG.recipient,
+          maxTimeoutSeconds: 60,
+          asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+          extra:             { name: 'USDC', version: '2' },
+          ...(reqUrl ? { resource: reqUrl } : {}),
+        };
+
+        // Check if it's a Solana payment based on network field
+        const network = paymentPayload?.network ||
+                        paymentPayload?.accepted?.network ||
+                        paymentPayload?.paymentRequirements?.network || '';
+
+        if (network.startsWith('solana')) {
+          // Use Solana payment requirements instead
+          const solanaRequirements = {
+            ...paymentRequirements,
+            network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+            payTo:   PAYMENT_CONFIG.solanaRecipient,
+            asset:   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+          };
+          return verifyWithFacilitator(paymentPayload, solanaRequirements);
+        }
+
+        return verifyWithFacilitator(paymentPayload, paymentRequirements);
+      } catch (parseErr) {
+        console.log('[The Sealer] Failed to parse base64 payload:', parseErr);
+        return { valid: false };
+      }
+    }
+
+    console.log('[The Sealer] Unrecognized proof format:', cleanProof.slice(0, 50));
     return { valid: false };
   } catch (e) {
     console.error('[The Sealer] Verification failed:', e);
     return { valid: false };
   }
 }
-
 // ── EAS attestation functions ─────────────────────────────────────────────────
 
 export async function issueSealAttestation(
@@ -404,7 +506,7 @@ export async function withX402Payment(
     let paymentChain: 'base' | 'solana' | undefined;
 
     if (!isTestMode && proof) {
-      const verify = await verifyPaymentProof(proof);
+      const verify = await verifyPaymentProof(proof, req.url, price);
       if (!verify.valid) {
         return NextResponse.json({ error: 'Invalid payment proof' }, { status: 402 });
       }
