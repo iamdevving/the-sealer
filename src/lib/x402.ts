@@ -196,7 +196,7 @@ async function verifyPaymentProof(
 ): Promise<{ valid: boolean; txHash?: string; chain?: 'base' | 'solana' }> {
   try {
     const cleanProof = proof.trim();
-
+    console.log('[The Sealer] Payment proof received — length:', cleanProof.length, 'prefix:', cleanProof.slice(0, 30));
     if (cleanProof.toLowerCase().includes('test')) {
       console.log('[The Sealer] Test mode — bypassing verification');
       return { valid: true };
