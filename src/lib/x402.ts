@@ -310,7 +310,6 @@ export async function issueAmendmentAttestation(params: {
     { name: 'bootstrapped',  value: params.bootstrapped,  type: 'bool'   },
   ]);
 
-  // Use refUID to chain to the original commitment attestation on EAS
   const refUID = params.originalUID.startsWith('0x') && params.originalUID.length === 66
     ? params.originalUID as `0x${string}`
     : '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
@@ -318,41 +317,45 @@ export async function issueAmendmentAttestation(params: {
   return sendAttestationWithRef(AMENDMENT_SCHEMA_UID, encodedData, params.agentId, refUID);
 }
 
-// ── Exported 402 challenge builder — use in GET handlers for crawler discovery ─
-export function x402Challenge(url: string, price: string): NextResponse {
-  const paymentRequired = {
-    x402Version: 1,
+// ── x402 v2 payment requirements builder ─────────────────────────────────────
+
+function buildPaymentRequired(url: string, price: string) {
+  return {
+    x402Version: 2,
     accepts: [
       {
         scheme:            'exact',
-        network: 'eip155:8453',
-        maxAmountRequired: price,
+        network:           'eip155:8453',
+        amount:            price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
         mimeType:          'application/json',
         payTo:             PAYMENT_CONFIG.recipient,
         maxTimeoutSeconds: 60,
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        extra: { name: 'USDC', version: '2' },
+        extra:             { name: 'USDC', version: '2' },
       },
       {
         scheme:            'exact',
-        network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-        maxAmountRequired: price,
+        network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+        amount:            price,
         resource:          url,
         description:       PAYMENT_CONFIG.description,
         mimeType:          'application/json',
         payTo:             PAYMENT_CONFIG.solanaRecipient,
         maxTimeoutSeconds: 60,
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        extra: { name: 'USDC', version: '2' },
+        extra:             { name: 'USDC', version: '2' },
       },
     ],
   };
+}
+
+function build402Response(paymentRequired: ReturnType<typeof buildPaymentRequired>, price: string): NextResponse {
   const b64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
   return new NextResponse(
     JSON.stringify({
-      x402Version: 1,
+      x402Version: 2,
       accepts:     paymentRequired.accepts,
       error:       'X-PAYMENT header is required',
     }),
@@ -365,6 +368,11 @@ export function x402Challenge(url: string, price: string): NextResponse {
       },
     },
   );
+}
+
+// ── Exported 402 challenge builder — use in GET handlers for crawler discovery ─
+export function x402Challenge(url: string, price: string): NextResponse {
+  return build402Response(buildPaymentRequired(url, price), price);
 }
 
 // ── x402 payment middleware ───────────────────────────────────────────────────
@@ -382,55 +390,7 @@ export async function withX402Payment(
   const isTestMode = req.headers.get('X-TEST-PAYMENT') === 'true';
 
   if (!proof && !isTestMode) {
-    // Standard x402 spec payload — base64 encoded for PAYMENT-REQUIRED header
-    // This is what 402index.io and compliant x402 clients look for
-    const paymentRequired = {
-      x402Version: 1,
-      accepts: [
-        {
-          scheme:           'exact',
-          network: 'eip155:8453',
-          maxAmountRequired: price,
-          resource:         req.url,
-          description:      PAYMENT_CONFIG.description,
-          mimeType:         'application/json',
-          payTo:            PAYMENT_CONFIG.recipient,
-          maxTimeoutSeconds: 60,
-          asset:            '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base mainnet
-          extra: { name: 'USDC', version: '2' },
-        },
-        {
-          scheme:           'exact',
-          network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-          maxAmountRequired: price,
-          resource:         req.url,
-          description:      PAYMENT_CONFIG.description,
-          mimeType:         'application/json',
-          payTo:            PAYMENT_CONFIG.solanaRecipient,
-          maxTimeoutSeconds: 60,
-          asset:            'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC on Solana
-          extra: { name: 'USDC', version: '2' },
-        },
-      ],
-    };
-
-    const paymentRequiredB64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
-
-    return new NextResponse(
-      JSON.stringify({
-        x402Version: 1,
-        accepts:     paymentRequired.accepts,
-        error:       'X-PAYMENT header is required',
-      }),
-      {
-        status:  402,
-        headers: {
-          'PAYMENT-REQUIRED':  paymentRequiredB64,
-          'WWW-Authenticate':  `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
-          'Content-Type':      'application/json',
-        },
-      },
-    );
+    return build402Response(buildPaymentRequired(req.url, price), price);
   }
 
   try {
