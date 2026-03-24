@@ -314,14 +314,16 @@ interface BazaarExtension {
 function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtension) {
   return {
     x402Version: 2,
+    resource: {
+      url,
+      description: PAYMENT_CONFIG.description,
+      mimeType:    'application/json',
+    },
     accepts: [
       {
         scheme:            'exact',
         network:           'eip155:8453',
         amount:            price,
-        resource: { url, method: 'POST' },
-        description:       PAYMENT_CONFIG.description,
-        mimeType:          'application/json',
         payTo:             PAYMENT_CONFIG.recipient,
         maxTimeoutSeconds: 60,
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -331,9 +333,6 @@ function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtensi
         scheme:            'exact',
         network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
         amount:            price,
-        resource: { url, method: 'POST' },
-        description:       PAYMENT_CONFIG.description,
-        mimeType:          'application/json',
         payTo:             PAYMENT_CONFIG.solanaRecipient,
         maxTimeoutSeconds: 60,
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
@@ -352,6 +351,7 @@ function build402Response(
   return new NextResponse(
     JSON.stringify({
       x402Version: 2,
+      resource:    paymentRequired.resource,
       accepts:     paymentRequired.accepts,
       error:       'X-PAYMENT header is required',
       ...(paymentRequired.extensions ? { extensions: paymentRequired.extensions } : {}),
