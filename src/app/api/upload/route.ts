@@ -128,7 +128,25 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-
-  return x402Challenge(req.url, '0.01');
-
+  return x402Challenge(req.url, '0.01', {
+    schema: {
+      properties: {
+        input: {
+          type: 'object',
+          required: ['file'],
+          properties: {
+            file: { type: 'string', format: 'binary', description: 'Image file (PNG, JPG, WEBP, GIF, max 5MB)' },
+          },
+        },
+        output: {
+          type: 'object',
+          properties: {
+            url:   { type: 'string', description: 'Permanent public image URL' },
+            uid:   { type: 'string' },
+            bytes: { type: 'number' },
+          },
+        },
+      },
+    },
+  });
 }

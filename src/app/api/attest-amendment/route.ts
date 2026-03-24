@@ -260,7 +260,26 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-
-  return x402Challenge(req.url, '0.25');
-
+  return x402Challenge(req.url, '0.25', {
+    schema: {
+      properties: {
+        input: {
+          type: 'object',
+          required: ['agentId', 'commitmentUID'],
+          properties: {
+            agentId:       { type: 'string', description: 'Agent wallet address (0x...)' },
+            commitmentUID: { type: 'string', description: 'Original commitment UID' },
+          },
+        },
+        output: {
+          type: 'object',
+          properties: {
+            status:       { type: 'string' },
+            amendmentUID: { type: 'string' },
+            txHash:       { type: 'string' },
+          },
+        },
+      },
+    },
+  });
 }

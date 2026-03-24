@@ -305,7 +305,28 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-
-  return x402Challenge(req.url, '0.30');
-
+  return x402Challenge(req.url, '0.30', {
+    schema: {
+      properties: {
+        input: {
+          type: 'object',
+          required: ['agentId', 'sourceChain', 'contractAddress', 'tokenId'],
+          properties: {
+            agentId:         { type: 'string', description: 'Agent wallet address' },
+            sourceChain:     { type: 'string', enum: ['base', 'ethereum', 'solana'] },
+            contractAddress: { type: 'string', description: 'NFT contract address' },
+            tokenId:         { type: 'string', description: 'Token ID' },
+          },
+        },
+        output: {
+          type: 'object',
+          properties: {
+            status:    { type: 'string' },
+            mirrorUID: { type: 'string' },
+            txHash:    { type: 'string' },
+          },
+        },
+      },
+    },
+  });
 }

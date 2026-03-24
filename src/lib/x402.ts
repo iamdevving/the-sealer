@@ -80,11 +80,11 @@ async function sendAttestation(
     ? `0x${attestedLog.data.slice(2, 66)}`
     : txHash;
 
-  console.log(`[The Sealer] ✅ Attestation mined — tx: ${txHash}, uid: ${uid}`);
+  console.log(`[The Sealer] Attestation mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
 }
 
-// ── Attestation with refUID (for amendments — chains to original commitment) ──
+// ── Attestation with refUID ───────────────────────────────────────────────────
 
 async function sendAttestationWithRef(
   schemaUid:   string,
@@ -129,7 +129,7 @@ async function sendAttestationWithRef(
     ? `0x${attestedLog.data.slice(2, 66)}`
     : txHash;
 
-  console.log(`[The Sealer] ✅ Attestation (with ref) mined — tx: ${txHash}, uid: ${uid}`);
+  console.log(`[The Sealer] Attestation (with ref) mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
 }
 
@@ -146,7 +146,7 @@ async function verifyPaymentProof(
     const cleanProof = proof.trim();
 
     if (cleanProof.toLowerCase().includes('test')) {
-      console.log('[The Sealer] 🧪 Test mode — bypassing verification');
+      console.log('[The Sealer] Test mode — bypassing verification');
       return { valid: true };
     }
 
@@ -160,10 +160,9 @@ async function verifyPaymentProof(
       if (receipt?.status === 'success' && tx) {
         const isCorrectRecipient = tx.to?.toLowerCase() === PAYMENT_CONFIG.recipient.toLowerCase();
         if (isCorrectRecipient) {
-          console.log('[The Sealer] ✅ Base verification OK');
+          console.log('[The Sealer] Base verification OK');
           return { valid: true, txHash: cleanProof, chain: 'base' };
         }
-        console.log('[The Sealer] ❌ Base TX recipient mismatch');
         return { valid: false };
       }
     }
@@ -177,7 +176,6 @@ async function verifyPaymentProof(
           commitment: 'confirmed',
         }).catch(() => null);
         if (tx) break;
-        console.log(`[The Sealer] 🔄 Solana tx not found yet, retry ${attempt + 1}/8...`);
         await new Promise(r => setTimeout(r, 4000));
       }
 
@@ -203,27 +201,21 @@ async function verifyPaymentProof(
         });
 
         if (usdcCredit) {
-          console.log('[The Sealer] ✅ Solana USDC verification OK (token balance)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
 
         const recipientKey = new PublicKey(recipientPubkey);
         const allKeys = accountKeys.map((k: any) => k.toBase58 ? k.toBase58() : k.toString());
         if (allKeys.includes(recipientKey.toBase58())) {
-          console.log('[The Sealer] ✅ Solana verification OK (account key)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
 
-        console.log('[The Sealer] ❌ Solana TX — recipient not found in token balances or accounts');
-        console.log('[The Sealer] Post token balances:', JSON.stringify(postBalances));
         return { valid: false };
       }
 
-      console.log('[The Sealer] ❌ Solana TX not found after retries');
       return { valid: false };
     }
 
-    console.log('[The Sealer] ❌ Unrecognized proof format');
     return { valid: false };
   } catch (e) {
     console.error('[The Sealer] Verification failed:', e);
@@ -237,7 +229,6 @@ export async function issueSealAttestation(
   statement: string,
   agentId?: `0x${string}`,
 ) {
-  console.log(`[The Sealer] Issuing statement attestation: "${statement}"`);
   const schemaEncoder = new SchemaEncoder('string statement');
   const encodedData   = schemaEncoder.encodeData([
     { name: 'statement', value: statement, type: 'string' },
@@ -253,7 +244,6 @@ export async function issueIdentityAttestation(
   imageUrl:   string,
   agentId?:   `0x${string}`,
 ) {
-  console.log(`[The Sealer] Issuing identity attestation for: "${name}"`);
   const schemaEncoder = new SchemaEncoder('string name,string entityType,string chain,string imageUrl');
   const encodedData   = schemaEncoder.encodeData([
     { name: 'name',       value: name,       type: 'string' },
@@ -273,8 +263,6 @@ export async function issueCommitmentAttestation(params: {
   deadline:          bigint;
   difficultyVersion: number;
 }): Promise<{ transactionHash: string; uid: string }> {
-  console.log(`[The Sealer] Issuing commitment attestation — claimType: ${params.claimType}`);
-
   const schemaEncoder = new SchemaEncoder(
     'string claimType,string metric,string evidence,uint64 deadline,uint8 difficultyVersion',
   );
@@ -285,7 +273,6 @@ export async function issueCommitmentAttestation(params: {
     { name: 'deadline',          value: params.deadline,          type: 'uint64' },
     { name: 'difficultyVersion', value: params.difficultyVersion, type: 'uint8'  },
   ]);
-
   return sendAttestation(COMMITMENT_SCHEMA_UID, encodedData, params.agentId);
 }
 
@@ -297,8 +284,6 @@ export async function issueAmendmentAttestation(params: {
   newDifficulty: number;
   bootstrapped:  boolean;
 }): Promise<{ transactionHash: string; uid: string }> {
-  console.log(`[The Sealer] Issuing amendment attestation — originalUID: ${params.originalUID}`);
-
   const schemaEncoder = new SchemaEncoder(
     'string claimType,string originalUID,string newMetric,uint8 newDifficulty,bool bootstrapped',
   );
@@ -309,17 +294,24 @@ export async function issueAmendmentAttestation(params: {
     { name: 'newDifficulty', value: params.newDifficulty, type: 'uint8'  },
     { name: 'bootstrapped',  value: params.bootstrapped,  type: 'bool'   },
   ]);
-
   const refUID = params.originalUID.startsWith('0x') && params.originalUID.length === 66
     ? params.originalUID as `0x${string}`
     : '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`;
-
   return sendAttestationWithRef(AMENDMENT_SCHEMA_UID, encodedData, params.agentId, refUID);
 }
 
 // ── x402 v2 payment requirements builder ─────────────────────────────────────
 
-function buildPaymentRequired(url: string, price: string) {
+interface BazaarExtension {
+  schema: {
+    properties: {
+      input:  Record<string, any>;
+      output: Record<string, any>;
+    };
+  };
+}
+
+function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtension) {
   return {
     x402Version: 2,
     accepts: [
@@ -348,16 +340,21 @@ function buildPaymentRequired(url: string, price: string) {
         extra:             { name: 'USDC', version: '2' },
       },
     ],
+    ...(bazaar ? { extensions: { bazaar } } : {}),
   };
 }
 
-function build402Response(paymentRequired: ReturnType<typeof buildPaymentRequired>, price: string): NextResponse {
+function build402Response(
+  paymentRequired: ReturnType<typeof buildPaymentRequired>,
+  price: string,
+): NextResponse {
   const b64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
   return new NextResponse(
     JSON.stringify({
       x402Version: 2,
       accepts:     paymentRequired.accepts,
       error:       'X-PAYMENT header is required',
+      ...(paymentRequired.extensions ? { extensions: paymentRequired.extensions } : {}),
     }),
     {
       status: 402,
@@ -370,9 +367,8 @@ function build402Response(paymentRequired: ReturnType<typeof buildPaymentRequire
   );
 }
 
-// ── Exported 402 challenge builder — use in GET handlers for crawler discovery ─
-export function x402Challenge(url: string, price: string): NextResponse {
-  return build402Response(buildPaymentRequired(url, price), price);
+export function x402Challenge(url: string, price: string, bazaar?: BazaarExtension): NextResponse {
+  return build402Response(buildPaymentRequired(url, price, bazaar), price);
 }
 
 // ── x402 payment middleware ───────────────────────────────────────────────────
@@ -405,7 +401,7 @@ export async function withX402Payment(
       }
       paymentChain = verify.chain;
     } else if (isTestMode) {
-      console.log('[The Sealer] 🧪 Test mode — bypassing verification');
+      console.log('[The Sealer] Test mode — bypassing verification');
     }
 
     return await handler(paymentChain);
