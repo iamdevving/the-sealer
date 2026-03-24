@@ -256,7 +256,12 @@ export async function POST(req: NextRequest) {
       amendmentUrl,
       message: 'Amendment sealed onchain. Verification at deadline will use the amended thresholds.',
     });
-  }, AMENDMENT_PRICE);
+  }, AMENDMENT_PRICE, {
+  schema: { properties: {
+    input: { properties: { body: { type: 'object', required: ['agentId','commitmentUid'], properties: { agentId: { type: 'string' }, commitmentUid: { type: 'string' }, newMetric: { type: 'string' } } } } },
+    output: { properties: { example: { success: true, amendUID: '0xabc', amendTxHash: '0xdef' } } },
+  } },
+});
 }
 
 export async function GET(req: NextRequest) {

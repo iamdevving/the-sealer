@@ -385,6 +385,7 @@ export async function withX402Payment(
   req:     NextRequest,
   handler: (paymentChain?: 'base' | 'solana') => Promise<NextResponse>,
   price:   string = '0.10',
+  bazaar?: BazaarExtension,
 ): Promise<NextResponse> {
   const proof = req.headers.get('PAYMENT-SIGNATURE') ||
                 req.headers.get('X-PAYMENT')         ||
@@ -394,7 +395,7 @@ export async function withX402Payment(
   const isTestMode = req.headers.get('X-TEST-PAYMENT') === 'true';
 
   if (!proof && !isTestMode) {
-    return build402Response(buildPaymentRequired(req.url, price), price);
+    return build402Response(buildPaymentRequired(req.url, price, bazaar), price);
   }
 
   try {

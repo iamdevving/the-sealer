@@ -181,7 +181,12 @@ export async function POST(req: NextRequest) {
       message:        'Commitment sealed onchain. Certificate will be issued after verification.',
       verifyEndpoint: `/api/verify/${claimType}`,
     });
-  }, COMMITMENT_PRICE);
+  }, COMMITMENT_PRICE, {
+  schema: { properties: {
+    input: { properties: { body: { type: 'object', required: ['agentId','claimType','commitment','metric','deadline'], properties: { agentId: { type: 'string' }, claimType: { type: 'string' }, commitment: { type: 'string' }, metric: { type: 'string' }, deadline: { type: 'string' } } } } },
+    output: { properties: { example: { status: 'success', commitmentUID: '0xabc', txHash: '0xdef', permalink: 'https://thesealer.xyz/c/abc123' } } },
+  } },
+});
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

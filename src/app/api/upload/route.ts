@@ -123,7 +123,11 @@ export async function POST(req: NextRequest) {
         },
       })
     },
-    UPLOAD_PRICE_USDC
+    UPLOAD_PRICE_USDC,
+    { schema: { properties: {
+      input: { properties: { body: { type: 'object', required: ['imageUrl'], properties: { imageUrl: { type: 'string' } } } } },
+      output: { properties: { example: { success: true, uid: 'abc123', url: 'https://blob.vercel-storage.com/abc.png', bytes: 204800 } } },
+    } } }
   )
 }
 

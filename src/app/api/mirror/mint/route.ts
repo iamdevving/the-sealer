@@ -301,7 +301,12 @@ export async function POST(req: NextRequest) {
       console.error('[mirror/mint]', err);
       return NextResponse.json({ error: 'Mint failed', details: String(err) }, { status: 500 });
     }
-  }, price);
+  }, price, {
+  schema: { properties: {
+    input: { properties: { body: { type: 'object', required: ['originalChain','originalTokenId','ownerWallet','recipientWallet'], properties: { originalChain: { type: 'string' }, originalContract: { type: 'string' }, originalTokenId: { type: 'string' }, ownerWallet: { type: 'string' }, recipientWallet: { type: 'string' }, targetChain: { type: 'string' } } } } },
+    output: { properties: { example: { success: true, mirrorTokenId: 'abc', txHash: '0xdef', targetChain: 'Base' } } },
+  } },
+});
 }
 
 export async function GET(req: NextRequest) {

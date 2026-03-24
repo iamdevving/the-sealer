@@ -345,7 +345,37 @@ export async function POST(req: NextRequest) {
       console.error('[The Sealer] Attestation error:', error);
       return NextResponse.json({ error: 'Failed to issue attestation' }, { status: 500 });
     }
-  }, price);
+  }, price, {
+  schema: {
+    properties: {
+      input: {
+        properties: {
+          body: {
+            type: 'object',
+            required: ['format', 'agentId'],
+            properties: {
+              format:     { type: 'string' },
+              agentId:    { type: 'string' },
+              statement:  { type: 'string' },
+              theme:      { type: 'string' },
+              imageUrl:   { type: 'string' },
+            },
+          },
+        },
+      },
+      output: {
+        properties: {
+          example: {
+            status:    'success',
+            txHash:    '0xabc',
+            uid:       'abc123',
+            permalink: 'https://thesealer.xyz/c/abc123',
+          },
+        },
+      },
+    },
+  },
+});
 }
 
 export async function GET(req: NextRequest) {
