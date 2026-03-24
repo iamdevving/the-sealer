@@ -352,15 +352,9 @@ export function x402Challenge(url: string, price: string): NextResponse {
   const b64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
   return new NextResponse(
     JSON.stringify({
-      error:       'Payment required',
-      amount:      price,
-      currency:    'USDC',
-      description: PAYMENT_CONFIG.description,
-      paymentOptions: [
-        { chain: 'base',   token: 'USDC', recipient: PAYMENT_CONFIG.recipient,       amount: price },
-        { chain: 'solana', token: 'USDC', recipient: PAYMENT_CONFIG.solanaRecipient, amount: price },
-      ],
-      x402: { version: 1, schemes: ['exact'], network: ['base', 'solana'] },
+      x402Version: 1,
+      accepts:     paymentRequired.accepts,
+      error:       'X-PAYMENT header is required',
     }),
     {
       status: 402,
@@ -424,15 +418,9 @@ export async function withX402Payment(
 
     return new NextResponse(
       JSON.stringify({
-        error:       'Payment required',
-        amount:      price,
-        currency:    'USDC',
-        description: PAYMENT_CONFIG.description,
-        paymentOptions: [
-          { chain: 'base',   token: 'USDC', recipient: PAYMENT_CONFIG.recipient,       amount: price },
-          { chain: 'solana', token: 'USDC', recipient: PAYMENT_CONFIG.solanaRecipient, amount: price },
-        ],
-        x402: { version: 1, schemes: ['exact'], network: ['base', 'solana'] },
+        x402Version: 1,
+        accepts:     paymentRequired.accepts,
+        error:       'X-PAYMENT header is required',
       }),
       {
         status:  402,
