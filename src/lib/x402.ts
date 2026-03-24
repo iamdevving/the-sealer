@@ -331,7 +331,7 @@ function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtensi
       {
         scheme:            'exact',
         network:           'eip155:8453',
-        amount:            price,
+        amount: String(Math.round(parseFloat(price) * 1_000_000)),
         payTo:             PAYMENT_CONFIG.recipient,
         maxTimeoutSeconds: 60,
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -340,7 +340,7 @@ function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtensi
       {
         scheme:            'exact',
         network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-        amount:            price,
+        amount: String(Math.round(parseFloat(price) * 1_000_000)),
         payTo:             PAYMENT_CONFIG.solanaRecipient,
         maxTimeoutSeconds: 60,
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
