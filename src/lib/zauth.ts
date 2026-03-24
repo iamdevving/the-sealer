@@ -1,20 +1,8 @@
 // src/lib/zauth.ts
-//
-// Official @zauthx402/sdk integration for Next.js (App Router)
-//
-// Uses ZauthClient directly from the SDK — no Express required.
-// Wraps withX402Payment to observe requests/responses and report
-// telemetry to the Zauth Provider Hub asynchronously.
-//
-// Drop-in replacement: swap withX402Payment → withZauthX402Payment.
-// All attestation functions and x402Challenge are re-exported so
-// route files only need to change their import path.
-
 import { NextRequest, NextResponse } from 'next/server';
 import { ZauthClient } from '@zauthx402/sdk';
 import { withX402Payment, x402Challenge } from '@/lib/x402';
 
-// ── Re-export everything from x402 so routes can import from one place ────────
 export {
   issueSealAttestation,
   issueIdentityAttestation,
@@ -24,7 +12,6 @@ export {
   x402Challenge,
 } from '@/lib/x402';
 
-// ── BazaarExtension type (mirrors x402.ts) ────────────────────────────────────
 interface BazaarExtension {
   schema: {
     properties: {
@@ -33,8 +20,6 @@ interface BazaarExtension {
     };
   };
 }
-
-// ── Singleton ZauthClient ─────────────────────────────────────────────────────
 
 let _zauthClient: InstanceType<typeof ZauthClient> | null = null;
 
@@ -58,15 +43,12 @@ function getZauthClient(): InstanceType<typeof ZauthClient> | null {
         ],
       },
     });
-    console.log('[zauth] ZauthClient initialised');
   } catch (err) {
     console.warn('[zauth] Failed to initialise ZauthClient:', err);
     _zauthClient = null;
   }
   return _zauthClient;
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function headersToRecord(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
@@ -86,8 +68,6 @@ function redactHeaders(headers: Record<string, string>): Record<string, string> 
   return out;
 }
 
-// ── Core wrapper ──────────────────────────────────────────────────────────────
-
 export async function withZauthX402Payment(
   req:     NextRequest,
   handler: (paymentChain?: 'base' | 'solana') => Promise<NextResponse>,
@@ -98,28 +78,24 @@ export async function withZauthX402Payment(
   const startTime = Date.now();
   const url       = req.url;
   const method    = req.method;
-
-  // Track request event ID so we can link response to it
   let requestEventId: string | undefined;
 
-  // ── Queue request event ───────────────────────────────────────────────────
+  // Queue request event
   if (client) {
     try {
       const base = client.createEventBase('request');
       requestEventId = base.eventId;
-      const reqHeaders = redactHeaders(headersToRecord(req.headers));
-
       client.queueEvent({
         ...base,
         type:        'request',
         url,
         baseUrl:     new URL(url).origin,
         method,
-        headers:     reqHeaders,
+        headers:     redactHeaders(headersToRecord(req.headers)),
         queryParams: Object.fromEntries(new URL(url).searchParams),
-        body:        null, // body consumed by payment middleware — not available here
+        body:        null,
         requestSize: Number(req.headers.get('content-length') || 0),
-        sourceIp:    req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        sourceIp:    req.headers.get('x-forwarded-for') || 'unknown',
         userAgent:   req.headers.get('user-agent') || undefined,
         paymentHeader:
           req.headers.get('payment-signature') ||
@@ -131,44 +107,42 @@ export async function withZauthX402Payment(
     }
   }
 
-  // ── Run the actual payment handler ────────────────────────────────────────
+  // Run payment handler
   const response = await withX402Payment(req, handler, price, bazaar);
 
-  // ── Queue response event (fire-and-forget) ────────────────────────────────
+  // Queue response event + explicit flush (required in serverless)
+  // Vercel kills the process after response — setTimeout never fires
   if (client && requestEventId) {
-    // Don't await — never block the response
-    Promise.resolve().then(async () => {
+    try {
+      const responseTime  = Date.now() - startTime;
+      const statusCode    = response.status;
+      const contentLength = response.headers.get('content-length');
+
+      let responseBody: unknown = null;
       try {
-        const responseTime = Date.now() - startTime;
-        const statusCode   = response.status;
+        const text = await response.clone().text();
+        if (text) responseBody = JSON.parse(text);
+      } catch { /* non-JSON */ }
 
-        let responseBody: unknown = null;
-        try {
-          const clone = response.clone();
-          const text  = await clone.text();
-          if (text) responseBody = JSON.parse(text);
-        } catch { /* non-JSON */ }
+      client.queueEvent({
+        ...client.createEventBase('response'),
+        type:           'response',
+        requestEventId,
+        url,
+        statusCode,
+        headers:        redactHeaders(headersToRecord(response.headers)),
+        body:           responseBody,
+        responseSize:   contentLength ? Number(contentLength) : 0,
+        responseTimeMs: responseTime,
+        success:        statusCode >= 200 && statusCode < 300,
+        meaningful:     statusCode === 200 && responseBody !== null,
+      });
 
-        const resHeaders = redactHeaders(headersToRecord(response.headers));
-        const contentLength = response.headers.get('content-length');
-
-        client.queueEvent({
-          ...client.createEventBase('response'),
-          type:           'response',
-          requestEventId,
-          url,
-          statusCode,
-          headers:        resHeaders,
-          body:           responseBody,
-          responseSize:   contentLength ? Number(contentLength) : 0,
-          responseTimeMs: responseTime,
-          success:        statusCode >= 200 && statusCode < 300,
-          meaningful:     statusCode === 200 && responseBody !== null,
-        });
-      } catch (err) {
-        console.warn('[zauth] Failed to queue response event:', err);
-      }
-    });
+      // Must flush explicitly — serverless doesn't wait for setTimeout
+      await (client as any).flush();
+    } catch (err) {
+      console.warn('[zauth] Failed to send telemetry:', err);
+    }
   }
 
   return response;
