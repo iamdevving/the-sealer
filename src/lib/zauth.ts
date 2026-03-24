@@ -24,11 +24,11 @@ interface BazaarExtension {
 let _zauthClient: InstanceType<typeof ZauthClient> | null = null;
 
 function getZauthClient(): InstanceType<typeof ZauthClient> | null {
+  console.log('[zauth] getZauthClient called, key:', process.env.ZAUTH_API_KEY ? 'SET' : 'MISSING');
   if (!process.env.ZAUTH_API_KEY) return null;
   if (_zauthClient) return _zauthClient;
   try {
-    console.log('[zauth] Initialising with key:', process.env.ZAUTH_API_KEY ? 'SET' : 'MISSING');
-      _zauthClient = new ZauthClient({
+          _zauthClient = new ZauthClient({
       apiKey:      process.env.ZAUTH_API_KEY,
       mode:        'provider',
       environment: process.env.NODE_ENV || 'production',
