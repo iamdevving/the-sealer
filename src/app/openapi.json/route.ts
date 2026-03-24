@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
             },
           },
           responses: {
-            '200': { description: 'Attestation issued successfully' },
+            '200': { description: 'Attestation issued successfully', content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string' }, txHash: { type: 'string' }, uid: { type: 'string' }, permalink: { type: 'string' }, nftTxHash: { type: 'string' } } } } } },
             '402': { description: 'Payment Required' },
           },
           'x-payment-info': {
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
             },
           },
           responses: {
-            '200': { description: 'Commitment attested onchain' },
+            '200': { description: 'Commitment attested onchain', content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string' }, commitmentUID: { type: 'string' }, txHash: { type: 'string' }, difficultyScore: { type: 'number' }, permalink: { type: 'string' } } } } } },
             '402': { description: 'Payment Required' },
           },
           'x-payment-info': {
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
             },
           },
           responses: {
-            '200': { description: 'Amendment attested onchain' },
+            '200': { description: 'Amendment attested onchain', content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string' }, amendmentUID: { type: 'string' }, txHash: { type: 'string' } } } } } },
             '402': { description: 'Payment Required' },
           },
           'x-payment-info': {
@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
             },
           },
           responses: {
-            '200': { description: 'Mirror NFT minted' },
+            '200': { description: 'Mirror NFT minted', content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string' }, mirrorUID: { type: 'string' }, txHash: { type: 'string' } } } } } },
             '402': { description: 'Payment Required' },
           },
           'x-payment-info': {
@@ -270,7 +270,7 @@ export async function GET(req: NextRequest) {
             },
           },
           responses: {
-            '200': { description: 'Image uploaded, permanent URL returned' },
+            '200': { description: 'Image uploaded, permanent URL returned', content: { 'application/json': { schema: { type: 'object', properties: { url: { type: 'string' }, uid: { type: 'string' }, bytes: { type: 'number' } } } } } },
             '402': { description: 'Payment Required' },
           },
           'x-payment-info': {
