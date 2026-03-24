@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
                     statement:  { type: 'string', description: 'Statement text' },
                     imageUrl:   { type: 'string', description: 'Image URL (optional)' },
                     theme:      { type: 'string', description: 'Visual theme' },
-                    name:       { type: 'string', description: 'Agent name (required for sid)' },
+                    name:       { type: 'string', description: 'Agent name (for sid)' },
                     entityType: { type: 'string', enum: ['AI_AGENT', 'HUMAN', 'UNKNOWN'] },
                     handle:     { type: 'string', description: 'Handle e.g. aria.agent (for sid)' },
                     chain:      { type: 'string', enum: ['Base', 'Solana'] },
@@ -47,6 +47,35 @@ export async function GET(req: NextRequest) {
             pricingMode: 'range',
             minPrice:    '0.10',
             maxPrice:    '0.20',
+          },
+          'x-bazaar': {
+            schema: {
+              properties: {
+                input: {
+                  type:       'object',
+                  required:   ['format', 'agentId'],
+                  properties: {
+                    format:     { type: 'string', enum: ['statement', 'card', 'sleeve', 'sid'] },
+                    agentId:    { type: 'string' },
+                    statement:  { type: 'string' },
+                    theme:      { type: 'string' },
+                    imageUrl:   { type: 'string' },
+                    name:       { type: 'string' },
+                    entityType: { type: 'string' },
+                    handle:     { type: 'string' },
+                  },
+                },
+                output: {
+                  type:       'object',
+                  properties: {
+                    status:    { type: 'string' },
+                    txHash:    { type: 'string' },
+                    uid:       { type: 'string' },
+                    permalink: { type: 'string' },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -66,8 +95,8 @@ export async function GET(req: NextRequest) {
                     claimType:  { type: 'string', enum: ['x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery'] },
                     commitment: { type: 'string', description: 'SMART commitment statement' },
                     metric:     { type: 'string', description: 'Measurable target description' },
-                    deadline:   { type: 'string', description: 'Deadline date YYYY-MM-DD' },
-                    evidence:   { type: 'string', description: 'Supporting URL or context (optional)' },
+                    deadline:   { type: 'string', description: 'Deadline YYYY-MM-DD' },
+                    evidence:   { type: 'string', description: 'Supporting URL (optional)' },
                     theme:      { type: 'string', description: 'Visual theme (optional)' },
                   },
                 },
@@ -82,6 +111,34 @@ export async function GET(req: NextRequest) {
             protocols:   ['x402'],
             pricingMode: 'fixed',
             price:       '0.50',
+          },
+          'x-bazaar': {
+            schema: {
+              properties: {
+                input: {
+                  type:       'object',
+                  required:   ['agentId', 'claimType', 'commitment', 'metric', 'deadline'],
+                  properties: {
+                    agentId:    { type: 'string' },
+                    claimType:  { type: 'string', enum: ['x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery'] },
+                    commitment: { type: 'string' },
+                    metric:     { type: 'string' },
+                    deadline:   { type: 'string' },
+                    evidence:   { type: 'string' },
+                  },
+                },
+                output: {
+                  type:       'object',
+                  properties: {
+                    status:          { type: 'string' },
+                    commitmentUID:   { type: 'string' },
+                    txHash:          { type: 'string' },
+                    difficultyScore: { type: 'number' },
+                    permalink:       { type: 'string' },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -112,6 +169,28 @@ export async function GET(req: NextRequest) {
             protocols:   ['x402'],
             pricingMode: 'fixed',
             price:       '0.25',
+          },
+          'x-bazaar': {
+            schema: {
+              properties: {
+                input: {
+                  type:       'object',
+                  required:   ['agentId', 'commitmentUID'],
+                  properties: {
+                    agentId:       { type: 'string' },
+                    commitmentUID: { type: 'string' },
+                  },
+                },
+                output: {
+                  type:       'object',
+                  properties: {
+                    status:       { type: 'string' },
+                    amendmentUID: { type: 'string' },
+                    txHash:       { type: 'string' },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -146,6 +225,30 @@ export async function GET(req: NextRequest) {
             minPrice:    '0.30',
             maxPrice:    '0.90',
           },
+          'x-bazaar': {
+            schema: {
+              properties: {
+                input: {
+                  type:       'object',
+                  required:   ['agentId', 'sourceChain', 'contractAddress', 'tokenId'],
+                  properties: {
+                    agentId:         { type: 'string' },
+                    sourceChain:     { type: 'string', enum: ['base', 'ethereum', 'solana'] },
+                    contractAddress: { type: 'string' },
+                    tokenId:         { type: 'string' },
+                  },
+                },
+                output: {
+                  type:       'object',
+                  properties: {
+                    status:    { type: 'string' },
+                    mirrorUID: { type: 'string' },
+                    txHash:    { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
         },
       },
       '/api/upload': {
@@ -174,6 +277,27 @@ export async function GET(req: NextRequest) {
             protocols:   ['x402'],
             pricingMode: 'fixed',
             price:       '0.01',
+          },
+          'x-bazaar': {
+            schema: {
+              properties: {
+                input: {
+                  type:       'object',
+                  required:   ['imageUrl'],
+                  properties: {
+                    imageUrl: { type: 'string' },
+                  },
+                },
+                output: {
+                  type:       'object',
+                  properties: {
+                    url:   { type: 'string' },
+                    uid:   { type: 'string' },
+                    bytes: { type: 'number' },
+                  },
+                },
+              },
+            },
           },
         },
       },
