@@ -140,7 +140,7 @@ async function sendAttestationWithRef(
 //   2. Solana signature (base58, 85-90 chars) — direct on-chain check
 //   3. Base64-encoded JSON (Coinbase facilitator / standard x402 clients) — forward to facilitator
 
-const COINBASE_FACILITATOR_URL = 'https://facilitator.x402.org';
+const COINBASE_FACILITATOR_URL = 'https://x402.org/facilitator';
 
 function isSolanaSignature(str: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{85,90}$/.test(str.trim());
