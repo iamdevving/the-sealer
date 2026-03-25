@@ -264,32 +264,20 @@ export async function POST(req: NextRequest) {
 });
 }
 
-export async function GET(req: NextRequest) {
-  return x402Challenge(req.url, '0.25', {
-    schema: {
-      properties: {
-        input: {
-          properties: {
-            body: {
-              type:       'object',
-              required:   ['agentId', 'commitmentUID'],
-              properties: {
-                agentId:       { type: 'string' },
-                commitmentUID: { type: 'string' },
-              },
-            },
-          },
-        },
-        output: {
-          properties: {
-            example: {
-              status:       'success',
-              amendmentUID: '0xabc...',
-              txHash:       '0xdef...',
-            },
-          },
-        },
-      },
+export async function GET() {
+  return NextResponse.json({
+    endpoint: 'POST /api/attest-amendment',
+    description: 'Amend an existing commitment with updated parameters',
+    docs: 'https://thesealer.xyz/api/infoproducts',
+    x402: true,
+    price: '$0.10 USDC',
+    networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+    params: {
+      agentId: 'your wallet address',
+      originalUID: 'UID of the commitment to amend',
+      claimType: 'github | defi_base | defi_solana | website | x402',
+      newMetric: 'updated goal description',
+      newDifficulty: 'difficulty score 1-10',
     },
   });
 }

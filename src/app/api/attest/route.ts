@@ -379,38 +379,22 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  return x402Challenge(req.url, '0.10', {
-    schema: {
-      properties: {
-        input: {
-          properties: {
-            body: {
-              type:       'object',
-              required:   ['format', 'agentId'],
-              properties: {
-                format:     { type: 'string', enum: ['statement', 'card', 'sleeve', 'sid'] },
-                agentId:    { type: 'string' },
-                statement:  { type: 'string' },
-                theme:      { type: 'string' },
-                imageUrl:   { type: 'string' },
-                name:       { type: 'string' },
-                entityType: { type: 'string' },
-                handle:     { type: 'string' },
-              },
-            },
-          },
-        },
-        output: {
-          properties: {
-            example: {
-              status:    'success',
-              txHash:    '0xabc...',
-              uid:       'abc123',
-              permalink: 'https://thesealer.xyz/c/abc123',
-            },
-          },
-        },
-      },
+  return NextResponse.json({
+    endpoint:    'POST /api/attest',
+    description: 'Issue onchain attestations — statements, credentials, Sealer IDs',
+    docs:        'https://thesealer.xyz/api/infoproducts',
+    x402:        true,
+    price:       '$0.10–$0.20 USDC',
+    networks:    ['eip155:8453 (Base)', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp (Solana)'],
+    params: {
+      format:    'statement | card | sleeve | sid',
+      agentId:   'your wallet address (0x... for EVM, base58 for Solana)',
+      statement: 'your statement text (for statement/card/sleeve formats)',
+    },
+    example: {
+      format:    'statement',
+      agentId:   '0xYourWalletAddress',
+      statement: 'I shipped 100 onchain transactions this month',
     },
   });
 }

@@ -129,31 +129,16 @@ export async function POST(req: NextRequest) {
   )
 }
 
-export async function GET(req: NextRequest) {
-  return x402Challenge(req.url, '0.01', {
-    schema: {
-      properties: {
-        input: {
-          properties: {
-            body: {
-              type:       'object',
-              required:   ['imageUrl'],
-              properties: {
-                imageUrl: { type: 'string' },
-              },
-            },
-          },
-        },
-        output: {
-          properties: {
-            example: {
-              url:   'https://blob.vercel-storage.com/uploads/abc123.png',
-              uid:   'abc123',
-              bytes: 204800,
-            },
-          },
-        },
-      },
+export async function GET() {
+  return NextResponse.json({
+    endpoint: 'POST /api/upload',
+    description: 'Upload an image for use in attestation credentials',
+    docs: 'https://thesealer.xyz/api/infoproducts',
+    x402: true,
+    price: '$0.01 USDC',
+    networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+    params: {
+      file: 'image file (multipart/form-data) — png, jpg, webp, gif, max 5MB',
     },
   });
 }

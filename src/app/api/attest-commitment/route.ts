@@ -270,38 +270,19 @@ function extractVerificationParams(
   }
 }
 
-export async function GET(req: NextRequest) {
-  return x402Challenge(req.url, '0.50', {
-    schema: {
-      properties: {
-        input: {
-          properties: {
-            body: {
-              type:       'object',
-              required:   ['agentId', 'claimType', 'commitment', 'metric', 'deadline'],
-              properties: {
-                agentId:    { type: 'string' },
-                claimType:  { type: 'string', enum: ['x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery'] },
-                commitment: { type: 'string' },
-                metric:     { type: 'string' },
-                deadline:   { type: 'string' },
-                evidence:   { type: 'string' },
-              },
-            },
-          },
-        },
-        output: {
-          properties: {
-            example: {
-              status:          'success',
-              commitmentUID:   '0xabc...',
-              txHash:          '0xdef...',
-              difficultyScore: 65,
-              permalink:       'https://thesealer.xyz/c/abc123',
-            },
-          },
-        },
-      },
+export async function GET() {
+  return NextResponse.json({
+    endpoint: 'POST /api/attest-commitment',
+    description: 'Commit to a measurable onchain goal — get certified when achieved',
+    docs: 'https://thesealer.xyz/api/infoproducts',
+    x402: true,
+    price: '$0.50 USDC',
+    networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+    params: {
+      agentId: 'your wallet address',
+      claimType: 'github | defi_base | defi_solana | website | x402',
+      metric: 'measurable goal description',
+      deadline: 'unix timestamp',
     },
   });
 }

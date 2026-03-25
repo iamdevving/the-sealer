@@ -4,7 +4,7 @@ import { Redis } from '@upstash/redis';
 import { createPublicClient, createWalletClient, http, parseAbi } from 'viem';
 import { base, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { withX402Payment } from '@/lib/x402';
+import { withZauthX402Payment } from '@/lib/zauth';
 import { mintSolanaMirror } from '@/lib/solana-mint';
 import { x402Challenge } from '@/lib/x402';
 
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
     if (preview?.targetChain === 'Solana') price = MIRROR_PRICE_SOLANA;
   } catch {}
 
-  return withX402Payment(req, async (paymentChain) => {
+  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     let body: any = {};
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
@@ -309,34 +309,19 @@ export async function POST(req: NextRequest) {
 });
 }
 
-export async function GET(req: NextRequest) {
-  return x402Challenge(req.url, '0.30', {
-    schema: {
-      properties: {
-        input: {
-          properties: {
-            body: {
-              type:       'object',
-              required:   ['agentId', 'sourceChain', 'contractAddress', 'tokenId'],
-              properties: {
-                agentId:         { type: 'string' },
-                sourceChain:     { type: 'string', enum: ['base', 'ethereum', 'solana'] },
-                contractAddress: { type: 'string' },
-                tokenId:         { type: 'string' },
-              },
-            },
-          },
-        },
-        output: {
-          properties: {
-            example: {
-              status:    'success',
-              mirrorUID: '0xabc...',
-              txHash:    '0xdef...',
-            },
-          },
-        },
-      },
+export async function GET() {
+  return NextResponse.json({
+    endpoint: 'POST /api/mirror/mint',
+    description: 'Mint a soulbound Mirror NFT of any Base or Solana NFT you own',
+    docs: 'https://thesealer.xyz/api/infoproducts',
+    x402: true,
+    price: '$0.30 (Base NFT) | $0.90 (Solana NFT) USDC',
+    networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+    params: {
+      walletAddress: 'your wallet address',
+      sourceChain: 'base | solana',
+      contractAddress: 'NFT contract address (Base) or mint address (Solana)',
+      tokenId: 'token ID (Base NFTs only)',
     },
   });
 }
