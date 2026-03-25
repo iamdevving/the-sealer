@@ -433,30 +433,35 @@ export interface BazaarExtension {
 }
 
 function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtension) {
+  const amountAtomic = String(Math.round(parseFloat(price) * 1_000_000));
+
   return {
     x402Version: 2,
-    resource: {
-      url,
-      description: PAYMENT_CONFIG.description,
-      mimeType:    'application/json',
-    },
     accepts: [
       {
         scheme:            'exact',
         network:           'eip155:8453',
-        amount:            String(Math.round(parseFloat(price) * 1_000_000)),
-        payTo:             PAYMENT_CONFIG.recipient,
-        maxTimeoutSeconds: 60,
+        maxAmountRequired: amountAtomic,   // EVM spec field
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        payTo:             PAYMENT_CONFIG.recipient,
+        resource:          url,
+        description:       PAYMENT_CONFIG.description,
+        mimeType:          'application/json',
+        outputSchema:      null,
+        maxTimeoutSeconds: 60,
         extra:             { name: 'USDC', version: '2' },
       },
       {
         scheme:            'exact',
         network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-        amount:            String(Math.round(parseFloat(price) * 1_000_000)),
-        payTo:             PAYMENT_CONFIG.solanaRecipient,
-        maxTimeoutSeconds: 60,
+        amount:            amountAtomic,   // SVM spec field (intentional asymmetry)
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        payTo:             PAYMENT_CONFIG.solanaRecipient,
+        resource:          url,
+        description:       PAYMENT_CONFIG.description,
+        mimeType:          'application/json',
+        outputSchema:      null,
+        maxTimeoutSeconds: 60,
         extra:             { name: 'USDC', version: '2' },
       },
     ],
@@ -469,23 +474,21 @@ function build402Response(
   price: string,
 ): NextResponse {
   const b64 = Buffer.from(JSON.stringify(paymentRequired)).toString('base64');
-  return new NextResponse(
-    JSON.stringify({
-      x402Version: 2,
-      resource:    paymentRequired.resource,
-      accepts:     paymentRequired.accepts,
-      error:       'X-PAYMENT header is required',
-      ...(paymentRequired.extensions ? { extensions: paymentRequired.extensions } : {}),
-    }),
-    {
-      status: 402,
-      headers: {
-        'PAYMENT-REQUIRED': b64,
-        'WWW-Authenticate': `x402 payment="USDC" chain="base|solana" amount="${price}" recipient-base="${PAYMENT_CONFIG.recipient}" recipient-solana="${PAYMENT_CONFIG.solanaRecipient}"`,
-        'Content-Type':     'application/json',
-      },
+
+  const body = {
+    x402Version: 2,
+    error:       'X-PAYMENT header is required',
+    accepts:     paymentRequired.accepts,
+  };
+
+  return new NextResponse(JSON.stringify(body), {
+    status: 402,
+    headers: {
+      'PAYMENT-REQUIRED':              b64,
+      'Content-Type':                  'application/json',
+      'Access-Control-Allow-Origin':   '*',
     },
-  );
+  });
 }
 
 export function x402Challenge(url: string, price: string, bazaar?: BazaarExtension): NextResponse {
