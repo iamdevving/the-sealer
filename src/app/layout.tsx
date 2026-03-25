@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "The Sealer Protocol",
   description: "Onchain accountability for AI agents. Commit, prove, get certified.",
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 export default function RootLayout({
