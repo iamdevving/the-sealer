@@ -134,7 +134,6 @@ async function sendAttestationWithRef(
 }
 
 // ── Payment verification ──────────────────────────────────────────────────────
-// ── Payment verification ──────────────────────────────────────────────────────
 // Supports three formats:
 //   1. Raw EVM tx hash (0x + 64 chars) — direct on-chain check
 //   2. Solana signature (base58, 85-90 chars) — direct on-chain check
@@ -147,41 +146,67 @@ function isSolanaSignature(str: string): boolean {
 }
 
 function isBase64Json(str: string): boolean {
-  // Base64 strings don't start with 0x and aren't Solana signatures
-  // They're typically 100+ chars of base64 characters
   return /^[A-Za-z0-9+/=]{20,}$/.test(str.trim()) &&
     !str.startsWith('0x') &&
     !isSolanaSignature(str.trim());
 }
 
+function buildPaymentRequirementsForFacilitator(
+  price:     string,
+  isSolana:  boolean,
+  reqUrl?:   string,
+): Record<string, any> {
+  const amount = String(Math.round(parseFloat(price) * 1_000_000));
+  if (isSolana) {
+    return {
+      scheme:            'exact',
+      network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+      amount,
+      payTo:             PAYMENT_CONFIG.solanaRecipient,
+      maxTimeoutSeconds: 60,
+      asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      extra:             { name: 'USDC', version: '2' },
+      ...(reqUrl ? { resource: { url: reqUrl, description: PAYMENT_CONFIG.description, mimeType: 'application/json' } } : {}),
+    };
+  }
+  return {
+    scheme:            'exact',
+    network:           'eip155:8453',
+    amount,
+    payTo:             PAYMENT_CONFIG.recipient,
+    maxTimeoutSeconds: 60,
+    asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    extra:             { name: 'USDC', version: '2' },
+    ...(reqUrl ? { resource: { url: reqUrl, description: PAYMENT_CONFIG.description, mimeType: 'application/json' } } : {}),
+  };
+}
+
 async function verifyWithFacilitator(
-  paymentPayload: unknown,
+  paymentPayload:      unknown,
   paymentRequirements: unknown,
 ): Promise<{ valid: boolean; chain?: 'base' | 'solana' }> {
   try {
+    const reqBody = { x402Version: 2, paymentPayload, paymentRequirements };
+    console.log('[The Sealer] Facilitator request:', JSON.stringify(reqBody).slice(0, 500));
+
     const res = await fetch(`${COINBASE_FACILITATOR_URL}/verify`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ x402Version: 2, paymentPayload, paymentRequirements }),
+      body:    JSON.stringify(reqBody),
       signal:  AbortSignal.timeout(10_000),
     });
 
-    if (!res.ok) {
-      console.log('[The Sealer] Facilitator verify returned', res.status);
-      return { valid: false };
-    }
+    const responseText = await res.text();
+    console.log('[The Sealer] Facilitator response', res.status, ':', responseText.slice(0, 300));
 
-    const data = await res.json();
-    console.log('[The Sealer] Facilitator verify result:', data);
+    if (!res.ok) return { valid: false };
 
+    const data = JSON.parse(responseText);
     if (data.isValid || data.valid || data.success) {
-      // Determine chain from network field in payload
       const network = (paymentPayload as any)?.network ||
                       (paymentPayload as any)?.accepted?.network || '';
-      const chain = network.startsWith('solana') ? 'solana' : 'base';
-      return { valid: true, chain };
+      return { valid: true, chain: network.startsWith('solana') ? 'solana' : 'base' };
     }
-
     return { valid: false };
   } catch (err) {
     console.error('[The Sealer] Facilitator verify error:', err);
@@ -190,15 +215,15 @@ async function verifyWithFacilitator(
 }
 
 async function verifyPaymentProof(
-  proof: string,
+  proof:   string,
   reqUrl?: string,
-  price?: string,
+  price?:  string,
 ): Promise<{ valid: boolean; txHash?: string; chain?: 'base' | 'solana' }> {
   try {
     const cleanProof = proof.trim();
-    console.log('[The Sealer] Payment proof received — length:', cleanProof.length, 'prefix:', cleanProof.slice(0, 30));
+    console.log('[The Sealer] Payment proof — length:', cleanProof.length, 'prefix:', cleanProof.slice(0, 40));
+
     if (cleanProof.toLowerCase().includes('test')) {
-      console.log('[The Sealer] Test mode — bypassing verification');
       return { valid: true };
     }
 
@@ -209,15 +234,11 @@ async function verifyPaymentProof(
         client.getTransactionReceipt({ hash: txHash }).catch(() => null),
         client.getTransaction({ hash: txHash }).catch(() => null),
       ]);
-
       if (receipt?.status === 'success' && tx) {
-        const isCorrectRecipient = tx.to?.toLowerCase() === PAYMENT_CONFIG.recipient.toLowerCase();
-        if (isCorrectRecipient) {
+        if (tx.to?.toLowerCase() === PAYMENT_CONFIG.recipient.toLowerCase()) {
           console.log('[The Sealer] Base verification OK (direct)');
           return { valid: true, txHash: cleanProof, chain: 'base' };
         }
-        console.log('[The Sealer] Base TX recipient mismatch — trying facilitator');
-        // Fall through to facilitator check in case it went via a contract
       }
     }
 
@@ -233,44 +254,32 @@ async function verifyPaymentProof(
         if (tx) break;
         await new Promise(r => setTimeout(r, 4000));
       }
-
       if (tx) {
         const USDC_MINT       = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
         const recipientPubkey = PAYMENT_CONFIG.solanaRecipient;
-
-        const postBalances = tx.meta?.postTokenBalances || [];
-        const preBalances  = tx.meta?.preTokenBalances  || [];
-
-        const accountKeys = tx.transaction.message.getAccountKeys
+        const postBalances    = tx.meta?.postTokenBalances || [];
+        const preBalances     = tx.meta?.preTokenBalances  || [];
+        const accountKeys     = tx.transaction.message.getAccountKeys
           ? tx.transaction.message.getAccountKeys().staticAccountKeys
           : (tx.transaction.message as any).accountKeys;
-
         const usdcCredit = postBalances.some((post: any) => {
           if (post.mint !== USDC_MINT) return false;
           const owner = post.owner || accountKeys[post.accountIndex]?.toBase58?.();
           if (owner !== recipientPubkey) return false;
           const pre    = preBalances.find((p: any) => p.accountIndex === post.accountIndex);
           const preAmt = pre ? Number(pre.uiTokenAmount?.amount || 0) : 0;
-          const postAmt = Number(post.uiTokenAmount?.amount || 0);
-          return postAmt > preAmt;
+          return Number(post.uiTokenAmount?.amount || 0) > preAmt;
         });
-
         if (usdcCredit) {
           console.log('[The Sealer] Solana USDC verification OK (direct)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
-
-        const recipientKey = new PublicKey(recipientPubkey);
         const allKeys = accountKeys.map((k: any) => k.toBase58 ? k.toBase58() : k.toString());
-        if (allKeys.includes(recipientKey.toBase58())) {
+        if (allKeys.includes(new PublicKey(recipientPubkey).toBase58())) {
           console.log('[The Sealer] Solana verification OK (account key)');
           return { valid: true, txHash: cleanProof, chain: 'solana' };
         }
-
-        return { valid: false };
       }
-
-      console.log('[The Sealer] Solana TX not found after retries');
       return { valid: false };
     }
 
@@ -278,38 +287,20 @@ async function verifyPaymentProof(
     if (isBase64Json(cleanProof)) {
       console.log('[The Sealer] Detected base64 payload — forwarding to facilitator');
       try {
-        const decoded        = Buffer.from(cleanProof, 'base64').toString('utf-8');
-        const paymentPayload = JSON.parse(decoded);
+        const paymentPayload = JSON.parse(Buffer.from(cleanProof, 'base64').toString('utf-8'));
+        console.log('[The Sealer] Decoded payload keys:', Object.keys(paymentPayload));
 
-        // Build paymentRequirements from our config to pass to facilitator
-        // Use the first (Base) accept entry as the requirements
-        const amountAtomic = String(Math.round(parseFloat(price || '0.10') * 1_000_000));
-        const paymentRequirements = {
-          scheme:            'exact',
-          network:           'eip155:8453',
-          amount:            amountAtomic,
-          payTo:             PAYMENT_CONFIG.recipient,
-          maxTimeoutSeconds: 60,
-          asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-          extra:             { name: 'USDC', version: '2' },
-          ...(reqUrl ? { resource: reqUrl } : {}),
-        };
+        // Determine network from payload
+        const network  = paymentPayload?.network ||
+                         paymentPayload?.accepted?.network ||
+                         paymentPayload?.paymentRequirements?.network || '';
+        const isSolana = network.startsWith('solana');
 
-        // Check if it's a Solana payment based on network field
-        const network = paymentPayload?.network ||
-                        paymentPayload?.accepted?.network ||
-                        paymentPayload?.paymentRequirements?.network || '';
-
-        if (network.startsWith('solana')) {
-          // Use Solana payment requirements instead
-          const solanaRequirements = {
-            ...paymentRequirements,
-            network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-            payTo:   PAYMENT_CONFIG.solanaRecipient,
-            asset:   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-          };
-          return verifyWithFacilitator(paymentPayload, solanaRequirements);
-        }
+        const paymentRequirements = buildPaymentRequirementsForFacilitator(
+          price || '0.10',
+          isSolana,
+          reqUrl,
+        );
 
         return verifyWithFacilitator(paymentPayload, paymentRequirements);
       } catch (parseErr) {
@@ -325,6 +316,7 @@ async function verifyPaymentProof(
     return { valid: false };
   }
 }
+
 // ── EAS attestation functions ─────────────────────────────────────────────────
 
 export async function issueSealAttestation(
@@ -404,7 +396,7 @@ export async function issueAmendmentAttestation(params: {
 
 // ── x402 v2 payment requirements builder ─────────────────────────────────────
 
-interface BazaarExtension {
+export interface BazaarExtension {
   schema: {
     properties: {
       input: {
@@ -433,7 +425,7 @@ function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtensi
       {
         scheme:            'exact',
         network:           'eip155:8453',
-        amount: String(Math.round(parseFloat(price) * 1_000_000)),
+        amount:            String(Math.round(parseFloat(price) * 1_000_000)),
         payTo:             PAYMENT_CONFIG.recipient,
         maxTimeoutSeconds: 60,
         asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
@@ -442,7 +434,7 @@ function buildPaymentRequired(url: string, price: string, bazaar?: BazaarExtensi
       {
         scheme:            'exact',
         network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-        amount: String(Math.round(parseFloat(price) * 1_000_000)),
+        amount:            String(Math.round(parseFloat(price) * 1_000_000)),
         payTo:             PAYMENT_CONFIG.solanaRecipient,
         maxTimeoutSeconds: 60,
         asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
