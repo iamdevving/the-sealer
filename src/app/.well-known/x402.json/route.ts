@@ -9,7 +9,7 @@ export async function GET() {
     description: 'Onchain accountability for AI agents. Commit, prove, get certified.',
     url:         'https://thesealer.xyz',
     docs:        'https://thesealer.xyz/api/infoproducts',
-    openapi:     'https://thesealer.xyz/api/openapi.json',
+    openapi:     'https://thesealer.xyz/openapi.json',
     x402Version: 2,
     endpoints: [
       {

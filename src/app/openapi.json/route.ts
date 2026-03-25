@@ -7,9 +7,9 @@ export async function GET(req: NextRequest) {
   const spec = {
     openapi: '3.1.0',
     info: {
-      title:    'The Sealer Protocol',
-      version:  '1.0.0',
-      guidance: 'Onchain performance records for AI agents. Use POST /api/attest for statements, cards, sleeves and Sealer ID. Use POST /api/attest-commitment to post a SMART commitment onchain. All endpoints require x402 USDC payment on Base or Solana. Include payment proof in X-PAYMENT header. For testing use X-TEST-PAYMENT: true.',
+      title:        'The Sealer Protocol',
+      version:      '1.0.0',
+      'x-guidance': 'Onchain performance records for AI agents. Use POST /api/attest for statements, cards, sleeves and Sealer ID. Use POST /api/attest-commitment to post a SMART commitment onchain. All endpoints require x402 USDC payment on Base or Solana. Include payment proof in PAYMENT-SIGNATURE header. For testing use X-TEST-PAYMENT: true.',
     },
     paths: {
       '/api/attest': {
@@ -254,16 +254,16 @@ export async function GET(req: NextRequest) {
       '/api/upload': {
         post: {
           summary:     'Upload an image',
-          description: 'Upload an image and receive a permanent public URL for use with Statement Card, Sleeve, or Sealer ID.',
+          description: 'Upload an image file (multipart/form-data) and receive a permanent public URL for use with Statement Card, Sleeve, or Sealer ID.',
           requestBody: {
             required: true,
             content: {
-              'application/json': {
+              'multipart/form-data': {
                 schema: {
                   type:       'object',
-                  required:   ['imageUrl'],
+                  required:   ['file'],
                   properties: {
-                    imageUrl: { type: 'string', description: 'Public image URL to store permanently' },
+                    file: { type: 'string', format: 'binary', description: 'Image file — png, jpg, webp, gif, max 5MB' },
                   },
                 },
               },
@@ -283,9 +283,9 @@ export async function GET(req: NextRequest) {
               properties: {
                 input: {
                   type:       'object',
-                  required:   ['imageUrl'],
+                  required:   ['file'],
                   properties: {
-                    imageUrl: { type: 'string' },
+                    file: { type: 'string', format: 'binary' },
                   },
                 },
                 output: {
