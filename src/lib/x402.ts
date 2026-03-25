@@ -1,6 +1,6 @@
 // src/lib/x402.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createPublicClient, http, createWalletClient, type Hash } from 'viem';
+import { createPublicClient, http, createWalletClient, type Hash, verifyTypedData } from 'viem';
 import { base } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { EAS, SchemaEncoder } from '@ethereum-attestation-service/eas-sdk';
@@ -29,6 +29,14 @@ const PAYMENT_CONFIG = {
   solanaRecipient: '6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj',
 };
 
+// USDC on Base — EIP-3009 domain
+const USDC_BASE = {
+  address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
+  name:    'USD Coin',
+  version: '2',
+  chainId: 8453,
+};
+
 const EAS_ADDRESS           = '0x4200000000000000000000000000000000000021';
 const SCHEMA_UID            = process.env.EAS_SCHEMA_UID!;
 const IDENTITY_SCHEMA_UID   = process.env.EAS_IDENTITY_SCHEMA_UID!;
@@ -45,9 +53,7 @@ async function sendAttestation(
 ): Promise<{ transactionHash: string; uid: string }> {
   const account      = privateKeyToAccount(privateKey as `0x${string}`);
   const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
-
   (eas as any).connect(walletClient);
-
   const txResponse = await eas.attest({
     schema: schemaUid,
     data: {
@@ -58,28 +64,21 @@ async function sendAttestation(
       data:           encodedData,
     },
   });
-
   let txHash: string;
-
   if (typeof txResponse === 'string' && (txResponse as string).startsWith('0x')) {
     txHash = txResponse;
   } else {
     const preparedTx = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
     txHash = await walletClient.sendTransaction(preparedTx as any);
   }
-
   const receipt = await client.waitForTransactionReceipt({
     hash: txHash as Hash, pollingInterval: 1000, timeout: 90_000,
   });
   txHash = receipt.transactionHash;
-
   const attestedLog = receipt.logs?.find(log =>
     log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
   );
-  const uid = attestedLog?.data
-    ? `0x${attestedLog.data.slice(2, 66)}`
-    : txHash;
-
+  const uid = attestedLog?.data ? `0x${attestedLog.data.slice(2, 66)}` : txHash;
   console.log(`[The Sealer] Attestation mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
 }
@@ -94,9 +93,7 @@ async function sendAttestationWithRef(
 ): Promise<{ transactionHash: string; uid: string }> {
   const account      = privateKeyToAccount(privateKey as `0x${string}`);
   const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
-
   (eas as any).connect(walletClient);
-
   const txResponse = await eas.attest({
     schema: schemaUid,
     data: {
@@ -107,28 +104,21 @@ async function sendAttestationWithRef(
       data:           encodedData,
     },
   });
-
   let txHash: string;
-
   if (typeof txResponse === 'string' && (txResponse as string).startsWith('0x')) {
     txHash = txResponse;
   } else {
     const preparedTx = (txResponse as any).data ?? (txResponse as any).tx ?? txResponse;
     txHash = await walletClient.sendTransaction(preparedTx as any);
   }
-
   const receipt = await client.waitForTransactionReceipt({
     hash: txHash as Hash, pollingInterval: 1000, timeout: 90_000,
   });
   txHash = receipt.transactionHash;
-
   const attestedLog = receipt.logs?.find(log =>
     log.topics?.[0] === '0x8bf46bf4cfd674fa735a3d63ec1c9ad4153f033c290341f3a588b75685141b35'
   );
-  const uid = attestedLog?.data
-    ? `0x${attestedLog.data.slice(2, 66)}`
-    : txHash;
-
+  const uid = attestedLog?.data ? `0x${attestedLog.data.slice(2, 66)}` : txHash;
   console.log(`[The Sealer] Attestation (with ref) mined — tx: ${txHash}, uid: ${uid}`);
   return { transactionHash: txHash, uid };
 }
@@ -137,9 +127,7 @@ async function sendAttestationWithRef(
 // Supports three formats:
 //   1. Raw EVM tx hash (0x + 64 chars) — direct on-chain check
 //   2. Solana signature (base58, 85-90 chars) — direct on-chain check
-//   3. Base64-encoded JSON (Coinbase facilitator / standard x402 clients) — forward to facilitator
-
-const COINBASE_FACILITATOR_URL = 'https://api.cdp.coinbase.com/platform/v2/x402/facilitator';
+//   3. Base64-encoded JSON (standard x402 clients) — local EIP-3009 verification
 
 function isSolanaSignature(str: string): boolean {
   return /^[1-9A-HJ-NP-Za-km-z]{85,90}$/.test(str.trim());
@@ -151,65 +139,94 @@ function isBase64Json(str: string): boolean {
     !isSolanaSignature(str.trim());
 }
 
-function buildPaymentRequirementsForFacilitator(
-  price:     string,
-  isSolana:  boolean,
-  reqUrl?:   string,
-): Record<string, any> {
-  const amount = String(Math.round(parseFloat(price) * 1_000_000));
-  if (isSolana) {
-    return {
-      scheme:            'exact',
-      network:           'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
-      amount,
-      payTo:             PAYMENT_CONFIG.solanaRecipient,
-      maxTimeoutSeconds: 60,
-      asset:             'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-      extra:             { name: 'USDC', version: '2' },
-      ...(reqUrl ? { resource: { url: reqUrl, description: PAYMENT_CONFIG.description, mimeType: 'application/json' } } : {}),
-    };
-  }
-  return {
-    scheme:            'exact',
-    network:           'eip155:8453',
-    amount,
-    payTo:             PAYMENT_CONFIG.recipient,
-    maxTimeoutSeconds: 60,
-    asset:             '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    extra:             { name: 'USDC', version: '2' },
-    ...(reqUrl ? { resource: { url: reqUrl, description: PAYMENT_CONFIG.description, mimeType: 'application/json' } } : {}),
-  };
-}
+// ── Local EIP-3009 TransferWithAuthorization verification ─────────────────────
+// No external facilitator needed — verify the signature directly using viem.
+// The Zauth agent signs a TransferWithAuthorization paying directly to our address.
 
-async function verifyWithFacilitator(
-  paymentPayload:      unknown,
-  paymentRequirements: unknown,
-): Promise<{ valid: boolean; chain?: 'base' | 'solana' }> {
+async function verifyEIP3009Authorization(
+  paymentPayload: any,
+  expectedAmountAtomic: bigint,
+): Promise<{ valid: boolean; payer?: string }> {
   try {
-    const reqBody = { x402Version: 2, paymentPayload, paymentRequirements };
-    console.log('[The Sealer] Facilitator request:', JSON.stringify(reqBody).slice(0, 500));
+    const auth      = paymentPayload?.payload?.authorization;
+    const signature = paymentPayload?.payload?.signature;
 
-    const res = await fetch(`${COINBASE_FACILITATOR_URL}/verify`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(reqBody),
-      signal:  AbortSignal.timeout(10_000),
+    if (!auth || !signature) {
+      console.log('[The Sealer] EIP-3009: missing authorization or signature');
+      return { valid: false };
+    }
+
+    const { from, to, value, validAfter, validBefore, nonce } = auth;
+
+    // Check recipient
+    if (to?.toLowerCase() !== PAYMENT_CONFIG.recipient.toLowerCase()) {
+      console.log('[The Sealer] EIP-3009: wrong recipient', to);
+      return { valid: false };
+    }
+
+    // Check amount — must be >= expected
+    if (BigInt(value) < expectedAmountAtomic) {
+      console.log('[The Sealer] EIP-3009: insufficient amount', value, '< expected', expectedAmountAtomic.toString());
+      return { valid: false };
+    }
+
+    // Check time window
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (now < BigInt(validAfter)) {
+      console.log('[The Sealer] EIP-3009: not yet valid');
+      return { valid: false };
+    }
+    if (now > BigInt(validBefore)) {
+      console.log('[The Sealer] EIP-3009: expired');
+      return { valid: false };
+    }
+
+    // Verify EIP-712 signature
+    const domain = {
+      name:              USDC_BASE.name,
+      version:           USDC_BASE.version,
+      chainId:           USDC_BASE.chainId,
+      verifyingContract: USDC_BASE.address,
+    };
+
+    const types = {
+      TransferWithAuthorization: [
+        { name: 'from',        type: 'address' },
+        { name: 'to',          type: 'address' },
+        { name: 'value',       type: 'uint256' },
+        { name: 'validAfter',  type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce',       type: 'bytes32' },
+      ],
+    };
+
+    const message = {
+      from:        from        as `0x${string}`,
+      to:          to          as `0x${string}`,
+      value:       BigInt(value),
+      validAfter:  BigInt(validAfter),
+      validBefore: BigInt(validBefore),
+      nonce:       nonce       as `0x${string}`,
+    };
+
+    const isValid = await verifyTypedData({
+      address:   from as `0x${string}`,
+      domain,
+      types,
+      primaryType: 'TransferWithAuthorization',
+      message,
+      signature: signature as `0x${string}`,
     });
 
-    const responseText = await res.text();
-    console.log('[The Sealer] Facilitator response', res.status, ':', responseText.slice(0, 300));
-
-    if (!res.ok) return { valid: false };
-
-    const data = JSON.parse(responseText);
-    if (data.isValid || data.valid || data.success) {
-      const network = (paymentPayload as any)?.network ||
-                      (paymentPayload as any)?.accepted?.network || '';
-      return { valid: true, chain: network.startsWith('solana') ? 'solana' : 'base' };
+    if (isValid) {
+      console.log('[The Sealer] EIP-3009 verification OK — payer:', from);
+      return { valid: true, payer: from };
     }
+
+    console.log('[The Sealer] EIP-3009: invalid signature');
     return { valid: false };
   } catch (err) {
-    console.error('[The Sealer] Facilitator verify error:', err);
+    console.error('[The Sealer] EIP-3009 verification error:', err);
     return { valid: false };
   }
 }
@@ -236,7 +253,7 @@ async function verifyPaymentProof(
       ]);
       if (receipt?.status === 'success' && tx) {
         if (tx.to?.toLowerCase() === PAYMENT_CONFIG.recipient.toLowerCase()) {
-          console.log('[The Sealer] Base verification OK (direct)');
+          console.log('[The Sealer] Base verification OK (direct tx)');
           return { valid: true, txHash: cleanProof, chain: 'base' };
         }
       }
@@ -283,26 +300,20 @@ async function verifyPaymentProof(
       return { valid: false };
     }
 
-    // ── Format 3: Base64-encoded JSON (Coinbase facilitator / standard x402) ─
+    // ── Format 3: Base64-encoded JSON (standard x402 clients — EIP-3009) ──
     if (isBase64Json(cleanProof)) {
-      console.log('[The Sealer] Detected base64 payload — forwarding to facilitator');
+      console.log('[The Sealer] Detected base64 payload — verifying EIP-3009 locally');
       try {
         const paymentPayload = JSON.parse(Buffer.from(cleanProof, 'base64').toString('utf-8'));
         console.log('[The Sealer] Decoded payload keys:', Object.keys(paymentPayload));
 
-        // Determine network from payload
-        const network  = paymentPayload?.network ||
-                         paymentPayload?.accepted?.network ||
-                         paymentPayload?.paymentRequirements?.network || '';
-        const isSolana = network.startsWith('solana');
+        const expectedAmount = BigInt(Math.round(parseFloat(price || '0.10') * 1_000_000));
+        const result = await verifyEIP3009Authorization(paymentPayload, expectedAmount);
 
-        const paymentRequirements = buildPaymentRequirementsForFacilitator(
-          price || '0.10',
-          isSolana,
-          reqUrl,
-        );
-
-        return verifyWithFacilitator(paymentPayload, paymentRequirements);
+        if (result.valid) {
+          return { valid: true, chain: 'base' };
+        }
+        return { valid: false };
       } catch (parseErr) {
         console.log('[The Sealer] Failed to parse base64 payload:', parseErr);
         return { valid: false };
@@ -399,16 +410,8 @@ export async function issueAmendmentAttestation(params: {
 export interface BazaarExtension {
   schema: {
     properties: {
-      input: {
-        properties: {
-          body: Record<string, any>;
-        };
-      };
-      output: {
-        properties: {
-          example: Record<string, any>;
-        };
-      };
+      input:  { properties: { body: Record<string, any> } };
+      output: { properties: { example: Record<string, any> } };
     };
   };
 }
