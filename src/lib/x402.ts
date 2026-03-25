@@ -140,11 +140,10 @@ function isBase64Json(str: string): boolean {
 }
 
 // ── Local EIP-3009 TransferWithAuthorization verification ─────────────────────
-// No external facilitator needed — verify the signature directly using viem.
-// The Zauth agent signs a TransferWithAuthorization paying directly to our address.
+// Verifies the EIP-712 signature directly using viem — no external facilitator needed.
 
 async function verifyEIP3009Authorization(
-  paymentPayload: any,
+  paymentPayload:       any,
   expectedAmountAtomic: bigint,
 ): Promise<{ valid: boolean; payer?: string }> {
   try {
@@ -157,6 +156,8 @@ async function verifyEIP3009Authorization(
     }
 
     const { from, to, value, validAfter, validBefore, nonce } = auth;
+    console.log('[The Sealer] EIP-3009 auth:', JSON.stringify({ from, to, value, validAfter, validBefore, nonce }));
+    console.log('[The Sealer] EIP-3009 sig prefix:', (signature as string)?.slice(0, 20));
 
     // Check recipient
     if (to?.toLowerCase() !== PAYMENT_CONFIG.recipient.toLowerCase()) {
@@ -177,11 +178,15 @@ async function verifyEIP3009Authorization(
       return { valid: false };
     }
     if (now > BigInt(validBefore)) {
-      console.log('[The Sealer] EIP-3009: expired');
+      console.log('[The Sealer] EIP-3009: expired — validBefore:', validBefore, 'now:', now.toString());
       return { valid: false };
     }
 
-    // Verify EIP-712 signature
+    // Pad nonce to 32 bytes — agent sends short hex like "0xce1b"
+    // but EIP-712 type is bytes32 requiring full 64 hex chars
+    const paddedNonce = ('0x' + (nonce as string).replace('0x', '').padStart(64, '0')) as `0x${string}`;
+    console.log('[The Sealer] EIP-3009: padded nonce:', paddedNonce.slice(0, 20));
+
     const domain = {
       name:              USDC_BASE.name,
       version:           USDC_BASE.version,
@@ -201,21 +206,21 @@ async function verifyEIP3009Authorization(
     };
 
     const message = {
-      from:        from        as `0x${string}`,
-      to:          to          as `0x${string}`,
+      from:        from as `0x${string}`,
+      to:          to   as `0x${string}`,
       value:       BigInt(value),
       validAfter:  BigInt(validAfter),
       validBefore: BigInt(validBefore),
-      nonce:       nonce       as `0x${string}`,
+      nonce:       paddedNonce,
     };
 
     const isValid = await verifyTypedData({
-      address:   from as `0x${string}`,
+      address:     from      as `0x${string}`,
       domain,
       types,
       primaryType: 'TransferWithAuthorization',
       message,
-      signature: signature as `0x${string}`,
+      signature:   signature as `0x${string}`,
     });
 
     if (isValid) {
@@ -223,7 +228,24 @@ async function verifyEIP3009Authorization(
       return { valid: true, payer: from };
     }
 
-    console.log('[The Sealer] EIP-3009: invalid signature');
+    console.log('[The Sealer] EIP-3009: signature invalid after padding — trying unpadded nonce');
+
+    // Fallback: try with nonce as-is (in case it's already full bytes32)
+    const isValidRaw = await verifyTypedData({
+      address:     from      as `0x${string}`,
+      domain,
+      types,
+      primaryType: 'TransferWithAuthorization',
+      message:     { ...message, nonce: nonce as `0x${string}` },
+      signature:   signature as `0x${string}`,
+    });
+
+    if (isValidRaw) {
+      console.log('[The Sealer] EIP-3009 verification OK (raw nonce) — payer:', from);
+      return { valid: true, payer: from };
+    }
+
+    console.log('[The Sealer] EIP-3009: both nonce formats failed');
     return { valid: false };
   } catch (err) {
     console.error('[The Sealer] EIP-3009 verification error:', err);
@@ -304,16 +326,10 @@ async function verifyPaymentProof(
     if (isBase64Json(cleanProof)) {
       console.log('[The Sealer] Detected base64 payload — verifying EIP-3009 locally');
       try {
-        const paymentPayload = JSON.parse(Buffer.from(cleanProof, 'base64').toString('utf-8'));
-        console.log('[The Sealer] Decoded payload keys:', Object.keys(paymentPayload));
-
-        const expectedAmount = BigInt(Math.round(parseFloat(price || '0.10') * 1_000_000));
-        const result = await verifyEIP3009Authorization(paymentPayload, expectedAmount);
-
-        if (result.valid) {
-          return { valid: true, chain: 'base' };
-        }
-        return { valid: false };
+        const paymentPayload     = JSON.parse(Buffer.from(cleanProof, 'base64').toString('utf-8'));
+        const expectedAmountAtomic = BigInt(Math.round(parseFloat(price || '0.10') * 1_000_000));
+        const result             = await verifyEIP3009Authorization(paymentPayload, expectedAmountAtomic);
+        return result.valid ? { valid: true, chain: 'base' } : { valid: false };
       } catch (parseErr) {
         console.log('[The Sealer] Failed to parse base64 payload:', parseErr);
         return { valid: false };
