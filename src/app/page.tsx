@@ -396,7 +396,7 @@ function HomePage() {
       {/* NAV */}
       <nav id="nav">
         <Link href="/" className="nav-logo">
-          <img src="/logo-white-lines.png" alt="" style={{ height: '36px', width: '36px', objectFit: 'contain', flexShrink: 0 }} />
+          <img src="/logo-white-lines.png" alt="" style={{ height: '48px', width: '48px', objectFit: 'contain', flexShrink: 0 }} />
           THE <span>SEALER</span> PROTOCOL
         </Link>
         <ul className="nav-links">
@@ -760,9 +760,7 @@ function HomePage() {
           <div>
             <div className="fctitle">Community</div>
             <ul className="flinks">
-              <li><a href="https://warpcast.com/thesealerxyz" target="_blank" rel="noopener">@thesealerxyz · Farcaster</a></li>
-              <li><a href="https://x.com/thesealerxyz" target="_blank" rel="noopener">@thesealerxyz · X</a></li>
-              <li><a href="https://thesealer.xyz">thesealer.xyz</a></li>
+             <li><a href="https://x.com/thesealerxyz" target="_blank" rel="noopener">@thesealerxyz · X</a></li>
             </ul>
           </div>
         </div>
