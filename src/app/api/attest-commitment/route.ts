@@ -6,6 +6,7 @@ import { mintCommitment } from '@/lib/nft';
 import type { ClaimType } from '@/lib/verify/types';
 import { x402Challenge } from '@/lib/x402';
 import { rateLimitRequest } from '@/lib/security';
+import { verifyAgentSignature, getSigningPayload } from '@/lib/agentSig';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +22,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
 ];
 
 export async function POST(req: NextRequest) {
-  // ── SECURITY: Rate limiting ──────────────────────────────────────────────
+  // ── SECURITY: Rate limiting ───────────────────────────────────────────────
   // 5 commitment requests per hour per IP (tighter than attest — higher cost action)
   const rateLimited = await rateLimitRequest(req, 'attest-commitment', 5, 3600);
   if (rateLimited) return rateLimited;
@@ -61,6 +62,51 @@ export async function POST(req: NextRequest) {
     }
     if (!metric) {
       return NextResponse.json({ error: 'metric is required' }, { status: 400 });
+    }
+
+    // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
+    if (agentId.startsWith('0x')) {
+      const agentSig   = (body.agentSig   as string) || '';
+      const agentNonce = (body.agentNonce as string) || '';
+
+      if (!agentSig || !agentNonce) {
+        const nonce = Math.floor(Date.now() / 1000);
+        return NextResponse.json(
+          {
+            error:   'Wallet ownership verification required',
+            message: 'EVM agentId requires an EIP-712 signature proving you control the wallet.',
+            howToFix: {
+              step1: 'Sign the EIP-712 payload with your wallet',
+              step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body',
+            },
+            signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
+            exampleNonce:   nonce,
+          },
+          { status: 401 },
+        );
+      }
+
+      const sigResult = await verifyAgentSignature(
+        agentId,
+        'attest-commitment',
+        Number(agentNonce),
+        agentSig,
+      );
+
+      if (!sigResult.valid) {
+        const nonce = Math.floor(Date.now() / 1000);
+        return NextResponse.json(
+          {
+            error:          'Wallet ownership verification failed',
+            reason:         sigResult.reason,
+            signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
+            exampleNonce:   nonce,
+          },
+          { status: 401 },
+        );
+      }
+
+      console.log(`[attest-commitment] Wallet ownership verified for ${agentId}`);
     }
 
     const walletAddress = agentId.startsWith('0x')
@@ -163,7 +209,7 @@ export async function POST(req: NextRequest) {
     });
   }, COMMITMENT_PRICE, {
   schema: { properties: {
-    input: { properties: { body: { type: 'object', required: ['agentId','claimType','commitment','metric','deadline'], properties: { agentId: { type: 'string' }, claimType: { type: 'string' }, commitment: { type: 'string' }, metric: { type: 'string' }, deadline: { type: 'string' } } } } },
+    input: { properties: { body: { type: 'object', required: ['agentId','agentSig','agentNonce','claimType','commitment','metric','deadline'], properties: { agentId: { type: 'string' }, agentSig: { type: 'string' }, agentNonce: { type: 'string' }, claimType: { type: 'string' }, commitment: { type: 'string' }, metric: { type: 'string' }, deadline: { type: 'string' } } } } },
     output: { properties: { example: { status: 'success', commitmentUID: '0xabc', txHash: '0xdef', permalink: 'https://thesealer.xyz/c/abc123' } } },
   } },
 });
@@ -257,10 +303,17 @@ export async function GET() {
     price: '$0.50 USDC',
     networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
     params: {
-      agentId: 'your wallet address',
-      claimType: 'github | defi_base | defi_solana | website | x402',
-      metric: 'measurable goal description',
-      deadline: 'unix timestamp',
+      agentId:    'your EVM wallet address',
+      agentSig:   'EIP-712 signature proving wallet ownership',
+      agentNonce: 'Unix timestamp (seconds) used when signing — valid for 5 minutes',
+      claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery',
+      metric:     'measurable goal description',
+      deadline:   'YYYY-MM-DD',
+    },
+    eip712: {
+      domain: { name: 'SealerProtocol', version: '1', chainId: 8453 },
+      types:  { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
+      message: { wallet: '<agentId>', action: 'attest-commitment', nonce: '<unix_timestamp_seconds>' },
     },
   });
 }

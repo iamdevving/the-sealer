@@ -11,6 +11,7 @@ import { nanoid } from 'nanoid';
 import { put } from '@vercel/blob';
 import { x402Challenge } from '@/lib/x402';
 import { rateLimitRequest, validateImageUrl } from '@/lib/security';
+import { verifyAgentSignature, getSigningPayload } from '@/lib/agentSig';
 
 export const runtime = 'nodejs';
 
@@ -100,7 +101,7 @@ async function claimHandle(handle: string, walletAddress: string): Promise<void>
 
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // ── SECURITY: Rate limiting ──────────────────────────────────────────────
+  // ── SECURITY: Rate limiting ───────────────────────────────────────────────
   // 10 attestation requests per hour per IP to prevent spam minting
   const rateLimited = await rateLimitRequest(req, 'attest', 10, 3600);
   if (rateLimited) return rateLimited;
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── SECURITY: Validate imageUrl against SSRF allowlist ──────────────────
+  // ── SECURITY: Validate imageUrl against SSRF allowlist ───────────────────
   const rawImageUrl = fields.imageUrl?.trim() || '';
   if (rawImageUrl && !file) {
     const imageValidation = validateImageUrl(rawImageUrl);
@@ -146,6 +147,53 @@ export async function POST(req: NextRequest) {
       const theme         = fields.theme || 'dark';
       const agentId       = fields.agentId || req.headers.get('X-WALLET') || '????';
       const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
+
+      // ── SECURITY: Verify wallet ownership for EVM agentIds ─────────────
+      // Solana agents prove ownership via x402 payment (the payment wallet
+      // IS the agent wallet). EVM agents must supply an EIP-712 signature.
+      if (agentId.startsWith('0x')) {
+        const agentSig   = fields.agentSig   || req.headers.get('X-AGENT-SIG')   || '';
+        const agentNonce = fields.agentNonce  || req.headers.get('X-AGENT-NONCE') || '';
+
+        if (!agentSig || !agentNonce) {
+          const nonce = Math.floor(Date.now() / 1000);
+          return NextResponse.json(
+            {
+              error:   'Wallet ownership verification required',
+              message: 'EVM agentId requires an EIP-712 signature proving you control the wallet. Sign the payload below and include agentSig + agentNonce in your request.',
+              howToFix: {
+                step1: 'Sign the EIP-712 payload with your wallet',
+                step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body or as X-AGENT-SIG / X-AGENT-NONCE headers',
+              },
+              signingPayload: getSigningPayload(agentId, 'attest', nonce),
+              exampleNonce:   nonce,
+            },
+            { status: 401 },
+          );
+        }
+
+        const sigResult = await verifyAgentSignature(
+          agentId,
+          'attest',
+          Number(agentNonce),
+          agentSig,
+        );
+
+        if (!sigResult.valid) {
+          const nonce = Math.floor(Date.now() / 1000);
+          return NextResponse.json(
+            {
+              error:          'Wallet ownership verification failed',
+              reason:         sigResult.reason,
+              signingPayload: getSigningPayload(agentId, 'attest', nonce),
+              exampleNonce:   nonce,
+            },
+            { status: 401 },
+          );
+        }
+
+        console.log(`[attest] Wallet ownership verified for ${agentId}`);
+      }
 
       const walletAddress = agentId.startsWith('0x')
         ? agentId as `0x${string}`
@@ -356,10 +404,12 @@ export async function POST(req: NextRequest) {
         properties: {
           body: {
             type: 'object',
-            required: ['format', 'agentId'],
+            required: ['format', 'agentId', 'agentSig', 'agentNonce'],
             properties: {
               format:     { type: 'string' },
-              agentId:    { type: 'string' },
+              agentId:    { type: 'string', description: 'Your EVM wallet address (0x...)' },
+              agentSig:   { type: 'string', description: 'EIP-712 signature from your wallet proving ownership' },
+              agentNonce: { type: 'string', description: 'Unix timestamp (seconds) used when signing' },
               statement:  { type: 'string' },
               theme:      { type: 'string' },
               imageUrl:   { type: 'string' },
@@ -391,14 +441,17 @@ export async function GET(req: NextRequest) {
     price:       '$0.10–$0.20 USDC',
     networks:    ['eip155:8453 (Base)', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp (Solana)'],
     params: {
-      format:    'statement | card | sleeve | sid',
-      agentId:   'your wallet address (0x... for EVM, base58 for Solana)',
-      statement: 'your statement text (for statement/card/sleeve formats)',
+      format:     'statement | card | sleeve | sid',
+      agentId:    'your wallet address (0x... for EVM)',
+      agentSig:   'EIP-712 signature (EVM wallets only) — sign the SealerAction typed data',
+      agentNonce: 'Unix timestamp (seconds) used when signing — valid for 5 minutes',
+      statement:  'your statement text (for statement/card/sleeve formats)',
     },
-    example: {
-      format:    'statement',
-      agentId:   '0xYourWalletAddress',
-      statement: 'I shipped 100 onchain transactions this month',
+    eip712: {
+      domain: { name: 'SealerProtocol', version: '1', chainId: 8453 },
+      types:  { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
+      message: { wallet: '<agentId>', action: 'attest', nonce: '<unix_timestamp_seconds>' },
     },
+    note: 'Solana agents do not need agentSig — payment proves wallet ownership.',
   });
 }
