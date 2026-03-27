@@ -5,6 +5,7 @@ import { registerPendingAchievement } from '@/lib/verify/register';
 import { mintCommitment } from '@/lib/nft';
 import type { ClaimType } from '@/lib/verify/types';
 import { x402Challenge } from '@/lib/x402';
+import { rateLimitRequest } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -19,33 +20,12 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
   // 'social_media_growth' — temporarily disabled, coming soon as a full category
 ];
 
-/**
- * POST /api/attest-commitment
- *
- * Required body fields:
- *   commitment  string   — the goal statement (min 10 chars)
- *   agentId     string   — agent wallet address (0x...) or Solana pubkey
- *   claimType   string   — one of VALID_CLAIM_TYPES
- *   deadline    string   — ISO date or "YYYY-MM-DD", e.g. "2026-06-01"
- *   metric      string   — measurable target description
- *
- * Optional:
- *   evidence    string   — supporting URL or context
- *   theme       string   — visual theme key (default: 'dark')
- *   windowDays  number   — override verification window (default: derived from deadline)
- *   difficultyVersion number — scoring version (default: 1)
- *
- * Per-claimType verification params (see extractVerificationParams):
- *   x402_payment_reliability: minSuccessRate, minTotalUSD, requireDistinctRecipients, maxGapHours
- *   defi_trading_performance:  chain ('base'|'solana'), minTradeCount, minVolumeUSD, minPnlPercent, protocol
- *   code_software_delivery:    repoOwner, repoName, githubUsername, walletGithubSig, minMergedPRs, minCommits, requireCIPass, minLinesChanged
- *   website_app_delivery:      url, minPerformanceScore, minAccessibility, requireDnsVerify, dnsVerifyRecord
- *
- * Headers:
- *   PAYMENT-SIGNATURE  <base tx hash or solana sig>
- *   X-TEST-PAYMENT: true   (bypass in dev)
- */
 export async function POST(req: NextRequest) {
+  // ── SECURITY: Rate limiting ──────────────────────────────────────────────
+  // 5 commitment requests per hour per IP (tighter than attest — higher cost action)
+  const rateLimited = await rateLimitRequest(req, 'attest-commitment', 5, 3600);
+  if (rateLimited) return rateLimited;
+
   return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     let body: Record<string, unknown>;
     try {
@@ -219,7 +199,7 @@ function extractVerificationParams(
     case 'defi_trading_performance':
       return {
         ...common,
-        chain:         body.chain ?? 'base',   // 'base' | 'solana'
+        chain:         body.chain ?? 'base',
         protocol:      body.protocol,
         agentWallet:   body.agentWallet || body.agentId,
         minTradeCount: body.minTradeCount,
@@ -234,7 +214,7 @@ function extractVerificationParams(
         repoOwner:       body.repoOwner,
         repoName:        body.repoName,
         githubUsername:  body.githubUsername,
-        walletGithubSig: body.walletGithubSig,  // Gist ID for wallet ownership proof
+        walletGithubSig: body.walletGithubSig,
         minMergedPRs:    body.minMergedPRs,
         minCommits:      body.minCommits,
         requireCIPass:   body.requireCIPass,
@@ -251,8 +231,6 @@ function extractVerificationParams(
         minAccessibility:   body.minAccessibility,
       };
 
-    // social_media_growth params kept here so existing Redis entries
-    // (committed before the category was disabled) can still be read by cron
     case 'social_media_growth':
       return {
         ...common,

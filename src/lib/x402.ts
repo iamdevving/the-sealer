@@ -12,6 +12,16 @@ const solanaRpcUrl  = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.so
 const rawPrivateKey = (process.env.TEST_PRIVATE_KEY || '').trim();
 const privateKey    = rawPrivateKey.startsWith('0x') ? rawPrivateKey : `0x${rawPrivateKey}`;
 
+// ── SECURITY: X-TEST-PAYMENT is only allowed in non-production environments ──
+// In production, this header is ALWAYS rejected regardless of value.
+function isTestPaymentAllowed(req: NextRequest): boolean {
+  const isProduction = process.env.NODE_ENV === 'production' ||
+                       process.env.VERCEL_ENV === 'production';
+  if (isProduction) return false;
+  // Only allow in dev/preview with explicit env opt-in
+  return process.env.ALLOW_TEST_PAYMENT === 'true';
+}
+
 const client           = createPublicClient({ chain: base, transport: http(rpcUrl) });
 const solanaConnection = new Connection(solanaRpcUrl);
 
@@ -262,9 +272,8 @@ async function verifyPaymentProof(
     const cleanProof = proof.trim();
     console.log('[The Sealer] Payment proof — length:', cleanProof.length, 'prefix:', cleanProof.slice(0, 40));
 
-    if (cleanProof.toLowerCase().includes('test')) {
-      return { valid: true };
-    }
+    // ── SECURITY: 'test' string in proof is NEVER accepted ───────────────
+    // Previously allowed for convenience — removed entirely from production.
 
     // ── Format 1: Raw EVM tx hash ─────────────────────────────────────────
     if (cleanProof.startsWith('0x') && cleanProof.length === 66) {
@@ -508,7 +517,18 @@ export async function withX402Payment(
                 req.headers.get('x-payment-proof')   ||
                 req.headers.get('authorization');
 
-  const isTestMode = req.headers.get('X-TEST-PAYMENT') === 'true';
+  const testPaymentHeader = req.headers.get('X-TEST-PAYMENT');
+  const isTestMode        = testPaymentHeader === 'true' && isTestPaymentAllowed(req);
+
+  // ── SECURITY: Block X-TEST-PAYMENT in production explicitly ──────────────
+  if (testPaymentHeader === 'true' && !isTestPaymentAllowed(req)) {
+    console.warn('[The Sealer] SECURITY: X-TEST-PAYMENT rejected in production from IP:',
+      req.headers.get('x-forwarded-for') || 'unknown');
+    return NextResponse.json(
+      { error: 'Payment required', message: 'Test payment bypass is not available.' },
+      { status: 402 }
+    );
+  }
 
   if (!proof && !isTestMode) {
     return build402Response(buildPaymentRequired(req.url, price, bazaar), price);
@@ -526,7 +546,7 @@ export async function withX402Payment(
       }
       paymentChain = verify.chain;
     } else if (isTestMode) {
-      console.log('[The Sealer] Test mode — bypassing verification');
+      console.log('[The Sealer] Test mode — bypassing verification (non-production only)');
     }
 
     return await handler(paymentChain);

@@ -37,6 +37,16 @@ export default function AdminPage() {
     } catch { setError('Auth error'); }
   }
 
+  async function handleLogout() {
+    try {
+      // Call DELETE to clear the session cookie
+      await fetch('/api/admin/auth', { method: 'DELETE' });
+    } catch { /* best effort */ }
+    setAuthed(false);
+    setPassword('');
+    setPwInput('');
+  }
+
   if (!authed) {
     return (
       <div style={{
@@ -121,7 +131,7 @@ export default function AdminPage() {
           <div style={{ fontSize: 8,  color: colors.inkDim, marginTop: 4 }}>THE SEALER PROTOCOL · INTERNAL TOOLS</div>
         </div>
         <button
-          onClick={() => { setAuthed(false); setPassword(''); setPwInput(''); }}
+          onClick={handleLogout}
           style={{
             background:    'transparent',
             border:        `0.8px solid ${colors.border}`,

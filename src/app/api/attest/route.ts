@@ -10,6 +10,7 @@ import { Redis } from '@upstash/redis';
 import { nanoid } from 'nanoid';
 import { put } from '@vercel/blob';
 import { x402Challenge } from '@/lib/x402';
+import { rateLimitRequest, validateImageUrl } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -20,9 +21,6 @@ const MAX_IMG_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
 
 // ── Parse request body — JSON or multipart ────────────────────────────────────
-// Returns { fields, file? } where fields mirrors what body.x would give in JSON mode.
-// File is only present when a multipart 'file' field is included.
-
 async function parseBody(req: NextRequest): Promise<{
   fields: Record<string, string>;
   file?: File;
@@ -44,15 +42,13 @@ async function parseBody(req: NextRequest): Promise<{
     return { fields, file };
   }
 
-  // Default: JSON
   let body: Record<string, any> = {};
-try {
-  const text = await req.text();
-  if (text) body = JSON.parse(text);
-} catch {
-  body = {};
-}
-  // Normalise — convert all values to strings for uniform access below
+  try {
+    const text = await req.text();
+    if (text) body = JSON.parse(text);
+  } catch {
+    body = {};
+  }
   const fields: Record<string, string> = {};
   for (const [k, v] of Object.entries(body)) {
     if (v !== undefined && v !== null) fields[k] = String(v);
@@ -60,8 +56,7 @@ try {
   return { fields };
 }
 
-// ── Upload a File to Vercel Blob, return permanent public URL ─────────────────
-
+// ── Upload a File to Vercel Blob ──────────────────────────────────────────────
 async function uploadFileToBlobIfPresent(
   file: File | undefined,
   format: string,
@@ -91,7 +86,6 @@ async function uploadFileToBlobIfPresent(
 }
 
 // ── Handle claim ──────────────────────────────────────────────────────────────
-
 async function claimHandle(handle: string, walletAddress: string): Promise<void> {
   const oldHandle = await redis.get(`sid:wallet:${walletAddress}`) as string | null;
   if (oldHandle && oldHandle !== handle) {
@@ -105,12 +99,13 @@ async function claimHandle(handle: string, walletAddress: string): Promise<void>
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
-
 export async function POST(req: NextRequest) {
-  // Peek at format before consuming body — need it for price + badge check.
-  // For JSON we can't peek without consuming, so we parse once and carry fields forward.
-  const { fields, file } = await parseBody(req);
+  // ── SECURITY: Rate limiting ──────────────────────────────────────────────
+  // 10 attestation requests per hour per IP to prevent spam minting
+  const rateLimited = await rateLimitRequest(req, 'attest', 10, 3600);
+  if (rateLimited) return rateLimited;
 
+  const { fields, file } = await parseBody(req);
   const format = fields.format || 'card';
 
   // Badge closed — 410
@@ -130,6 +125,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── SECURITY: Validate imageUrl against SSRF allowlist ──────────────────
+  const rawImageUrl = fields.imageUrl?.trim() || '';
+  if (rawImageUrl && !file) {
+    const imageValidation = validateImageUrl(rawImageUrl);
+    if (!imageValidation.valid) {
+      return NextResponse.json(
+        { error: 'Invalid imageUrl', message: imageValidation.reason },
+        { status: 400 },
+      );
+    }
+  }
+
   const price = format === 'sleeve' ? '0.15'
               : format === 'sid'    ? '0.20'
               : '0.10';
@@ -147,11 +154,8 @@ export async function POST(req: NextRequest) {
       const baseUrl = new URL(req.url).origin;
       const uid     = nanoid(12);
 
-      // ── Upload image if file was provided inline ──────────────────────────
-      // imageUrl can come from:
-      //   a) multipart file field   → uploaded here to Blob
-      //   b) imageUrl string field  → passed directly (agent pre-uploaded or has a URL)
-      let imageUrl = fields.imageUrl?.trim() || '';
+      // Upload image if file was provided inline
+      let imageUrl = rawImageUrl;
       if (file) {
         try {
           imageUrl = await uploadFileToBlobIfPresent(file, format);
