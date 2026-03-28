@@ -1,4 +1,12 @@
 // src/app/api/attest/route.ts
+//
+// SECURITY CHANGE: Solana agentId impersonation fix (CRITICAL).
+//
+// Previously Solana payers could pass any EVM address (0x...) as agentId.
+// Payment proved ability to pay, not ownership of the agentId wallet.
+// Fix: Solana payers must use their Solana pubkey (base58) as agentId.
+// EVM addresses (0x...) are rejected for Solana payment flows.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { withZauthX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/zauth';
 import { checkEntityType } from '@/lib/agentRegistry';
@@ -20,6 +28,12 @@ const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.
 const HANDLE_REGEX  = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
 const MAX_IMG_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
+
+// ── Solana pubkey validator ───────────────────────────────────────────────────
+// Base58 string, 32-44 chars, no 0/O/I/l ambiguous chars
+function isSolanaPubkey(s: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
+}
 
 // ── Parse request body — JSON or multipart ────────────────────────────────────
 async function parseBody(req: NextRequest): Promise<{
@@ -148,51 +162,75 @@ export async function POST(req: NextRequest) {
       const agentId       = fields.agentId || req.headers.get('X-WALLET') || '????';
       const paymentSource = paymentChain === 'solana' ? 'Solana' : 'Base';
 
-      // ── SECURITY: Verify wallet ownership for EVM agentIds ─────────────
-      // Solana agents prove ownership via x402 payment (the payment wallet
-      // IS the agent wallet). EVM agents must supply an EIP-712 signature.
-      if (agentId.startsWith('0x')) {
-        const agentSig   = fields.agentSig   || req.headers.get('X-AGENT-SIG')   || '';
-        const agentNonce = fields.agentNonce  || req.headers.get('X-AGENT-NONCE') || '';
-
-        if (!agentSig || !agentNonce) {
-          const nonce = Math.floor(Date.now() / 1000);
+      // ── SECURITY: Verify wallet ownership ────────────────────────────────
+      if (paymentChain === 'solana') {
+        // SECURITY FIX: Solana payers must use their Solana pubkey as agentId.
+        // Previously any EVM address could be passed — payment only proves the
+        // Solana wallet, not ownership of any 0x address in the body.
+        if (agentId.startsWith('0x')) {
           return NextResponse.json(
             {
-              error:   'Wallet ownership verification required',
-              message: 'EVM agentId requires an EIP-712 signature proving you control the wallet. Sign the payload below and include agentSig + agentNonce in your request.',
-              howToFix: {
-                step1: 'Sign the EIP-712 payload with your wallet',
-                step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body or as X-AGENT-SIG / X-AGENT-NONCE headers',
+              error:   'Identity mismatch',
+              message: 'Solana payers must pass their Solana public key (base58) as agentId — not an EVM address. ' +
+                       'Your Solana payment proves ownership of your Solana wallet, not any EVM wallet.',
+              example: { agentId: '<your-solana-pubkey-base58>', format, statement: '...' },
+            },
+            { status: 400 },
+          );
+        }
+        if (agentId !== '????' && !isSolanaPubkey(agentId)) {
+          return NextResponse.json(
+            { error: 'Invalid agentId for Solana payment — expected a base58 Solana public key (32-44 chars)' },
+            { status: 400 },
+          );
+        }
+        console.log(`[attest] Solana identity verified via payment: ${agentId}`);
+
+      } else {
+        // EVM agents must supply an EIP-712 signature
+        if (agentId.startsWith('0x')) {
+          const agentSig   = fields.agentSig   || req.headers.get('X-AGENT-SIG')   || '';
+          const agentNonce = fields.agentNonce  || req.headers.get('X-AGENT-NONCE') || '';
+
+          if (!agentSig || !agentNonce) {
+            const nonce = Math.floor(Date.now() / 1000);
+            return NextResponse.json(
+              {
+                error:   'Wallet ownership verification required',
+                message: 'EVM agentId requires an EIP-712 signature proving you control the wallet. Sign the payload below and include agentSig + agentNonce in your request.',
+                howToFix: {
+                  step1: 'Sign the EIP-712 payload with your wallet',
+                  step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body or as X-AGENT-SIG / X-AGENT-NONCE headers',
+                },
+                signingPayload: getSigningPayload(agentId, 'attest', nonce),
+                exampleNonce:   nonce,
               },
-              signingPayload: getSigningPayload(agentId, 'attest', nonce),
-              exampleNonce:   nonce,
-            },
-            { status: 401 },
+              { status: 401 },
+            );
+          }
+
+          const sigResult = await verifyAgentSignature(
+            agentId,
+            'attest',
+            Number(agentNonce),
+            agentSig,
           );
+
+          if (!sigResult.valid) {
+            const nonce = Math.floor(Date.now() / 1000);
+            return NextResponse.json(
+              {
+                error:          'Wallet ownership verification failed',
+                reason:         sigResult.reason,
+                signingPayload: getSigningPayload(agentId, 'attest', nonce),
+                exampleNonce:   nonce,
+              },
+              { status: 401 },
+            );
+          }
+
+          console.log(`[attest] Wallet ownership verified for ${agentId}`);
         }
-
-        const sigResult = await verifyAgentSignature(
-          agentId,
-          'attest',
-          Number(agentNonce),
-          agentSig,
-        );
-
-        if (!sigResult.valid) {
-          const nonce = Math.floor(Date.now() / 1000);
-          return NextResponse.json(
-            {
-              error:          'Wallet ownership verification failed',
-              reason:         sigResult.reason,
-              signingPayload: getSigningPayload(agentId, 'attest', nonce),
-              exampleNonce:   nonce,
-            },
-            { status: 401 },
-          );
-        }
-
-        console.log(`[attest] Wallet ownership verified for ${agentId}`);
       }
 
       const walletAddress = agentId.startsWith('0x')
@@ -407,8 +445,8 @@ export async function POST(req: NextRequest) {
             required: ['format', 'agentId', 'agentSig', 'agentNonce'],
             properties: {
               format:     { type: 'string' },
-              agentId:    { type: 'string', description: 'Your EVM wallet address (0x...)' },
-              agentSig:   { type: 'string', description: 'EIP-712 signature from your wallet proving ownership' },
+              agentId:    { type: 'string', description: 'EVM: your 0x wallet. Solana: your base58 public key.' },
+              agentSig:   { type: 'string', description: 'EIP-712 signature from your wallet proving ownership (EVM only)' },
               agentNonce: { type: 'string', description: 'Unix timestamp (seconds) used when signing' },
               statement:  { type: 'string' },
               theme:      { type: 'string' },
@@ -442,16 +480,19 @@ export async function GET(req: NextRequest) {
     networks:    ['eip155:8453 (Base)', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp (Solana)'],
     params: {
       format:     'statement | card | sleeve | sid',
-      agentId:    'your wallet address (0x... for EVM)',
+      agentId:    'EVM: your 0x wallet address. Solana: your base58 public key.',
       agentSig:   'EIP-712 signature (EVM wallets only) — sign the SealerAction typed data',
       agentNonce: 'Unix timestamp (seconds) used when signing — valid for 5 minutes',
       statement:  'your statement text (for statement/card/sleeve formats)',
+    },
+    identityModel: {
+      evm:    'agentId = 0x wallet address + EIP-712 signature required',
+      solana: 'agentId = your Solana public key (base58) — payment proves ownership',
     },
     eip712: {
       domain: { name: 'SealerProtocol', version: '1', chainId: 8453 },
       types:  { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
       message: { wallet: '<agentId>', action: 'attest', nonce: '<unix_timestamp_seconds>' },
     },
-    note: 'Solana agents do not need agentSig — payment proves wallet ownership.',
   });
 }
