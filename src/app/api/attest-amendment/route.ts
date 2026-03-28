@@ -10,13 +10,20 @@
 //   - Difficulty recalculates downward at amendment time
 //   - Amendment is attested onchain as a new EAS attestation referencing the original
 //
-// Payment: $0.25 USDC via x402 (half the commitment price)
+// Payment: $0.25 USDC via x402
+//
+// SECURITY:
+//   - Rate limited: 5 amendments per hour per IP (tighter than attest — high-value action)
+//   - EVM agentId requires EIP-712 wallet ownership signature (same pattern as attest)
+//   - Solana wallets exempt — x402 payment from their wallet proves ownership
 //
 // POST /api/attest-amendment
 // Body:
 //   commitmentUid  string  — EAS UID of the original commitment attestation
 //   agentId        string  — must match original commitment agent
-//   newCommitment  string  — updated commitment statement (optional, defaults to original)
+//   agentSig       string  — EIP-712 signature (EVM wallets only)
+//   agentNonce     number  — Unix timestamp used when signing (valid 5 min)
+//   newCommitment  string  — updated commitment statement (optional)
 //   newMetric      string  — updated metric description
 //   theme          string  — visual theme (default: 'parchment')
 //   [claimType-specific threshold params — same as attest-commitment but lowered]
@@ -27,6 +34,8 @@ import { Redis } from '@upstash/redis';
 import { computeDifficulty } from '@/lib/difficulty';
 import type { ClaimType } from '@/lib/verify/types';
 import { x402Challenge } from '@/lib/x402';
+import { rateLimitRequest } from '@/lib/security';
+import { verifyAgentSignature, getSigningPayload } from '@/lib/agentSig';
 
 export const runtime = 'nodejs';
 
@@ -38,6 +47,11 @@ const redis = new Redis({
 });
 
 export async function POST(req: NextRequest) {
+  // ── SECURITY: Rate limiting ───────────────────────────────────────────────
+  // 5 amendment requests per hour per IP — amendments are high-value, paid actions
+  const rateLimited = await rateLimitRequest(req, 'attest-amendment', 5, 3600);
+  if (rateLimited) return rateLimited;
+
   return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
     let body: Record<string, unknown>;
     try {
@@ -61,6 +75,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'newMetric is required — describe the amended threshold' }, { status: 400 });
     }
 
+    // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
+    // Solana agents (non-0x) are exempt — x402 payment proves ownership.
+    if (agentId.startsWith('0x')) {
+      const agentSig   = (body.agentSig   as string) || '';
+      const agentNonce = (body.agentNonce as string) || '';
+
+      if (!agentSig || !agentNonce) {
+        const nonce = Math.floor(Date.now() / 1000);
+        return NextResponse.json(
+          {
+            error:   'Wallet ownership verification required',
+            message: 'EVM agentId requires an EIP-712 signature proving you control the wallet.',
+            howToFix: {
+              step1: 'Sign the EIP-712 payload with your wallet',
+              step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body',
+            },
+            signingPayload: getSigningPayload(agentId, 'attest-amendment', nonce),
+            exampleNonce:   nonce,
+          },
+          { status: 401 },
+        );
+      }
+
+      const sigResult = await verifyAgentSignature(
+        agentId,
+        'attest-amendment',
+        Number(agentNonce),
+        agentSig,
+      );
+
+      if (!sigResult.valid) {
+        const nonce = Math.floor(Date.now() / 1000);
+        return NextResponse.json(
+          {
+            error:          'Wallet ownership verification failed',
+            reason:         sigResult.reason,
+            signingPayload: getSigningPayload(agentId, 'attest-amendment', nonce),
+            exampleNonce:   nonce,
+          },
+          { status: 401 },
+        );
+      }
+
+      console.log(`[attest-amendment] Wallet ownership verified for ${agentId}`);
+    }
+
     // ── Load existing pending achievement from Redis ───────────────────────
     const redisKey = `achievement:pending:${commitmentUid}`;
     const existing = await redis.get(redisKey) as Record<string, unknown> | null;
@@ -72,7 +132,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Ownership check ───────────────────────────────────────────────────
+    // ── Ownership check ────────────────────────────────────────────────────
     if ((existing.subject as string)?.toLowerCase() !== agentId.toLowerCase()) {
       return NextResponse.json(
         { error: 'Unauthorized — agentId does not match the commitment owner.' },
@@ -162,7 +222,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Recompute difficulty against new thresholds ───────────────────────
-    // Extract only numeric thresholds for the difficulty scorer
     const newThresholds: Record<string, number> = {};
     for (const key of numericParamKeys) {
       const v = newParams[key];
@@ -184,7 +243,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── EAS amendment attestation ─────────────────────────────────────────
-    // Attested onchain with refUID pointing to the original commitment
     const newCommitment = ((body.newCommitment as string)?.trim()) || (existing.statement as string);
     const walletAddress = agentId.startsWith('0x')
       ? agentId as `0x${string}`
@@ -212,7 +270,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Update Redis entry ────────────────────────────────────────────────
-    // Mark as amended, store new params, new difficulty, new statement
     const updated = {
       ...existing,
       status:             'amended',
@@ -228,10 +285,7 @@ export async function POST(req: NextRequest) {
       amendedMetric:      newMetric,
     };
 
-    // Use 'amended' key so cron uses the new thresholds but same attestation UID
-    // The original key stays for history; we update it in-place
-    const redisKeyFixed = redisKey.replace('achievement:pending:', 'achievement:pending:');
-    await redis.set(redisKeyFixed, updated, { ex: 90 * 86400 });
+    await redis.set(redisKey, updated, { ex: 90 * 86400 });
 
     // ── Build SVG URL for amended commitment ──────────────────────────────
     const baseUrl      = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
@@ -258,7 +312,7 @@ export async function POST(req: NextRequest) {
     });
   }, AMENDMENT_PRICE, {
   schema: { properties: {
-    input: { properties: { body: { type: 'object', required: ['agentId','commitmentUid'], properties: { agentId: { type: 'string' }, commitmentUid: { type: 'string' }, newMetric: { type: 'string' } } } } },
+    input: { properties: { body: { type: 'object', required: ['agentId','agentSig','agentNonce','commitmentUid'], properties: { agentId: { type: 'string' }, agentSig: { type: 'string' }, agentNonce: { type: 'string' }, commitmentUid: { type: 'string' }, newMetric: { type: 'string' } } } } },
     output: { properties: { example: { success: true, amendUID: '0xabc', amendTxHash: '0xdef' } } },
   } },
 });
@@ -270,14 +324,20 @@ export async function GET() {
     description: 'Amend an existing commitment with updated parameters',
     docs: 'https://thesealer.xyz/api/infoproducts',
     x402: true,
-    price: '$0.10 USDC',
+    price: '$0.25 USDC',
     networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
     params: {
-      agentId: 'your wallet address',
-      originalUID: 'UID of the commitment to amend',
-      claimType: 'github | defi_base | defi_solana | website | x402',
-      newMetric: 'updated goal description',
-      newDifficulty: 'difficulty score 1-10',
+      agentId:       'your wallet address',
+      agentSig:      'EIP-712 signature (EVM wallets only)',
+      agentNonce:    'Unix timestamp (seconds) used when signing — valid for 5 minutes',
+      commitmentUid: 'UID of the commitment to amend',
+      newMetric:     'updated goal description',
     },
+    eip712: {
+      domain: { name: 'SealerProtocol', version: '1', chainId: 8453 },
+      types:  { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
+      message: { wallet: '<agentId>', action: 'attest-amendment', nonce: '<unix_timestamp_seconds>' },
+    },
+    note: 'Solana agents do not need agentSig — payment proves wallet ownership.',
   });
 }
