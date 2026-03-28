@@ -1,8 +1,21 @@
 // src/app/api/agent/[handleOrWallet]/route.ts
+//
+// SECURITY CHANGE:
+//
+// 1. failureReason removed from public response (MEDIUM): This field exposed
+//    internal verifier scoring thresholds (e.g. "Total volume below minimum ($0.10).
+//    Dust activity filtered.") which could help agents reverse-engineer and game
+//    the verification system. It is now stripped from the public commitments array.
+//    The field is still stored in Redis and available internally.
+//
+// 2. Rate limiting added (MEDIUM): /api/agent/* had no rate limiting, enabling
+//    automated identity profiling. Now 30/min per IP.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { createPublicClient, http, parseAbi } from 'viem';
 import { base } from 'viem/chains';
+import { rateLimitRequest } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +45,10 @@ export async function GET(
   req:     NextRequest,
   context: { params: Promise<{ handleOrWallet: string }> },
 ) {
+  // ── Rate limiting: 30/min per IP ──────────────────────────────────────────
+  const limited = await rateLimitRequest(req, 'agent-profile', 30, 60);
+  if (limited) return limited;
+
   const { handleOrWallet } = await context.params;
   const param = handleOrWallet.toLowerCase().trim();
 
@@ -43,7 +60,6 @@ export async function GET(
     wallet = param;
     handle = (await redis.get(`sid:wallet:${wallet}`)) as string | null;
   } else {
-    // Treat as handle
     const resolved = await redis.get(`sid:handle:${param}`) as string | null;
     if (!resolved) return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     wallet = resolved;
@@ -79,14 +95,13 @@ export async function GET(
         publicClient.readContract({ address: SID_ADDRESS, abi: SID_ABI, functionName: 'renewalCount', args: [tokenId] }),
       ]);
 
-      // Parse params from tokenURI
       let name = 'UNNAMED AGENT', entityType = 'UNKNOWN', imageUrl = '', chain = 'Base';
       try {
-        const url    = new URL(tokenUri as string);
-        name         = url.searchParams.get('name')       || name;
-        entityType   = url.searchParams.get('entityType') || entityType;
-        imageUrl     = url.searchParams.get('imageUrl')   || imageUrl;
-        chain        = url.searchParams.get('chain')      || chain;
+        const url  = new URL(tokenUri as string);
+        name       = url.searchParams.get('name')       || name;
+        entityType = url.searchParams.get('entityType') || entityType;
+        imageUrl   = url.searchParams.get('imageUrl')   || imageUrl;
+        chain      = url.searchParams.get('chain')      || chain;
       } catch { /* use defaults */ }
 
       sidData = {
@@ -113,20 +128,19 @@ export async function GET(
     const entry = typeof raw === 'string' ? JSON.parse(raw) : raw as any;
     if ((entry.subject as string)?.toLowerCase() !== wallet) continue;
 
-    const commitment = {
-      uid:          entry.attestationUID,
-      claimType:    entry.claimType,
-      claimLabel:   CLAIM_LABELS[entry.claimType] || entry.claimType,
-      status:       entry.status,
-      statement:    entry.statement,
-      deadline:     entry.deadline ? new Date(entry.deadline * 1000).toISOString() : null,
-      proofPoints:  entry.proofPoints  ?? 0,
-      difficulty:   entry.difficulty   ?? 0,
-      onTime:       entry.onTime       ?? false,
-      failureReason: entry.failureReason || null,
-    };
-
-    commitments.push(commitment);
+    commitments.push({
+      uid:         entry.attestationUID,
+      claimType:   entry.claimType,
+      claimLabel:  CLAIM_LABELS[entry.claimType] || entry.claimType,
+      status:      entry.status,
+      statement:   entry.statement,
+      deadline:    entry.deadline ? new Date(entry.deadline * 1000).toISOString() : null,
+      proofPoints: entry.proofPoints  ?? 0,
+      difficulty:  entry.difficulty   ?? 0,
+      onTime:      entry.onTime       ?? false,
+      // failureReason intentionally omitted — internal verifier metadata,
+      // exposes scoring thresholds that could be used to game the system
+    });
 
     if (entry.status === 'achieved') {
       totalProofPoints += Number(entry.proofPoints ?? 0);
@@ -134,7 +148,6 @@ export async function GET(
     }
   }
 
-  // Sort: achieved first, then by proofPoints desc
   commitments.sort((a, b) => {
     if (a.status === 'achieved' && b.status !== 'achieved') return -1;
     if (b.status === 'achieved' && a.status !== 'achieved') return 1;
