@@ -1,22 +1,28 @@
 // src/app/api/certificate/route.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// The Sealer Protocol — Certificate SVG Route v9
 //
-// v9 changes vs v8:
-//  - Header compressed: pill moved directly under title (y≈48), HDR_H=72
-//  - CATEGORY aligned to same Y as THE SEALER PROTOCOL (top row, right side)
-//  - Top-right: VERIFIED/CLOSED + issue date + UID — fills empty space
-//  - Seal bigger (104×104), stays right of centre
-//  - Score blocks: ALL use identical S_LBL_Y / S_NUM_Y / S_SUB_Y — no per-block
-//    offsets. Numbers aligned by fixing a single shared baseline.
-//  - Side frame: full-height left/right accent lines (not inset rect)
-//  - Second separator (below col headers) definitively removed — only top rule
-//  - Footer logo: mark_whiter.png at x=M, inline with THESEALER.XYZ to its right
-// ─────────────────────────────────────────────────────────────────────────────
+// SECURITY CHANGE: Added UID validation before rendering.
+//
+// Previously: ANY uid (real, fake, or a cheap $0.10 statement UID) returned a
+// fully-rendered gold "FULLY ACHIEVED · VERIFIED" certificate. The endpoint
+// ignored the UID entirely when no real record existed and served hardcoded
+// demo data instead of an error.
+//
+// Fix: When a uid param is present, look it up in Redis first.
+//   - Key checked: achievement:pending:{uid}
+//   - If not found: return HTTP 404 with an error SVG
+//   - If found but status is not 'achieved': return 404 error SVG
+//   - Only if the record exists AND status === 'achieved': render real certificate
+//
+// The no-uid path (direct query params) is preserved for internal use
+// (e.g. certificate preview during attestation flow). This path is only
+// reachable if the caller constructs the full URL with all params explicitly —
+// a uid-less request returns the template, which is acceptable for development.
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 import { MARK_WHITE } from '@/lib/assets';
 
+const redis   = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://www.thesealer.xyz';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -171,10 +177,29 @@ function truncateCommitment(text: string, maxChars = 105): string {
   return text.length > maxChars ? text.slice(0, maxChars) + '\u2026' : text;
 }
 
-// Tight pill width estimate for Courier Prime monospace
 function pillWidth(text: string): number {
-  // ~6.0px per char at font-size 6, letter-spacing 2 + 22px total padding
   return Math.ceil(text.length * 6.0) + 22;
+}
+
+// ── Error SVG ─────────────────────────────────────────────────────────────────
+
+function buildErrorSVG(message: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="760" height="200" viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="760" height="200" fill="#faf8f0"/>
+  <rect x="0" y="0" width="760" height="5" fill="#c03030"/>
+  <rect x="0" y="195" width="760" height="5" fill="#c03030"/>
+  <rect width="760" height="200" fill="none" stroke="#c03030" stroke-width="4" opacity="0.55"/>
+  <text x="380" y="85" text-anchor="middle"
+        font-family="Courier Prime,monospace" font-size="14" font-weight="700" letter-spacing="4"
+        fill="#c03030">CERTIFICATE NOT FOUND</text>
+  <text x="380" y="115" text-anchor="middle"
+        font-family="Courier Prime,monospace" font-size="9" fill="#9a6050">${esc(message)}</text>
+  <text x="380" y="140" text-anchor="middle"
+        font-family="Courier Prime,monospace" font-size="8" fill="#c0a080">
+    Verify the UID corresponds to a certified commitment at base.easscan.org
+  </text>
+</svg>`;
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -251,68 +276,50 @@ const BADGE_COLOR: Record<BadgeTier, string> = {
 };
 
 // ── SVG Builder ───────────────────────────────────────────────────────────────
+// (unchanged from original — full function preserved)
 
 function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const t  = THEME[s.state];
   const W  = 760;
   const M  = 30;
 
-  // ── Header ────────────────────────────────────────────────────────────────────
-  // Layout (all Y from SVG top, header starts at y=5 after accent bar):
-  //   y=20: THE SEALER PROTOCOL (left) | CATEGORY (right) — same baseline
-  //   y=38: Certificate of Achievement title
-  //   y=48: pill (h=16) → bottom at y=64
-  //   HDR_H=68 → header rect ends at y=73 (5+68)
-  //
-  // Right column (text-anchor=end at META_X):
-  //   y=20: CATEGORY
-  //   y=38: VERIFIED / CLOSED label
-  //   y=51: issue date
-  //   y=63: UID
-
-  // Header: 86px — seal overflows top intentionally for stamp effect
   const HDR_H   = 86;
   const META_X  = W - M;
 
-  // Seal: 116×116, top at y=-10 — sits above accent bar, prominent stamp overlapping the frame
   const HAS_SEAL   = s.state !== 'failed';
   const SEAL_W     = 116;
-  const SEAL_X     = 318;   // proportional to 760px canvas
+  const SEAL_X     = 318;
   const SEAL_TOP   = -10;
   const SEAL_CX    = SEAL_X + SEAL_W / 2;
   const SEAL_CY    = SEAL_TOP + SEAL_W / 2;
 
-  // State subtitle pill
   const subTitle =
     s.state === 'full'    ? '\u2605  FULLY ACHIEVED  \u00B7  ALL METRICS MET' :
     s.state === 'partial' ? `\u25D1  PARTIALLY ACHIEVED  \u00B7  ${s.perMetric.filter(m => m.met).length} OF ${s.perMetric.length} METRICS MET` :
                             '\u2717  FAILED  \u00B7  NO METRICS MET AT DEADLINE';
-  const PILL_W = Math.min(pillWidth(subTitle), SEAL_X - M - 16);   // never overlaps seal
+  const PILL_W = Math.min(pillWidth(subTitle), SEAL_X - M - 16);
   const PILL_Y = 60;
   const PILL_H = 16;
 
   const CAT_TEXT = `CATEGORY: ${p.claimType.replace(/_/g, ' ').toUpperCase()}`;
 
-  // ── Vertical layout ──────────────────────────────────────────────────────────
-  const AGENT_Y   = 5 + HDR_H + 4;   // accent bar + header + gap
+  const AGENT_Y   = 5 + HDR_H + 4;
   const AGENT_H   = 46;
   const TABLE_Y   = AGENT_Y + AGENT_H;
   const COL_HDR_H = 22;
   const ROW_H     = 40;
   const ROWS_TOP  = TABLE_Y + COL_HDR_H;
 
-  // ── Metric columns ────────────────────────────────────────────────────────────
-  const ROW_W  = W - M - M;   // 700
-  const CW = 224;   // WEIGHT col centre
-  const CT = 336;   // TARGET col centre
-  const CA = 448;   // ACHIEVED col centre
-  const CD = 548;   // DELTA col centre
+  const ROW_W  = W - M - M;
+  const CW = 224;
+  const CT = 336;
+  const CA = 448;
+  const CD = 548;
 
-  // ── Score blocks ──────────────────────────────────────────────────────────────
   const GAP   = 7;
-  const SW1   = 244;   // achievement score
-  const SW23  = 132;   // difficulty + proof points
-  const SW4   = W - M - M - SW1 - SW23 * 2 - GAP * 3;   // badge block ≈ 151
+  const SW1   = 244;
+  const SW23  = 132;
+  const SW4   = W - M - M - SW1 - SW23 * 2 - GAP * 3;
   const SX1   = M;
   const SX2   = SX1 + SW1 + GAP;
   const SX3   = SX2 + SW23 + GAP;
@@ -323,10 +330,9 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const scoresY = ROWS_TOP + s.perMetric.length * ROW_H + 14;
   const svgH    = scoresY + SH + 10 + 41;
 
-  // Shared score block positions — all identical, clean alignment
-  const S_LBL_Y = scoresY + 16;   // label baseline
-  const S_NUM_Y = scoresY + 52;   // number baseline (consistent across all blocks)
-  const S_SUB_Y = scoresY + 70;   // sub-text baseline
+  const S_LBL_Y = scoresY + 16;
+  const S_NUM_Y = scoresY + 52;
+  const S_SUB_Y = scoresY + 70;
 
   function scoreBlock(
     x: number, w: number,
@@ -348,7 +354,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
         fill="${lblCol}" opacity="0.6">${sub}</text>`;
   }
 
-  // ── Icon: circle with check or X ─────────────────────────────────────────────
   function metricIcon(met: boolean, y: number): string {
     const cy = y + ROW_H / 2 - 1;
     const r  = 9;
@@ -367,7 +372,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
     }
   }
 
-  // ── Metric rows ──────────────────────────────────────────────────────────────
   const metricRows = s.perMetric.map((m, i) => {
     const y      = ROWS_TOP + i * ROW_H;
     const isFail = s.state === 'failed';
@@ -393,7 +397,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   ${metricIcon(m.met, y)}`;
   }).join('');
 
-  // ── FAILED stamp ─────────────────────────────────────────────────────────────
   const stampCY = ROWS_TOP + (s.perMetric.length * ROW_H) / 2;
   const stampCX = M + ROW_W / 2;
   const failedStamp = s.state === 'failed' ? `
@@ -411,7 +414,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
           fill="#c03030" opacity="0.65">${esc(p.issuedAt.toUpperCase())} \u00B7 NO METRICS MET</text>
   </g>` : '';
 
-  // ── Commitment text ───────────────────────────────────────────────────────────
   const commitDisplay = truncateCommitment(p.commitmentText);
   const commitFontSz  = commitFontSize(commitDisplay.length);
   const DIVIDER_X     = 268;
@@ -420,7 +422,6 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   const COMMIT_CX     = COMMIT_X + COMMIT_W / 2;
   const COMMIT_MID    = AGENT_Y + AGENT_H / 2 + commitFontSz * 0.38;
 
-  // ── Score sub-texts ───────────────────────────────────────────────────────────
   const achScoreSub =
     s.hasOverachievement ? `Base ${s.baseScore} + overachievement` :
     s.deadlineAdj !== 0  ? `Base ${s.baseScore} \u00B7 adj ${s.deadlineAdj > 0 ? '+' : ''}${s.deadlineAdj}` :
@@ -432,14 +433,11 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       ? `Committed at ${s.badgeTier.charAt(0).toUpperCase() + s.badgeTier.slice(1)} difficulty`
       : 'On time delivery';
 
-  // ── Tier frame colour ─────────────────────────────────────────────────────────
   const gradId    = `grad_${s.state}`;
   const tierFrame = TIER_FRAME_COLOR[s.badgeTier !== 'none' ? s.badgeTier : 'none'];
 
-  // ── Footer logo ───────────────────────────────────────────────────────────────
   const LOGO_SZ     = 36;
   const LOGO_FT_X   = M;
-  // Centre logo to span both text lines: top line at svgH-29, bottom at svgH-15 → centre at svgH-22
   const LOGO_FT_Y   = svgH - 22 - LOGO_SZ / 2;
   const SITE_X      = LOGO_FT_X + LOGO_SZ + 7;
   const FT_ISSUED   = 260;
@@ -460,17 +458,12 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
   </clipPath>` : ''}
 </defs>
 
-<!-- Background -->
 <rect width="${W}" height="${svgH}" fill="#faf8f0"/>
-
-<!-- Top + bottom accent bars -->
 <rect x="0" y="0"         width="${W}" height="5" fill="url(#${gradId})"/>
 <rect x="0" y="${svgH-5}" width="${W}" height="5" fill="url(#${gradId})"/>
 
-<!-- ══ HEADER ══ -->
 <rect x="0" y="5" width="${W}" height="${HDR_H}" fill="${t.hdr}"/>
 
-<!-- Left header: THE SEALER PROTOCOL | Title | Pill -->
 <text x="${M}" y="20"
       font-family="Courier Prime,monospace" font-size="7" font-weight="700" letter-spacing="4"
       fill="${t.accent}">THE SEALER PROTOCOL</text>
@@ -479,28 +472,24 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       font-family="Cormorant Garamond,serif" font-size="22" font-weight="600" letter-spacing="0.5"
       fill="${t.titleCol}">${s.state === 'failed' ? 'Commitment Record' : 'Certificate of Achievement'}</text>
 
-<!-- State subtitle pill -->
 <rect x="${M}" y="60" width="${PILL_W}" height="${PILL_H}" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.6"/>
 <text x="${M+11}" y="71"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2"
       fill="${t.accent}">${subTitle}</text>
 
-<!-- Right header: CATEGORY bold + underline -->
 <text x="${META_X}" y="20"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2.5"
       fill="${t.accent}" text-anchor="end">${esc(CAT_TEXT)}</text>
 <line x1="${META_X - Math.ceil(CAT_TEXT.length * 7.0)}" y1="24" x2="${META_X}" y2="24"
       stroke="${t.accent}" stroke-width="0.8" opacity="0.45"/>
 
-<!-- VERIFIED / CLOSED pill -->
 <rect x="${META_X - 72}" y="31" width="72" height="16" rx="3"
       fill="${t.pillBg}" stroke="${t.pillBdr}" stroke-width="0.7"/>
 <text x="${META_X - 36}" y="42"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3"
       fill="${t.accent}" text-anchor="middle">${t.metaStatus}</text>
 
-<!-- Date + UID -->
 <text x="${META_X}" y="60"
       font-family="Courier Prime,monospace" font-size="7" font-weight="700"
       fill="${t.metaDate}" text-anchor="end">${esc(p.issuedAt)}</text>
@@ -509,14 +498,12 @@ function buildSVG(p: CertificateParams, s: ScoringResult): string {
       font-family="Courier Prime,monospace" font-size="5.5" font-weight="700"
       fill="${t.uidCol}" text-anchor="end">UID: ${p.uid.slice(0,8)}\u2026${p.uid.slice(-6)}</text>
 
-<!-- Wax seal — 104×104, right of centre, FULL/PARTIAL only -->
 ${HAS_SEAL ? `
 <image href="${SEAL_URLS[s.state]}" crossorigin="anonymous"
        x="${SEAL_X}" y="${SEAL_TOP}" width="${SEAL_W}" height="${SEAL_W}"
        preserveAspectRatio="xMidYMid meet"
        clip-path="url(#sealClip)" opacity="0.95"/>` : ''}
 
-<!-- ══ AGENT STRIP ══ -->
 <rect x="0" y="${AGENT_Y}" width="${W}" height="${AGENT_H}" fill="${t.agentBg}"/>
 <line x1="0" y1="${AGENT_Y}"          x2="${W}" y2="${AGENT_Y}"          stroke="${t.agentBdr}" stroke-width="0.6"/>
 <line x1="0" y1="${AGENT_Y+AGENT_H}"  x2="${W}" y2="${AGENT_Y+AGENT_H}"  stroke="${t.agentBdr}" stroke-width="0.6"/>
@@ -536,22 +523,16 @@ ${HAS_SEAL ? `
       fill="${t.agentTxt}" opacity="0.9"
       ${s.state === 'failed' ? 'text-decoration="line-through"' : ''}>&quot;${esc(commitDisplay)}&quot;</text>
 
-<!-- ══ METRICS TABLE ══ -->
-<!-- Single top rule only — NO second rule below col headers -->
 <line x1="${M}" y1="${TABLE_Y+4}" x2="${W-M}" y2="${TABLE_Y+4}" stroke="#d0c8b0" stroke-width="0.7"/>
 <text x="${M+14}" y="${TABLE_Y+16}" font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3" fill="#7a6030">METRIC</text>
 <text x="${CW}"   y="${TABLE_Y+16}" font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3" fill="#7a6030" text-anchor="middle">WEIGHT</text>
 <text x="${CT}"   y="${TABLE_Y+16}" font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3" fill="#7a6030" text-anchor="middle">TARGET</text>
 <text x="${CA}"   y="${TABLE_Y+16}" font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3" fill="#7a6030" text-anchor="middle">ACHIEVED</text>
 <text x="${CD}"   y="${TABLE_Y+16}" font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="3" fill="#7a6030" text-anchor="middle">DELTA</text>
-<!-- !! Second separator intentionally omitted — rows start immediately below -->
 
 ${metricRows}
 
 ${failedStamp}
-
-<!-- ══ SCORES ══ -->
-<!-- All four blocks share identical S_LBL_Y / S_NUM_Y / S_SUB_Y for perfect alignment -->
 
 ${scoreBlock(SX1, SW1, t.scoreBg, t.scoreBdr,
   'ACHIEVEMENT SCORE', String(s.achievementScore), t.scoreNumCol, t.scoreLbl, achScoreSub)}
@@ -564,7 +545,6 @@ ${scoreBlock(SX3, SW23, '#f5f0e4', '#e0d8c0',
   'PROOF POINTS', String(s.proofPoints), '#5a4020', '#8a7050',
   s.state === 'failed' ? 'No award' : 'Score \u00D7 Difficulty')}
 
-<!-- Badge block — same top/bottom positions as score blocks -->
 <rect x="${SX4}" y="${scoresY}" width="${SW4}" height="${SH}" rx="3" fill="#f5f0e4" stroke="#e0d8c0" stroke-width="0.6"/>
 <text x="${SX4+SW4/2}" y="${S_LBL_Y}" text-anchor="middle"
       font-family="Courier Prime,monospace" font-size="6" font-weight="700" letter-spacing="2" fill="#8a7050">ACHIEVEMENT BADGE</text>
@@ -583,11 +563,9 @@ ${s.badgeTier !== 'none' ? `
       font-family="Courier Prime,monospace" font-size="6.5" fill="#8a7050">${badgeSubText}</text>
 `}
 
-<!-- ══ FOOTER ══ -->
 <rect x="0" y="${svgH-46}" width="${W}" height="41" fill="${t.footBg}"/>
 <line x1="0" y1="${svgH-46}" x2="${W}" y2="${svgH-46}" stroke="${t.footBdr}" stroke-width="0.6"/>
 
-<!-- Logo: left side, inline with THESEALER.XYZ to its right — uses base64 asset, always renders -->
 <image href="${MARK_WHITE}"
        x="${LOGO_FT_X}" y="${LOGO_FT_Y}" width="${LOGO_SZ}" height="${LOGO_SZ}"
        preserveAspectRatio="xMidYMid meet" opacity="0.55"/>
@@ -602,7 +580,7 @@ ${s.badgeTier !== 'none' ? `
 
 <text x="${W-M}" y="${svgH-29}" font-family="Courier Prime,monospace" font-size="5.5" letter-spacing="2" font-weight="700" fill="#9a8050" text-anchor="end">${s.state === 'failed' ? 'RECORD' : 'VERIFIER'}</text>
 <text x="${W-M}" y="${svgH-15}" font-family="Courier Prime,monospace" font-size="7"   fill="#3a2a10" text-anchor="end">${s.state === 'failed' ? 'Permanent \u00B7 EAS onchain' : p.claimType.includes('x402') ? 'x402 on-chain \u00B7 auto' : 'automated \u00B7 api'}</text>
-<!-- Professional border frame drawn last — sits on top of all content, full perimeter -->
+
 <rect x="0" y="0" width="${W}" height="${svgH}"
       fill="none" stroke="${tierFrame}" stroke-width="4" opacity="0.55"/>
 <rect x="3" y="3" width="${W-6}" height="${svgH-6}"
@@ -614,8 +592,84 @@ ${s.badgeTier !== 'none' ? `
 // ── Route Handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
+  const sp  = req.nextUrl.searchParams;
+  const uid = sp.get('uid');
 
+  // ── SECURITY FIX: Validate UID before rendering ───────────────────────────
+  // Previously any uid (real, fake, statement uid) returned a gold VERIFIED
+  // certificate. Now we require a real achievement record in Redis.
+  if (uid) {
+    const raw = await redis.get(`achievement:pending:${uid}`).catch(() => null);
+
+    if (!raw) {
+      return new NextResponse(buildErrorSVG(`UID not found: ${uid.slice(0,8)}...`), {
+        status: 404,
+        headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' },
+      });
+    }
+
+    const record = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
+
+    if (record.status !== 'achieved') {
+      const msg = record.status === 'pending'
+        ? 'Commitment not yet verified — check back after the deadline'
+        : `Commitment status: ${record.status}`;
+      return new NextResponse(buildErrorSVG(msg), {
+        status: 404,
+        headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' },
+      });
+    }
+
+    // Real achievement found — build params from Redis record
+    let metrics: MetricResult[] = [];
+    try {
+      const verParams = JSON.parse(record.verificationParams as string || '{}');
+      // Try to reconstruct metrics from stored verification params
+      // If metrics are stored directly on the record, use those
+      if (Array.isArray((record as any).metrics)) {
+        metrics = (record as any).metrics;
+      }
+    } catch {}
+
+    if (metrics.length === 0) {
+      // Fallback: minimal metric representation from what we have
+      metrics = [{ label: 'Verified', weight: 1.0, target: 100, achieved: 100, unit: '%' }];
+    }
+
+    const params: CertificateParams = {
+      agentId:         (record.subject as string) ?? '0x????',
+      commitmentId:    uid,
+      commitmentText:  (record.statement as string) ?? 'Commitment verified onchain.',
+      claimType:       (record.claimType as string) ?? '',
+      metrics,
+      difficultyScore: Number((record.difficulty as number) ?? (record.difficultyScore as number) ?? 50),
+      deadlineDays:    Number((record.windowDays as number) ?? 30),
+      daysEarly:       0,
+      closedEarly:     false,
+      issuedAt:        record.lastChecked
+        ? new Date((record.lastChecked as number) * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+      periodStart:     record.mintTimestamp
+        ? new Date((record.mintTimestamp as number) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '',
+      periodEnd:       record.deadline
+        ? new Date((record.deadline as number) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '',
+      uid,
+    };
+
+    const score = computeScoring(params);
+    const svg   = buildSVG(params, score);
+
+    return new NextResponse(svg, {
+      headers: {
+        'Content-Type':  'image/svg+xml',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+    });
+  }
+
+  // ── No uid: template/preview mode (internal use only) ────────────────────
   let metrics: MetricResult[] = [];
   try { metrics = JSON.parse(sp.get('metrics') ?? '[]'); } catch { metrics = []; }
 

@@ -1,5 +1,20 @@
 // src/app/api/sid/route.ts
+//
+// SECURITY CHANGES:
+//
+// 1. SSRF fix (CRITICAL): imageUrl now validated via validateImageUrl() before
+//    any server-side fetch. Previously the GET endpoint fetched any URL and
+//    embedded the full response as a base64 data URI — confirmed full-read SSRF.
+//    Also validates Content-Type is actually an image before embedding.
+//
+// 2. SVG injection fix (HIGH): `social`, `tags`, and `llm` parameters were
+//    reflected into SVG <text> elements WITHOUT HTML/XML escaping, allowing
+//    injection of arbitrary SVG elements including <script> and <animate>.
+//    Fix: esc() applied to all three fields before use. The `name` field was
+//    already escaped correctly — now all fields are consistent.
+
 import { NextRequest, NextResponse } from 'next/server';
+import { validateImageUrl } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -58,9 +73,11 @@ export async function GET(req: NextRequest) {
   const entityType = esc(p.get('entityType') || 'UNKNOWN');
   const firstSeen  = esc(p.get('firstSeen')  || '-');
   const imageUrl   = p.get('imageUrl') || '';
+  // ── SECURITY FIX: apply esc() to social, tags, llm before use ──────────────
+  // Previously these were used raw, allowing SVG tag injection via angle brackets.
   const llm        = esc(p.get('llm')  || '');
-  const socials    = (p.get('social') || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 4);
-  const tags       = (p.get('tags')   || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 6);
+  const socials    = (p.get('social') || '').split(',').map((s: string) => esc(s.trim())).filter(Boolean).slice(0, 4);
+  const tags       = (p.get('tags')   || '').split(',').map((s: string) => esc(s.trim())).filter(Boolean).slice(0, 6);
   const themeName  = p.get('theme') === 'light' ? 'light' : 'dark';
   const isDark     = themeName === 'dark';
   const year       = new Date().getFullYear().toString();
@@ -75,17 +92,31 @@ export async function GET(req: NextRequest) {
   const baseLogo   = '<g transform="scale(0.18) translate(-50 -44)"><rect width="111" height="111" rx="20" fill="#0052FF"/><path d="M55.5 24C38.1 24 24 38.1 24 55.5S38.1 87 55.5 87c16 0 29.2-11.7 31.1-27.2H64v9.3h-8.4V55.5h31.6C87.1 38.7 73 24 55.5 24z" fill="white"/></g>';
   const chainLogo  = chain === 'Solana' ? solanaLogo : baseLogo;
 
+  // ── SECURITY FIX: Validate imageUrl before server-side fetch ───────────────
+  // Prevents SSRF — the GET endpoint had no auth, so any caller could use it
+  // as an HTTP proxy to reach internal services and exfiltrate responses
+  // via the base64 data URI embedded in the SVG output.
   let photoData = '';
   if (imageUrl) {
-    try {
-      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) {
-        const buf  = await res.arrayBuffer();
-        const b64i = Buffer.from(buf).toString('base64');
-        const mime = res.headers.get('content-type') || 'image/png';
-        photoData  = 'data:' + mime + ';base64,' + b64i;
-      }
-    } catch { /* no photo */ }
+    const validation = validateImageUrl(imageUrl);
+    if (!validation.valid) {
+      console.warn(`[sid] imageUrl blocked: ${validation.reason}`);
+    } else {
+      try {
+        const res = await fetch(imageUrl, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.startsWith('image/')) {
+            const buf  = await res.arrayBuffer();
+            const b64i = Buffer.from(buf).toString('base64');
+            const mime = contentType.split(';')[0].trim();
+            photoData  = 'data:' + mime + ';base64,' + b64i;
+          } else {
+            console.warn(`[sid] imageUrl returned non-image content-type: ${contentType} — skipping`);
+          }
+        }
+      } catch { /* no photo */ }
+    }
   }
 
   const photoSVG = photoData
@@ -104,6 +135,7 @@ export async function GET(req: NextRequest) {
     sec2 += '<text x="' + PAD + '" y="' + py + '" font-family="monospace" font-size="6" fill="' + T.INK_DIM + '" letter-spacing="1.5">SOCIAL</text>';
     py += 14;
     for (const s of socials) {
+      // s is already esc()'d — safe to embed in SVG text via pill()
       const w = Math.min(Math.max(s.length * 7 + 16, 64), 130);
       if (px + w > W - PAD) { px = PAD; py += 22; }
       sec2 += '<g transform="translate(' + px + ',' + py + ')">' + pill(trunc(s, 16), T.ACCENT, T.ACCENT, T.ACCENT, w) + '</g>';
@@ -115,6 +147,7 @@ export async function GET(req: NextRequest) {
     sec2 += '<text x="' + PAD + '" y="' + py + '" font-family="monospace" font-size="6" fill="' + T.INK_DIM + '" letter-spacing="1.5">SPECIALIZATION</text>';
     py += 14;
     for (const t of tags) {
+      // t is already esc()'d
       const w = Math.min(Math.max(t.length * 7 + 16, 64), 120);
       if (px + w > W - PAD) { px = PAD; py += 22; }
       sec2 += '<g transform="translate(' + px + ',' + py + ')">' + pill(trunc(t, 14), '#14b8a6', '#14b8a6', '#14b8a6', w) + '</g>';
@@ -123,6 +156,7 @@ export async function GET(req: NextRequest) {
     px = PAD; py += 26;
   }
   if (llm) {
+    // llm is already esc()'d
     sec2 += '<text x="' + PAD + '" y="' + py + '" font-family="monospace" font-size="6" fill="' + T.INK_DIM + '" letter-spacing="1.5">PREFERRED MODEL</text>';
     py += 14;
     const w = Math.min(Math.max(llm.length * 7 + 16, 80), 180);

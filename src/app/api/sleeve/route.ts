@@ -1,6 +1,14 @@
 // src/app/api/sleeve/route.ts
+//
+// SECURITY CHANGE: Added SSRF protection to imageUrl parameter.
+// The GET endpoint previously fetched any URL and embedded the full
+// response as a base64 data URI — confirmed full-read SSRF by scanner.
+// Fix: validateImageUrl() from security.ts blocks non-HTTPS, private IPs,
+// and non-allowlisted hosts before any fetch occurs.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { MARK_BLACK } from '@/lib/assets';
+import { validateImageUrl } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -18,15 +26,14 @@ function truncateHash(h: string) {
 }
 
 // Card layout constants
-const W           = 315;   // fixed card width
-const SLEEVE_PAD  = 12;    // sleeve border
-const FOOTER_H    = 28;    // footer bar height
+const W           = 315;
+const SLEEVE_PAD  = 12;
+const FOOTER_H    = 28;
 const INNER_W     = W - SLEEVE_PAD * 2;
 
-// Image ratio bounds — min 9:16 portrait, max 16:9 landscape
 const MIN_RATIO     = 9 / 16;
 const MAX_RATIO     = 16 / 9;
-const DEFAULT_RATIO = 63 / 88; // trading card default if no image
+const DEFAULT_RATIO = 63 / 88;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -44,36 +51,52 @@ export async function GET(req: NextRequest) {
   let imgMime  = 'image/png';
   let imgRatio = DEFAULT_RATIO;
 
+  // ── SECURITY: Validate imageUrl before fetching ───────────────────────────
+  // Prevents SSRF — blocks private IPs, non-HTTPS, and non-allowlisted hosts.
   if (imageUrl) {
-    try {
-      const res = await fetch(imageUrl, { signal: AbortSignal.timeout(5000) });
-      if (res.ok) {
-        const buf = await res.arrayBuffer();
-        const b64 = Buffer.from(buf).toString('base64');
-        imgMime   = res.headers.get('content-type') || 'image/png';
-        imgData   = `data:${imgMime};base64,${b64}`;
+    const validation = validateImageUrl(imageUrl);
+    if (!validation.valid) {
+      // Silently skip — render card without image rather than returning error
+      // (GET SVG endpoints should always return a valid SVG)
+      console.warn(`[sleeve] imageUrl blocked: ${validation.reason}`);
+    } else {
+      try {
+        const res = await fetch(imageUrl, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          // ── SECURITY: Validate Content-Type is actually an image ───────────
+          const contentType = res.headers.get('content-type') || '';
+          const isImage = contentType.startsWith('image/');
+          if (!isImage) {
+            console.warn(`[sleeve] imageUrl returned non-image content-type: ${contentType} — skipping`);
+          } else {
+            const buf = await res.arrayBuffer();
+            const b64 = Buffer.from(buf).toString('base64');
+            imgMime   = contentType.split(';')[0].trim();
+            imgData   = `data:${imgMime};base64,${b64}`;
 
-        if (paramW > 0 && paramH > 0) {
-          imgRatio = paramW / paramH;
-        } else if (imgMime.includes('png')) {
-          const view = new DataView(buf);
-          if (buf.byteLength >= 24) {
-            const pngW = view.getUint32(16);
-            const pngH = view.getUint32(20);
-            if (pngW > 0 && pngH > 0) imgRatio = pngW / pngH;
-          }
-        } else if (imgMime.includes('jpeg') || imgMime.includes('jpg')) {
-          const bytes = new Uint8Array(buf);
-          for (let i = 0; i < bytes.length - 8; i++) {
-            if (bytes[i] === 0xFF && (bytes[i+1] === 0xC0 || bytes[i+1] === 0xC2)) {
-              const jpgH = (bytes[i+5] << 8) | bytes[i+6];
-              const jpgW = (bytes[i+7] << 8) | bytes[i+8];
-              if (jpgW > 0 && jpgH > 0) { imgRatio = jpgW / jpgH; break; }
+            if (paramW > 0 && paramH > 0) {
+              imgRatio = paramW / paramH;
+            } else if (imgMime.includes('png')) {
+              const view = new DataView(buf);
+              if (buf.byteLength >= 24) {
+                const pngW = view.getUint32(16);
+                const pngH = view.getUint32(20);
+                if (pngW > 0 && pngH > 0) imgRatio = pngW / pngH;
+              }
+            } else if (imgMime.includes('jpeg') || imgMime.includes('jpg')) {
+              const bytes = new Uint8Array(buf);
+              for (let i = 0; i < bytes.length - 8; i++) {
+                if (bytes[i] === 0xFF && (bytes[i+1] === 0xC0 || bytes[i+1] === 0xC2)) {
+                  const jpgH = (bytes[i+5] << 8) | bytes[i+6];
+                  const jpgW = (bytes[i+7] << 8) | bytes[i+8];
+                  if (jpgW > 0 && jpgH > 0) { imgRatio = jpgW / jpgH; break; }
+                }
+              }
             }
           }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   imgRatio = Math.max(MIN_RATIO, Math.min(MAX_RATIO, imgRatio));
