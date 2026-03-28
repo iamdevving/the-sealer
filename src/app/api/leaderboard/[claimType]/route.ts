@@ -1,6 +1,19 @@
 // src/app/api/leaderboard/[claimType]/route.ts
+//
+// SECURITY CHANGES:
+//
+// 1. limit param capped at 20 (MEDIUM): Previously ?limit=100 was accepted,
+//    enabling bulk wallet harvest in a single request. Now silently capped at 20.
+//
+// 2. Rate limiting added (MEDIUM): 60 req/min per IP — generous for legitimate
+//    use, blocks automated bulk scraping.
+//
+// Note: leaderboard stays intentionally public. The Sealer's value prop is
+// verifiable public reputation — requiring auth would contradict the product.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
+import { rateLimitRequest } from '@/lib/security';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +37,8 @@ const CLAIM_LABELS: Record<string, string> = {
   all:                      'All Categories',
 };
 
+const MAX_LIMIT = 20; // hard cap — prevents bulk harvest in a single request
+
 export interface LeaderboardEntry {
   rank:        number;
   wallet:      string;
@@ -40,8 +55,16 @@ export async function GET(
   req:     NextRequest,
   context: { params: Promise<{ claimType: string }> },
 ) {
+  // ── Rate limiting: 60/min per IP ──────────────────────────────────────────
+  const limited = await rateLimitRequest(req, 'leaderboard', 60, 60);
+  if (limited) return limited;
+
   const { claimType } = await context.params;
-  const limit = parseInt(new URL(req.url).searchParams.get('limit') || '20');
+
+  // Enforce limit cap — silently clamp rather than error, so existing
+  // integrations sending limit=100 don't break, they just get 20
+  const rawLimit = parseInt(new URL(req.url).searchParams.get('limit') || '20');
+  const limit    = Math.min(isNaN(rawLimit) ? 20 : Math.max(1, rawLimit), MAX_LIMIT);
 
   if (claimType !== 'all' && !VALID_CLAIM_TYPES.includes(claimType)) {
     return NextResponse.json({ error: 'Invalid claimType' }, { status: 400 });
@@ -56,10 +79,10 @@ export async function GET(
 
   // Aggregate by wallet
   const walletMap = new Map<string, {
-    proofPoints:     number;
-    bestDifficulty:  number;
-    onTime:          boolean;
-    claimType:       string;
+    proofPoints:      number;
+    bestDifficulty:   number;
+    onTime:           boolean;
+    claimType:        string;
     achievementCount: number;
   }>();
 
@@ -73,17 +96,16 @@ export async function GET(
     const wallet = (entry.subject as string)?.toLowerCase();
     if (!wallet) continue;
 
-    const points    = Number(entry.proofPoints ?? 0);
-    const diff      = Number(entry.difficulty  ?? 0);
-    const onTime    = Boolean(entry.onTime);
-    const existing  = walletMap.get(wallet);
+    const points   = Number(entry.proofPoints ?? 0);
+    const diff     = Number(entry.difficulty  ?? 0);
+    const onTime   = Boolean(entry.onTime);
+    const existing = walletMap.get(wallet);
 
     if (existing) {
       existing.proofPoints     += points;
       existing.achievementCount++;
       if (diff > existing.bestDifficulty) existing.bestDifficulty = diff;
       if (onTime) existing.onTime = true;
-      // Use most frequent claimType for global view
     } else {
       walletMap.set(wallet, {
         proofPoints:      points,
@@ -97,7 +119,7 @@ export async function GET(
 
   if (!walletMap.size) return NextResponse.json({ leaderboard: [], claimType, total: 0 });
 
-  // Sort by proofPoints desc
+  // Sort by proofPoints desc, slice to capped limit
   const sorted = [...walletMap.entries()]
     .sort((a, b) => b[1].proofPoints - a[1].proofPoints)
     .slice(0, limit);

@@ -1,11 +1,30 @@
 // src/app/api/sid/check/route.ts
+//
+// SECURITY CHANGES:
+//
+// 1. Removed freeClaimUsed from unauthenticated response (MEDIUM): This internal
+//    entitlement flag revealed platform engagement and enabled targeted enumeration.
+//    It is no longer returned to unauthenticated callers. The sid/claim endpoint
+//    checks it server-side without exposing it.
+//
+// 2. Rate limiting added (MEDIUM): No rate limiting previously meant bulk
+//    wallet-to-handle harvesting was trivial. Now 30 req/min per IP — generous
+//    for UI use, blocks automated scanning.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
+import { rateLimitRequest } from '@/lib/security';
+
+export const runtime = 'nodejs';
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 const HANDLE_REGEX = /^[a-z0-9][a-z0-9.\-]{1,30}[a-z0-9]$/;
 
 export async function GET(req: NextRequest) {
+  // ── Rate limiting: 30/min per IP ──────────────────────────────────────────
+  const limited = await rateLimitRequest(req, 'sid-check', 30, 60);
+  if (limited) return limited;
+
   const params = new URL(req.url).searchParams;
   const wallet = params.get('wallet')?.toLowerCase().trim();
   const handle = params.get('handle')?.toLowerCase().trim();
@@ -13,11 +32,11 @@ export async function GET(req: NextRequest) {
   // Wallet lookup — returns current handle for a wallet
   if (wallet) {
     const currentHandle = await redis.get(`sid:wallet:${wallet}`);
-    const freeClaimed   = await redis.get(`sid:free_claim_used:${wallet}`);
     return NextResponse.json({
       wallet,
-      handle:        currentHandle || null,
-      freeClaimUsed: !!freeClaimed,
+      handle: currentHandle || null,
+      // freeClaimUsed intentionally omitted — internal entitlement flag,
+      // not appropriate to expose in unauthenticated responses
     });
   }
 
