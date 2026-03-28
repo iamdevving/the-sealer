@@ -1,4 +1,11 @@
 // src/lib/verify/route-handler.ts
+//
+// SECURITY CHANGE: Added rate limiting to handleVerifyRoute.
+// 10 verification requests per hour per IP — prevents API cost abuse
+// (Alchemy, GitHub, PageSpeed calls are not free).
+// The uid check still gates access to real Redis entries so random spam
+// is cheap to reject, but rate limiting stops sustained hammering.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { attestAchievement } from '@/lib/verify/attest-achievement';
@@ -7,6 +14,7 @@ import type { CommitmentThresholds } from '@/lib/difficulty';
 import { computeDifficulty } from '@/lib/difficulty';
 import type { PendingAchievement, VerificationResult } from '@/lib/verify/types';
 import { computeScoring } from '@/lib/verify/scoring';
+import { rateLimitRequest } from '@/lib/security';
 
 const redis      = new Redis({ url: process.env.KV_REST_API_URL!, token: process.env.KV_REST_API_TOKEN! });
 const KEY_PREFIX = 'achievement:pending:';
@@ -23,6 +31,11 @@ export async function handleVerifyRoute(
   claimType:   string,
   runVerifier: VerifierFn,
 ): Promise<NextResponse> {
+  // ── SECURITY: Rate limiting ─────────────────────────────────────────────
+  // 10 verify calls per hour per IP — each call may hit Alchemy/GitHub/PageSpeed
+  const rateLimited = await rateLimitRequest(req, `verify-${claimType}`, 10, 3600);
+  if (rateLimited) return rateLimited;
+
   let body: { uid?: string; force?: boolean } = {};
   try { body = await req.json(); } catch { /* ok */ }
 
@@ -82,11 +95,8 @@ export async function handleVerifyRoute(
     const rawM         = result.evidence.rawMetrics as Record<string, number | string | boolean>;
     const metrics      = buildCertificateMetrics(claimType, rawM, params);
 
-    // ── v2 scoring (single source of truth: scoring.ts) ───────────────────
-    const thresholds = extractThresholds(claimType, params);
-    const diffResult = computeDifficulty(claimType, thresholds, []);
-
-    // Only score metrics that have a weight > 0 (display-only rows have weight 0)
+    const thresholds      = extractThresholds(claimType, params);
+    const diffResult      = computeDifficulty(claimType, thresholds, []);
     const weightedMetrics = metrics.filter(m => (m.weight ?? 0) > 0);
     const totalWeight     = weightedMetrics.reduce((s, m) => s + (m.weight as number), 0);
     const normMetrics     = weightedMetrics.map(m => ({
@@ -110,7 +120,6 @@ export async function handleVerifyRoute(
     const proofPoints  = Math.round(scoring.leaderboardPoints);
     const metricsMet   = scoring.perMetric.filter(m => m.met).length;
     const metricsTotal = scoring.perMetric.length;
-    // ─────────────────────────────────────────────────────────────────────
 
     const achieved = await attestAchievement({
       agentId:              pending.subject as `0x${string}`,
@@ -184,8 +193,6 @@ export async function handleGetRoute(req: NextRequest): Promise<NextResponse> {
 }
 
 // ── Certificate metrics ───────────────────────────────────────────────────────
-// weight > 0  = scored metric (participates in achievement score)
-// weight = 0  = display-only row (shown in SVG table but not scored)
 
 function buildCertificateMetrics(
   claimType: string,
@@ -197,12 +204,12 @@ function buildCertificateMetrics(
   switch (claimType) {
     case 'x402_payment_reliability':
       return [
-        { label: 'Success Rate',        weight: 1.2, target: `${params.minSuccessRate ?? '?'}%`,           achieved: `${fmt(raw.successRate)}%`,          met: (raw.successRate as number) >= (params.minSuccessRate ?? 0) },
-        { label: 'Total Volume',        weight: 1.0, target: `$${params.minTotalUSD ?? '?'}`,              achieved: `$${fmt(raw.totalUSD, 0)}`,           met: (raw.totalUSD as number) >= (params.minTotalUSD ?? 0) },
+        { label: 'Success Rate',        weight: 1.2, target: `${params.minSuccessRate ?? '?'}%`,              achieved: `${fmt(raw.successRate)}%`,          met: (raw.successRate as number) >= (params.minSuccessRate ?? 0) },
+        { label: 'Total Volume',        weight: 1.0, target: `$${params.minTotalUSD ?? '?'}`,                 achieved: `$${fmt(raw.totalUSD, 0)}`,           met: (raw.totalUSD as number) >= (params.minTotalUSD ?? 0) },
         { label: 'Distinct Recipients', weight: 0.9, target: String(params.requireDistinctRecipients ?? '—'), achieved: String(raw.distinctRecipients ?? '—'), met: !params.requireDistinctRecipients || (raw.distinctRecipients as number) >= params.requireDistinctRecipients },
-        { label: 'Payment Count',       weight: 0,   target: '—',                                          achieved: String(raw.paymentCount ?? '—'),      met: true },
-        { label: 'Failed Txns',         weight: 0,   target: '0',                                          achieved: String(raw.failedCount ?? '—'),       met: (raw.failedCount as number) === 0 },
-        { label: 'Chain',               weight: 0,   target: 'Base',                                       achieved: 'Base',                              met: true },
+        { label: 'Payment Count',       weight: 0,   target: '—',                                             achieved: String(raw.paymentCount ?? '—'),      met: true },
+        { label: 'Failed Txns',         weight: 0,   target: '0',                                             achieved: String(raw.failedCount ?? '—'),       met: (raw.failedCount as number) === 0 },
+        { label: 'Chain',               weight: 0,   target: 'Base',                                          achieved: 'Base',                              met: true },
       ];
     case 'code_software_delivery':
       return [
@@ -226,22 +233,18 @@ function buildCertificateMetrics(
         { label: 'Trade Count', weight: 1.0, target: String(params.minTradeCount ?? '?'), achieved: String(raw.tradeCount ?? '—'), met: (raw.tradeCount as number) >= (params.minTradeCount ?? 0) },
         { label: 'Volume USD',  weight: 1.1, target: `$${params.minVolumeUSD ?? '?'}`,    achieved: `$${fmt(raw.volumeUSD, 0)}`,  met: (raw.volumeUSD as number) >= (params.minVolumeUSD ?? 0) },
         { label: 'P&L %',       weight: 1.3, target: `${params.minPnlPercent ?? '?'}%`,   achieved: `${fmt(raw.pnlPercent)}%`,   met: (raw.pnlPercent as number) >= (params.minPnlPercent ?? 0) },
+        { label: 'Chain',       weight: 0,   target: '—',                                  achieved: String(raw.chain ?? params.chain ?? 'base'), met: true },
         { label: 'Protocol',    weight: 0,   target: '—',                                  achieved: String(raw.protocol ?? '—'), met: true },
       ];
     case 'social_media_growth':
       return [
         { label: 'Follower Growth', weight: 1.0, target: `+${params.minFollowerGrowth ?? '?'}%`, achieved: `+${fmt(raw.followerGrowth)}%`, met: (raw.followerGrowth as number) >= (params.minFollowerGrowth ?? 0) },
         { label: 'Engagement Rate', weight: 1.1, target: `${params.minEngagementRate ?? '?'}%`,  achieved: `${fmt(raw.engagementRate)}%`,  met: (raw.engagementRate as number) >= (params.minEngagementRate ?? 0) },
-        { label: 'Posts Published', weight: 0,   target: '—',                                    achieved: String(raw.postCount ?? '—'),   met: true },
-        { label: 'Replies',         weight: 0,   target: '—',                                    achieved: String(raw.replyCount ?? '—'),  met: true },
-        { label: 'Recasts',         weight: 0,   target: '—',                                    achieved: String(raw.recastCount ?? '—'), met: true },
         { label: 'Platform',        weight: 0,   target: '—',                                    achieved: String(raw.platform ?? '—'),    met: true },
       ];
     default: return [];
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractThresholds(claimType: string, params: Record<string, any>): CommitmentThresholds {
   const pick = (keys: string[]) =>
@@ -258,11 +261,11 @@ function extractThresholds(claimType: string, params: Record<string, any>): Comm
 
 function buildCommitmentText(claimType: string, p: Record<string, any>): string {
   switch (claimType) {
-    case 'x402_payment_reliability': return `Maintain a payment success rate above ${p.minSuccessRate ?? '?'}%` + (p.minTotalUSD ? ` processing a minimum of $${p.minTotalUSD} USDC` : '') + (p.requireDistinctRecipients ? ` across ${p.requireDistinctRecipients}+ distinct recipients` : '') + ' within the commitment window.';
-    case 'code_software_delivery':   return `Merge at least ${p.minMergedPRs ?? '?'} pull requests` + (p.repoName ? ` into ${p.repoOwner}/${p.repoName}` : '') + ' with CI passing within the commitment window.';
-    case 'website_app_delivery':     return `Achieve a PageSpeed score of ${p.minPerformanceScore ?? '?'} or above` + (p.url ? ` on ${p.url}` : '') + (p.requireDnsVerify ? ', verified via DNS TXT record ownership.' : '.');
-    case 'defi_trading_performance': return `Execute at least ${p.minTradeCount ?? '?'} on-chain trades` + (p.minVolumeUSD ? ` with total volume exceeding $${p.minVolumeUSD}` : '') + (p.minPnlPercent ? ` and a positive P&L above ${p.minPnlPercent}%` : '') + ' within the commitment window.';
-    case 'social_media_growth':      return `Grow follower count by ${p.minFollowerGrowth ?? '?'}%` + (p.minEngagementRate ? ` with engagement above ${p.minEngagementRate}%` : '') + ` on ${p.platform || 'Farcaster'} within the commitment window.`;
+    case 'x402_payment_reliability': return `Maintain a payment success rate above ${p.minSuccessRate ?? '?'}%` + (p.minTotalUSD ? ` processing a minimum of $${p.minTotalUSD} USDC` : '') + ' within the commitment window.';
+    case 'code_software_delivery':   return `Merge at least ${p.minMergedPRs ?? '?'} pull requests` + (p.repoName ? ` into ${p.repoOwner}/${p.repoName}` : '') + ' within the commitment window.';
+    case 'website_app_delivery':     return `Achieve a PageSpeed score of ${p.minPerformanceScore ?? '?'} or above` + (p.url ? ` on ${p.url}` : '') + '.';
+    case 'defi_trading_performance': return `Execute at least ${p.minTradeCount ?? '?'} on-chain trades` + (p.minVolumeUSD ? ` with total volume exceeding $${p.minVolumeUSD}` : '') + ' within the commitment window.';
+    case 'social_media_growth':      return `Grow follower count by ${p.minFollowerGrowth ?? '?'}%` + ` on ${p.platform || 'Farcaster'} within the commitment window.`;
     default: return 'Complete the committed goal within the verification window.';
   }
 }

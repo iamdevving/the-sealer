@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 
-const BASE_URL = 'https://thesealer.xyz';
-const LAST_UPDATED = '2026-03-26T00:00:00.000Z';
+export const runtime = 'nodejs';
 
-const EVM_ASSET = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const SOL_ASSET = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const BASE_URL   = 'https://thesealer.xyz';
+const LAST_UPDATED = '2026-03-28T00:00:00.000Z';
+
+const EVM_ASSET  = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const SOL_ASSET  = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 const EVM_PAY_TO = '0x4386606286eEA12150386f0CFc55959F30de00D1';
 const SOL_PAY_TO = '6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj';
 const EVM_NETWORK = 'eip155:8453';
@@ -45,6 +47,9 @@ function makeAccepts(url: string, priceUsd: number) {
   ];
 }
 
+// Upload intentionally omitted — image attachment is handled inline within
+// each product endpoint (card, sleeve, sid) at no extra cost. Agents should
+// pass a "file" field directly to the product endpoint or use imageUrl.
 const items = [
   {
     resource: `${BASE_URL}/api/attest`,
@@ -93,19 +98,6 @@ const items = [
       description: 'Mint a soulbound mirror of any Base, ETH, or Solana NFT',
       method: 'POST',
       pricing: 'Base mirror $0.30 · Solana mirror $0.90',
-      docs: `${BASE_URL}/api/infoproducts`,
-    },
-  },
-  {
-    resource: `${BASE_URL}/api/upload`,
-    type: 'http',
-    x402Version: 2,
-    accepts: makeAccepts(`${BASE_URL}/api/upload`, 0.01),
-    lastUpdated: LAST_UPDATED,
-    metadata: {
-      description: 'Upload an image for use in attestations (multipart/form-data)',
-      method: 'POST',
-      note: 'Agents can skip this — pass imageUrl param or file field directly to /api/attest',
       docs: `${BASE_URL}/api/infoproducts`,
     },
   },

@@ -1,9 +1,16 @@
 // src/app/api/social/queue/route.ts
-// Manages the social post draft queue
-// GET  /api/social/queue          — list pending drafts
-// POST /api/social/queue          — create a draft manually
-// PATCH /api/social/queue/[id]    — approve/reject/update a draft
-// DELETE /api/social/queue/[id]   — delete a draft
+//
+// Manages the social post draft queue.
+//
+// SECURITY CHANGE:
+//   GET is public (read-only, low sensitivity — no IPs or personal data).
+//   POST, PATCH, DELETE now require Authorization: Bearer <ADMIN_PASSWORD>.
+//   Without this, anyone could create/edit/delete social post drafts.
+//
+// GET  /api/social/queue          — list pending drafts (public)
+// POST /api/social/queue          — create a draft (admin only)
+// PATCH /api/social/queue         — approve/reject/update a draft (admin only)
+// DELETE /api/social/queue/[id]   — delete a draft (admin only)
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
@@ -19,13 +26,29 @@ export interface SocialDraft {
   id:          string;
   text:        string;
   platforms:   Platform[];
-  trigger:     string;   // human-readable reason e.g. "New #1 on leaderboard: aria.agent"
+  trigger:     string;
   triggerData: Record<string, any>;
   status:      DraftStatus;
   createdAt:   string;
   updatedAt:   string;
   postedAt?:   string;
 }
+
+// ── Auth helper ───────────────────────────────────────────────────────────────
+
+function isAuthorized(req: NextRequest): boolean {
+  const auth = req.headers.get('authorization')?.replace('Bearer ', '');
+  return (
+    auth === process.env.ADMIN_PASSWORD ||
+    auth === process.env.CRON_SECRET
+  );
+}
+
+function unauthorizedResponse(): NextResponse {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+// ── Data helpers ──────────────────────────────────────────────────────────────
 
 export async function getDraft(id: string): Promise<SocialDraft | null> {
   const raw = await redis.get(`social:draft:${id}`).catch(() => null);
@@ -46,15 +69,19 @@ export async function listDrafts(status?: DraftStatus): Promise<SocialDraft[]> {
   return status ? valid.filter(d => d.status === status) : valid;
 }
 
-// ── GET — list drafts ─────────────────────────────────────────────────────────
+// ── GET — list drafts (public read) ──────────────────────────────────────────
+
 export async function GET(req: NextRequest) {
   const status = req.nextUrl.searchParams.get('status') as DraftStatus | null;
   const drafts = await listDrafts(status || 'pending');
   return NextResponse.json({ drafts });
 }
 
-// ── POST — create draft ───────────────────────────────────────────────────────
+// ── POST — create draft (admin only) ─────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) return unauthorizedResponse();
+
   const body = await req.json();
   const { text, platforms, trigger, triggerData } = body;
 
@@ -77,8 +104,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ draft });
 }
 
-// ── PATCH — update draft ──────────────────────────────────────────────────────
+// ── PATCH — update draft (admin only) ────────────────────────────────────────
+
 export async function PATCH(req: NextRequest) {
+  if (!isAuthorized(req)) return unauthorizedResponse();
+
   const body = await req.json();
   const { id, text, status, platforms } = body;
 
@@ -97,8 +127,11 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ draft });
 }
 
-// ── DELETE — remove draft ─────────────────────────────────────────────────────
+// ── DELETE — remove draft (admin only) ───────────────────────────────────────
+
 export async function DELETE(req: NextRequest) {
+  if (!isAuthorized(req)) return unauthorizedResponse();
+
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
