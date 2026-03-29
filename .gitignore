@@ -68,3 +68,8 @@ src/app/api/cron/
 src/app/api/social/
 src/app/api/webhooks/
 SECURITY_CHECKLIST.md
+
+src/app/admin/
+
+src/app/api/upload/
+src/app/admin/
