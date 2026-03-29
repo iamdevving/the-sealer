@@ -14,6 +14,10 @@
 //
 // 3. agentSig + wallet state enumeration fix (MEDIUM, previous session):
 //    Signature verified before any state is revealed to the caller.
+//
+// 4. Type-safe body field parsing (LOW): All body fields type-checked before
+//    string operations. Non-string values (object, array, integer) return 400
+//    instead of crashing with empty 500 response.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
@@ -45,17 +49,30 @@ export async function POST(req: NextRequest) {
   const limited = await rateLimitRequest(req, 'sid-claim', 20, 3600);
   if (limited) return limited;
 
-  let body: { walletAddress?: string; handle?: string; agentSig?: string; agentNonce?: string } = {};
+  let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
-  const walletAddress = body.walletAddress?.trim().toLowerCase();
-  const rawHandle = body.handle;
-  if (rawHandle !== undefined && typeof rawHandle !== 'string') {
-  return NextResponse.json({ error: 'handle must be a string' }, { status: 400 });
+  // ── Type-safe body field parsing ──────────────────────────────────────────
+  // All fields type-checked before string operations. Passing an object/array
+  // for any field would cause .trim()/.toLowerCase() to throw → HTTP 500.
+  // Now returns a descriptive 400 instead.
+  if (body.walletAddress !== undefined && typeof body.walletAddress !== 'string') {
+    return NextResponse.json({ error: 'walletAddress must be a string' }, { status: 400 });
   }
-  const handle = rawHandle?.trim().toLowerCase();
-  const agentSig      = body.agentSig?.trim()  || req.headers.get('X-AGENT-SIG')   || '';
-  const agentNonce    = body.agentNonce?.trim() || req.headers.get('X-AGENT-NONCE') || '';
+  if (body.handle !== undefined && typeof body.handle !== 'string') {
+    return NextResponse.json({ error: 'handle must be a string' }, { status: 400 });
+  }
+  if (body.agentSig !== undefined && typeof body.agentSig !== 'string') {
+    return NextResponse.json({ error: 'agentSig must be a string' }, { status: 400 });
+  }
+  if (body.agentNonce !== undefined && typeof body.agentNonce !== 'string') {
+    return NextResponse.json({ error: 'agentNonce must be a string' }, { status: 400 });
+  }
+
+  const walletAddress = (body.walletAddress as string | undefined)?.trim().toLowerCase();
+  const handle        = (body.handle        as string | undefined)?.trim().toLowerCase();
+  const agentSig      = (body.agentSig      as string | undefined)?.trim() || req.headers.get('X-AGENT-SIG')   || '';
+  const agentNonce    = (body.agentNonce     as string | undefined)?.trim() || req.headers.get('X-AGENT-NONCE') || '';
 
   if (!walletAddress || !walletAddress.startsWith('0x')) {
     return NextResponse.json({ error: 'walletAddress required' }, { status: 400 });
