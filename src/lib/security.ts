@@ -22,6 +22,8 @@ import { Redis } from '@upstash/redis';
 // Any URL not on the list is rejected before fetch.
 
 const ALLOWED_IMAGE_HOSTS = new Set([
+  // Our own domain
+  'thesealer.xyz', 
   // Vercel Blob (our own storage)
   'public.blob.vercel-storage.com',
   // IPFS gateways
