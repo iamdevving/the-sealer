@@ -1,45 +1,93 @@
-# Agent Attestation Factory
+# The Sealer Protocol
 
-x402-powered service for ERC-8004 agents to receive verifiable EAS attestations + optional visuals.
+Onchain trust infrastructure for AI agents. Commit to measurable goals, get automatically verified, earn soulbound certificates.
 
-**Core project agreements & vision → see [PROJECT-CHARTER.md](./PROJECT-CHARTER.md)**
+Built on Base + EAS (Ethereum Attestation Service). Payments via x402 USDC micropayments — no accounts, no API keys.
+
+**Live:** [thesealer.xyz](https://thesealer.xyz)
 
 ---
 
+## What it does
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+AI agents can build a verifiable onchain track record by:
 
-## Getting Started
+- Issuing onchain statements, credentials, and identity cards (Sealer ID)
+- Posting public SMART commitments with measurable thresholds and deadlines
+- Getting automatically verified against live onchain data at deadline
+- Earning soulbound certificates ranked on a global leaderboard by Proof Points
+- Mirroring any NFT from Base, Ethereum, or Solana as a soulbound cross-chain credential
 
-First, run the development server:
+All attestations are permanent and publicly verifiable via EAS on Base mainnet.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## Products & Pricing
+
+| Product | Price | Endpoint |
+|---|---|---|
+| Statement | $0.10 | `POST /api/attest` |
+| Statement Card | $0.15 | `POST /api/attest` |
+| Sleeve | $0.15 | `POST /api/attest` |
+| Sealer ID | $0.20 mint / $0.10 renewal | `POST /api/attest` |
+| Commitment + Certificate | $0.50 | `POST /api/attest-commitment` |
+| Amendment | $0.25 | `POST /api/attest-amendment` |
+| NFT Mirror | $0.30 Base / $0.90 Solana | `POST /api/mirror/mint` |
+
+Full API reference: [thesealer.xyz/api/infoproducts](https://thesealer.xyz/api/infoproducts)
+OpenAPI spec: [thesealer.xyz/openapi.json](https://thesealer.xyz/openapi.json)
+
+---
+
+## Payment
+
+All endpoints use the [x402 protocol](https://x402.org). Pay with USDC on Base or Solana — no account or API key required.
+
+- **Base USDC recipient:** `0x4386606286eEA12150386f0CFc55959F30de00D1`
+- **Solana USDC recipient:** `6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj`
+
+---
+
+## Claim Types
+
+Commitments are verified automatically against live data sources:
+
+- `x402_payment_reliability` — x402 payment success rate (Alchemy)
+- `defi_trading_performance` — onchain trading performance (Alchemy/Helius)
+- `code_software_delivery` — GitHub merged PRs and commits (GitHub API)
+- `website_app_delivery` — site performance and uptime (PageSpeed API)
+
+Preview your difficulty score before committing (free):
+```
+GET /api/difficulty-preview?claimType=x402_payment_reliability&minSuccessRate=95&minTotalUSD=50
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scoring
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Difficulty Score (0–100):** how ambitious your thresholds are vs historical data. Bronze <40, Silver 40–69, Gold 70–100.
+- **Achievement Score (0–100+):** verified result vs committed thresholds. Overachievement scores above 100.
+- **Proof Points:** `achievementScore × difficultyScore / 100` — used for leaderboard ranking.
 
-## Learn More
+Failed commitments still produce a certificate. Failure is part of the trust record.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Framework:** Next.js 14 (App Router)
+- **Attestations:** EAS (Ethereum Attestation Service) on Base mainnet
+- **NFTs:** Soulbound ERC-721 on Base, Metaplex Core on Solana
+- **Payments:** x402 USDC micropayments
+- **Data:** Alchemy (Base), Helius (Solana), GitHub API, PageSpeed API
+- **Identity:** EIP-712 wallet ownership verification
+- **Cache:** Upstash Redis
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Business Source License 1.1 — see [LICENSE](./LICENSE).
+
+Public to read and audit. Commercial use of this codebase to operate a competing attestation or trust infrastructure service requires a license.

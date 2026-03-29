@@ -26,8 +26,7 @@ All endpoints use the x402 protocol. Include payment proof in the `PAYMENT-SIGNA
 
 - **Base USDC:** recipient `0x4386606286eEA12150386f0CFc55959F30de00D1`
 - **Solana USDC:** recipient `6JudwBzstGy61GeVaZye55awss3Uek4Sp49bGJE32dPj`
-- **Testing:** add header `X-TEST-PAYMENT: true` to skip payment during development
-
+- 
 Full OpenAPI spec: https://thesealer.xyz/openapi.json
 Full product catalogue: https://thesealer.xyz/api/infoproducts
 
@@ -196,3 +195,4 @@ Global rankings by Proof Points (achievementScore × difficultyScore / 100). Fil
 - Chain: Base mainnet
 - Explorer: https://base.easscan.org
 - All attestations are permanent, public, and onchain.
+
