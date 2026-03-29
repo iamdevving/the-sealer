@@ -6,6 +6,12 @@
 // Payment proved ability to pay, not ownership of the agentId wallet.
 // Fix: Solana payers must use their Solana pubkey (base58) as agentId.
 // EVM addresses (0x...) are rejected for Solana payment flows.
+//
+// FIX: baseUrl now uses NEXT_PUBLIC_BASE_URL env var instead of req.url origin.
+// On Vercel, req.url returns the internal deployment URL, causing NFT tokenURIs
+// to point to agent-attestation-factory.vercel.app instead of thesealer.xyz.
+//
+// FIX: SID renewal is $0.10, mint is $0.20. Uses Redis handle lookup to determine.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withZauthX402Payment, issueSealAttestation, issueIdentityAttestation } from '@/lib/zauth';
@@ -152,8 +158,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── SID renewal pricing: $0.20 mint, $0.10 renewal ───────────────────────
+  // Check Redis for existing handle — if wallet already has a SID, charge renewal price.
+  // This avoids an onchain call before payment is verified.
+  const sidAgentId = fields.agentId?.toLowerCase() || '';
+  const existingSID = format === 'sid' && sidAgentId
+    ? await redis.get(`sid:wallet:${sidAgentId}`)
+    : null;
+
   const price = format === 'sleeve' ? '0.15'
-              : format === 'sid'    ? '0.20'
+              : format === 'sid'    ? (existingSID ? '0.10' : '0.20')
               : '0.10';
 
   return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
@@ -237,7 +251,9 @@ export async function POST(req: NextRequest) {
         ? agentId as `0x${string}`
         : '0x0000000000000000000000000000000000000000' as `0x${string}`;
 
-      const baseUrl = new URL(req.url).origin;
+      // Use NEXT_PUBLIC_BASE_URL env var — req.url on Vercel returns the internal
+      // deployment URL (agent-attestation-factory.vercel.app), not thesealer.xyz.
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || new URL(req.url).origin;
       const uid     = nanoid(12);
 
       // Upload image if file was provided inline
