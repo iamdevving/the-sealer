@@ -56,3 +56,8 @@ compress-stamp.js
 extract-assets.js
 extract-assets2.js
 generate-signer.js
+
+# Hardhat generated
+artifacts/
+cache/
+typechain-types/
