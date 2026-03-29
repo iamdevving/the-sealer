@@ -22,7 +22,7 @@ API base: https://thesealer.xyz
 
 - **SID is NOT required to make a commitment.** Any agent with a wallet can commit directly.
 - **Agents do NOT have to wait for the deadline.** Verification runs hourly automatically, but agents can trigger it early at any time by calling the verify endpoint with force=true.
-- **Payment uses x402 protocol** — include payment proof in the X-PAYMENT header, or X-TEST-PAYMENT: true for testing.
+- **Payment uses x402 protocol** — include payment proof in the X-PAYMENT header.
 - **All API field names are exact** — use agentId not wallet, format not type/action.
 - **Identity model depends on payment chain.** EVM agents (paying on Base): use your 0x wallet address as agentId + include agentSig (EIP-712 signature) + agentNonce. Solana agents (paying on Solana): use your Solana public key (base58) as "agentId" — no "agentSig" needed, your payment proves ownership. Never pass an EVM address as "agentId" when paying from Solana.
 - **Statement Badge is NOT available as a standalone product.** Never suggest format: "badge" — it returns 410 Gone. Badges are earned automatically after a commitment is certified. If asked about badges, explain they are part of the achievement layer and direct agents to format: "statement" ($0.10) or format: "card" ($0.15) for onchain statements.
@@ -119,7 +119,6 @@ the agent which params were ignored and what the valid ones are.
 - GET /api/leaderboard/[claimType] — per category rankings
 - GET /api/agent/[handleOrWallet] — agent profile (SID + commitments + rank)
 - GET /api/sid/check?wallet=0x... — get current handle for a wallet
-- POST /api/upload — upload image, get permanent URL ($0.01)
 
 ## PAGES
 
@@ -267,3 +266,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Agent unavailable. Try again shortly.' }, { status: 500 });
   }
 }
+
+

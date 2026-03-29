@@ -1,80 +1,8 @@
 'use client';
 // src/app/page.tsx
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
-
-// ── Password gate ──────────────────────────────────────────────────────────────
-
-function PasswordGate({ children }: { children: React.ReactNode }) {
-  const [authed,   setAuthed]   = useState(false);
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-
-  async function handleLogin() {
-    if (!password || loading) return;
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/admin/auth', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ password }),
-      });
-      if (res.ok) setAuthed(true);
-      else setError('Access denied');
-    } catch {
-      setError('Connection error');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  if (authed) return <>{children}</>;
-
-  return (
-    <div style={{
-      minHeight:'100vh', background:'#060a12',
-      display:'flex', alignItems:'center', justifyContent:'center',
-      fontFamily:'IBM Plex Mono, monospace',
-    }}>
-      <div style={{
-        background:'#0a0f1e', border:'0.8px solid #1e2d4a', borderRadius:12,
-        padding:48, width:320, display:'flex', flexDirection:'column', gap:20,
-      }}>
-        <div>
-          <div style={{ fontSize:9, letterSpacing:'4px', color:'#3b82f6', marginBottom:6 }}>THE SEALER PROTOCOL</div>
-          <div style={{ fontSize:7, letterSpacing:'2px', color:'#5a7090' }}>SITE UNDER MAINTENANCE</div>
-        </div>
-        <input
-          type="password" placeholder="Access code" value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleLogin()}
-          autoFocus
-          style={{
-            background:'#060a12', border:`0.8px solid ${error ? '#ef4444' : '#1e2d4a'}`,
-            borderRadius:6, color:'#c8d8f0', fontFamily:'IBM Plex Mono, monospace',
-            fontSize:11, padding:'10px 14px', outline:'none', width:'100%', boxSizing:'border-box',
-          }}
-        />
-        {error && <div style={{ fontSize:8, color:'#ef4444', marginTop:-12 }}>{error}</div>}
-        <button
-          onClick={handleLogin} disabled={loading || !password}
-          style={{
-            background: loading || !password ? '#1e2d4a' : '#3b82f6',
-            border:'none', borderRadius:6,
-            color: loading || !password ? '#5a7090' : '#fff',
-            fontFamily:'IBM Plex Mono, monospace', fontSize:9, fontWeight:700,
-            letterSpacing:'2px', padding:'12px',
-            cursor: loading || !password ? 'default' : 'pointer',
-            transition:'background 0.15s',
-          }}
-        >{loading ? 'CHECKING...' : 'ENTER'}</button>
-      </div>
-    </div>
-  );
-}
 
 // ── Homepage ───────────────────────────────────────────────────────────────────
 
@@ -277,8 +205,6 @@ function HomePage() {
         .sp2    { font-size:7.5px; letter-spacing:1.5px; text-transform:uppercase; padding:3px 11px; border:1px solid var(--border); color:var(--ink-dim); }
         .sp2.hi { border-color:rgba(59,130,246,0.35); color:var(--accent2); }
 
-        /* UPLOAD NOTE */
-
         /* CODE BLOCK */
         .code-block {
           background:var(--bg2); border:1px solid var(--border); border-left:3px solid var(--accent);
@@ -411,12 +337,9 @@ function HomePage() {
 
       {/* HERO */}
       <div className="hero">
-        {/* Wax seal — upper-left */}
         <div className="hero-seal-wrap">
           <img src="/seal-wax-web.png" alt="" className="hero-seal" />
         </div>
-
-        {/* Centered text */}
         <div className="hero-content">
           <div className="hero-eyebrow">Base · Solana · x402 · EAS · Agent-Native</div>
           <h1 className="hero-title">
@@ -434,8 +357,6 @@ function HomePage() {
             <Link href="/sealer-agent" className="btn-s">Talk to Sealer Agent →</Link>
           </div>
         </div>
-
-        {/* Ink stamp — lower-right */}
         <div className="hero-stamp-wrap">
           <img src="/seals/stamp_home.png" alt="" className="hero-stamp" />
         </div>
@@ -631,8 +552,6 @@ function HomePage() {
             </div>
           </div>
 
-
-
           <div className="pnote reveal">
             <div className="pni">
               <p>Every agent who has committed gets a <em>public profile page</em> at <em>/agent/[handle]</em> or <em>/agent/[wallet]</em>. The base profile shows wallet, commitments, and results. Adding a <em>Sealer ID</em> enriches it with name, avatar, tags, and social handles.</p>
@@ -707,7 +626,7 @@ function HomePage() {
             <div className="ap reveal">
               <span className="ap-icon">⬡</span>
               <div className="ap-title">Pay Per Use</div>
-              <p className="ap-desc">USDC via x402 on Base or Solana. Payment proof in X-PAYMENT header. X-TEST-PAYMENT: true for development. Starting at $0.10.</p>
+              <p className="ap-desc">USDC via x402 on Base or Solana. Payment proof in X-PAYMENT header. Starting at $0.10.</p>
               <p className="ap-detail">No subscriptions · No monthly fees</p>
             </div>
             <div className="ap reveal">
@@ -760,7 +679,7 @@ function HomePage() {
           <div>
             <div className="fctitle">Community</div>
             <ul className="flinks">
-             <li><a href="https://x.com/thesealerxyz" target="_blank" rel="noopener">@thesealerxyz · X</a></li>
+              <li><a href="https://x.com/thesealerxyz" target="_blank" rel="noopener">@thesealerxyz · X</a></li>
             </ul>
           </div>
         </div>

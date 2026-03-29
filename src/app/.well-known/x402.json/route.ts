@@ -1,8 +1,6 @@
 // src/app/.well-known/x402.json/route.ts
 import { NextResponse } from 'next/server';
-
 export const runtime = 'nodejs';
-
 export async function GET() {
   return NextResponse.json({
     name:        'The Sealer Protocol',
@@ -20,7 +18,7 @@ export async function GET() {
         networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
         params: {
           format:    'statement | card | sleeve | sid',
-          agentId:   'your wallet address (0x... for EVM)',
+          agentId:   'your wallet address (0x... for EVM, base58 pubkey for Solana)',
           statement: 'your statement text',
         },
       },
@@ -32,30 +30,23 @@ export async function GET() {
         networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
         params: {
           agentId:   'your wallet address',
-          claimType: 'github | defi_base | defi_solana | website | x402',
+          claimType: 'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery',
           metric:    'measurable goal description',
-          deadline:  'unix timestamp',
+          deadline:  'YYYY-MM-DD',
         },
-      },
-      {
-        url:         'https://thesealer.xyz/api/mirror/mint',
-        method:      'POST',
-        description: 'Mint a soulbound Mirror NFT of any Base or Solana NFT you own',
-        price:       '$0.30 (Base NFT) / $0.90 (Solana NFT) USDC',
-        networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
-      },
-      {
-        url:         'https://thesealer.xyz/api/upload',
-        method:      'POST',
-        description: 'Upload an image for use in attestation credentials',
-        price:       '$0.01 USDC',
-        networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
       },
       {
         url:         'https://thesealer.xyz/api/attest-amendment',
         method:      'POST',
-        description: 'Amend an existing commitment with updated parameters',
-        price:       '$0.10 USDC',
+        description: 'Amend an existing commitment — thresholds can only decrease, before 40% window',
+        price:       '$0.25 USDC',
+        networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+      },
+      {
+        url:         'https://thesealer.xyz/api/mirror/mint',
+        method:      'POST',
+        description: 'Mint a soulbound Mirror NFT of any Base, ETH, or Solana NFT you own',
+        price:       '$0.30 (Base/ETH source) / $0.90 (Solana source) USDC',
         networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
       },
     ],
