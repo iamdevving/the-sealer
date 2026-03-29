@@ -61,3 +61,10 @@ generate-signer.js
 artifacts/
 cache/
 typechain-types/
+
+# Internal — not for public repo
+src/app/api/admin/
+src/app/api/cron/
+src/app/api/social/
+src/app/api/webhooks/
+SECURITY_CHECKLIST.md
