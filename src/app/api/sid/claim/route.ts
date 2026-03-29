@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
   const walletAddress = body.walletAddress?.trim().toLowerCase();
-  const handle        = body.handle?.trim().toLowerCase();
+  const rawHandle = body.handle;
+  if (rawHandle !== undefined && typeof rawHandle !== 'string') {
+  return NextResponse.json({ error: 'handle must be a string' }, { status: 400 });
+  }
+  const handle = rawHandle?.trim().toLowerCase();
   const agentSig      = body.agentSig?.trim()  || req.headers.get('X-AGENT-SIG')   || '';
   const agentNonce    = body.agentNonce?.trim() || req.headers.get('X-AGENT-NONCE') || '';
 
