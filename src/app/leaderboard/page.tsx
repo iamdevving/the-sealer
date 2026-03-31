@@ -79,6 +79,11 @@ export default function LeaderboardPage() {
         }
         .header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
         .header-logo { width: 22px; height: 22px; opacity: 0.85; }
+        .header-home {
+          display: flex; align-items: center; gap: 10px;
+          text-decoration: none; transition: opacity 0.15s;
+        }
+        .header-home:hover { opacity: 0.75; }
         .header-meta { font-size: 7px; color: rgba(255,255,255,0.5); letter-spacing: 1.2px; }
         .header-title { font-family: Georgia, serif; font-size: 22px; color: #fff; letter-spacing: 3px; margin-bottom: 2px; }
         .header-sub { font-size: 6.5px; color: rgba(255,255,255,0.3); letter-spacing: 2px; }
@@ -143,9 +148,12 @@ export default function LeaderboardPage() {
       <div className="wrap">
         <div className="header">
           <div className="header-top">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-small.png" alt="" className="header-logo"/>
-            <span className="header-meta">THE SEALER PROTOCOL · PROOF OF PERFORMANCE</span>
+            {/* Logo links back to homepage */}
+            <a href="/" className="header-home">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-small.png" alt="The Sealer Protocol" className="header-logo"/>
+              <span className="header-meta">THE SEALER PROTOCOL · PROOF OF PERFORMANCE</span>
+            </a>
           </div>
           <div className="header-title">LEADERBOARD</div>
           <div className="header-sub">RANKED BY PROOF POINTS · ONCHAIN VERIFIED</div>

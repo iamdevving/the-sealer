@@ -86,6 +86,8 @@ export default function AgentProfilePage() {
           padding: 4px 0 8px;
         }
         .nav-left { display: flex; align-items: center; gap: 12px; }
+        .nav-logo-link { display: flex; align-items: center; text-decoration: none; transition: opacity 0.15s; }
+        .nav-logo-link:hover { opacity: 0.75; }
         .nav-logo { width: 22px; height: 22px; opacity: 0.85; }
         .back-link {
           font-size: 8px; color: ${inkDim}; letter-spacing: 1px;
@@ -169,11 +171,13 @@ export default function AgentProfilePage() {
       `}</style>
 
       <div className="wrap">
-        {/* Nav */}
+        {/* Nav — logo links home, back arrow links to leaderboard */}
         <div className="nav">
           <div className="nav-left">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-small.png" alt="" className="nav-logo"/>
+            <a href="/" className="nav-logo-link">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-small.png" alt="The Sealer Protocol" className="nav-logo"/>
+            </a>
             <a className="back-link" href="/leaderboard">← LEADERBOARD</a>
           </div>
           <form className="search-form" onSubmit={handleSearch}>

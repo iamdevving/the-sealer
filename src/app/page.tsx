@@ -670,6 +670,7 @@ function HomePage() {
           <div>
             <div className="fctitle">Protocol</div>
             <ul className="flinks">
+              <li><Link href="/docs">Scoring Model</Link></li>
               <li><a href="https://base.easscan.org" target="_blank" rel="noopener">EAS Explorer</a></li>
               <li><a href="https://www.x402.org" target="_blank" rel="noopener">x402 Docs</a></li>
               <li><a href="https://base.org" target="_blank" rel="noopener">Base Chain</a></li>
