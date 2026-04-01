@@ -21,193 +21,220 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
   // 'social_media_growth' — temporarily disabled, coming soon as a full category
 ];
 
+// ── Shared handler body ───────────────────────────────────────────────────────
+// Extracted so both the x402 path and the internal-key path can call it.
+// paymentChain is undefined when called from internal-key bypass.
+
+async function handleBody(
+  req:          NextRequest,
+  paymentChain: 'base' | 'solana' | undefined,
+): Promise<NextResponse> {
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // ── Validate required fields ──────────────────────────────────────────
+  const commitment        = (body.commitment as string)?.trim();
+  const agentId           = (body.agentId   as string)?.trim();
+  const claimType         = (body.claimType as string)?.trim();
+  const deadline          = (body.deadline  as string)?.trim();
+  const metric            = (body.metric    as string)?.trim();
+  const evidence          = (body.evidence  as string)?.trim() || '';
+  const theme             = (body.theme     as string)?.trim() || 'dark';
+  const difficultyVersion = Number(body.difficultyVersion) || 1;
+
+  if (!commitment || commitment.length < 10) {
+    return NextResponse.json({ error: 'commitment is required (min 10 chars)' }, { status: 400 });
+  }
+  if (!agentId) {
+    return NextResponse.json({ error: 'agentId is required' }, { status: 400 });
+  }
+  if (!claimType || !VALID_CLAIM_TYPES.includes(claimType as ClaimType)) {
+    return NextResponse.json(
+      { error: `claimType must be one of: ${VALID_CLAIM_TYPES.join(', ')}` },
+      { status: 400 },
+    );
+  }
+  if (!deadline) {
+    return NextResponse.json({ error: 'deadline is required (YYYY-MM-DD)' }, { status: 400 });
+  }
+  if (!metric) {
+    return NextResponse.json({ error: 'metric is required' }, { status: 400 });
+  }
+
+  // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
+  if (agentId.startsWith('0x')) {
+    const agentSig   = (body.agentSig   as string) || '';
+    const agentNonce = (body.agentNonce as string) || '';
+
+    if (!agentSig || !agentNonce) {
+      const nonce = Math.floor(Date.now() / 1000);
+      return NextResponse.json(
+        {
+          error:   'Wallet ownership verification required',
+          message: 'EVM agentId requires an EIP-712 signature proving you control the wallet.',
+          howToFix: {
+            step1: 'Sign the EIP-712 payload with your wallet',
+            step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body',
+          },
+          signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
+          exampleNonce:   nonce,
+        },
+        { status: 401 },
+      );
+    }
+
+    const sigResult = await verifyAgentSignature(
+      agentId,
+      'attest-commitment',
+      Number(agentNonce),
+      agentSig,
+    );
+
+    if (!sigResult.valid) {
+      const nonce = Math.floor(Date.now() / 1000);
+      return NextResponse.json(
+        {
+          error:          'Wallet ownership verification failed',
+          reason:         sigResult.reason,
+          signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
+          exampleNonce:   nonce,
+        },
+        { status: 401 },
+      );
+    }
+
+    console.log(`[attest-commitment] Wallet ownership verified for ${agentId}`);
+  }
+
+  const walletAddress = agentId.startsWith('0x')
+    ? agentId as `0x${string}`
+    : '0x0000000000000000000000000000000000000000' as `0x${string}`;
+
+  // ── Parse deadline → windowDays + unix timestamp ──────────────────────
+  const deadlineDate = parseDeadline(deadline);
+  const deadlineUnix = Math.floor(deadlineDate.getTime() / 1000);
+  const nowUnix      = Math.floor(Date.now() / 1000);
+  const windowDays   = body.windowDays
+    ? Number(body.windowDays)
+    : Math.max(1, Math.ceil((deadlineUnix - nowUnix) / 86400));
+
+  // ── EAS commitment attestation ────────────────────────────────────────
+  let easTxHash:    string;
+  let commitmentUid: string;
+  try {
+    const receipt = await issueCommitmentAttestation({
+      agentId:           walletAddress,
+      claimType:         claimType as ClaimType,
+      metric,
+      evidence,
+      deadline:          BigInt(deadlineUnix),
+      difficultyVersion: difficultyVersion as 1,
+    });
+    easTxHash     = receipt.transactionHash;
+    commitmentUid = receipt.uid;
+  } catch (err) {
+    console.error('[attest-commitment] EAS attestation failed:', err);
+    return NextResponse.json(
+      { error: 'EAS commitment attestation failed', details: String(err) },
+      { status: 500 },
+    );
+  }
+
+  // ── Mint commitment NFT ───────────────────────────────────────────────
+  const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
+  const tokenUri = `${baseUrl}/api/commitment?uid=${commitmentUid}&theme=${theme}`;
+
+  let nftTxHash: string;
+  let tokenId:   bigint;
+  try {
+    const nft = await mintCommitment(
+      walletAddress,
+      easTxHash,
+      claimType,
+      deadlineUnix,
+      commitmentUid,
+    );
+    nftTxHash = nft.txHash;
+    tokenId   = nft.tokenId;
+  } catch (err) {
+    console.error('[attest-commitment] NFT mint failed:', err);
+    return NextResponse.json(
+      { error: 'Commitment NFT mint failed', details: String(err) },
+      { status: 500 },
+    );
+  }
+
+  // ── Register pending achievement in Redis ─────────────────────────────
+  try {
+    await registerPendingAchievement({
+      attestationUID:     commitmentUid,
+      subject:            agentId,
+      claimType:          claimType as ClaimType,
+      statement:          commitment,
+      windowDays,
+      verificationParams: JSON.stringify({
+        ...extractVerificationParams(body, claimType),
+        agentWallet: agentId,
+        windowDays,
+        deadline:    deadlineUnix,
+      }),
+    });
+  } catch (err) {
+    // Non-fatal — cron can recover
+    console.error('[attest-commitment] Redis registration failed (non-fatal):', err);
+  }
+
+  // ── Response ──────────────────────────────────────────────────────────
+  return NextResponse.json({
+    success:        true,
+    commitmentUid,
+    easTxHash,
+    nftTxHash,
+    tokenId:        tokenId.toString(),
+    tokenUri,
+    commitment,
+    claimType,
+    metric,
+    evidence,
+    deadline:       deadlineDate.toISOString(),
+    windowDays,
+    agentId,
+    paymentChain:   paymentChain || 'base',
+    easExplorer:    `https://base.easscan.org/attestation/view/${commitmentUid}`,
+    message:        'Commitment sealed onchain. Certificate will be issued after verification.',
+    verifyEndpoint: `/api/verify/${claimType}`,
+  });
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   // ── SECURITY: Rate limiting ───────────────────────────────────────────────
   // 5 commitment requests per hour per IP (tighter than attest — higher cost action)
-  const rateLimited = await rateLimitRequest(req, 'attest-commitment', 5, 3600);
-  if (rateLimited) return rateLimited;
+  // Skip for trusted internal callers
+  const internalKey = req.headers.get('x-internal-key');
+  const isInternal  = internalKey && internalKey === process.env.SEALER_INTERNAL_KEY;
 
-  return withZauthX402Payment(req, async (paymentChain: 'base' | 'solana' | undefined) => {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+  if (!isInternal) {
+    const rateLimited = await rateLimitRequest(req, 'attest-commitment', 5, 3600);
+    if (rateLimited) return rateLimited;
+  }
 
-    // ── Validate required fields ──────────────────────────────────────────
-    const commitment        = (body.commitment as string)?.trim();
-    const agentId           = (body.agentId   as string)?.trim();
-    const claimType         = (body.claimType as string)?.trim();
-    const deadline          = (body.deadline  as string)?.trim();
-    const metric            = (body.metric    as string)?.trim();
-    const evidence          = (body.evidence  as string)?.trim() || '';
-    const theme             = (body.theme     as string)?.trim() || 'dark';
-    const difficultyVersion = Number(body.difficultyVersion) || 1;
+  // ── Internal key bypass (ACP seller script) ───────────────────────────────
+  // Bypasses x402 payment gate for trusted internal callers.
+  // ACP job fee is collected by the ACP contract — no x402 payment header needed.
+  if (isInternal) {
+    console.log('[attest-commitment] Internal key bypass — skipping x402 payment gate');
+    return handleBody(req, undefined);
+  }
 
-    if (!commitment || commitment.length < 10) {
-      return NextResponse.json({ error: 'commitment is required (min 10 chars)' }, { status: 400 });
-    }
-    if (!agentId) {
-      return NextResponse.json({ error: 'agentId is required' }, { status: 400 });
-    }
-    if (!claimType || !VALID_CLAIM_TYPES.includes(claimType as ClaimType)) {
-      return NextResponse.json(
-        { error: `claimType must be one of: ${VALID_CLAIM_TYPES.join(', ')}` },
-        { status: 400 },
-      );
-    }
-    if (!deadline) {
-      return NextResponse.json({ error: 'deadline is required (YYYY-MM-DD)' }, { status: 400 });
-    }
-    if (!metric) {
-      return NextResponse.json({ error: 'metric is required' }, { status: 400 });
-    }
-
-    // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
-    if (agentId.startsWith('0x')) {
-      const agentSig   = (body.agentSig   as string) || '';
-      const agentNonce = (body.agentNonce as string) || '';
-
-      if (!agentSig || !agentNonce) {
-        const nonce = Math.floor(Date.now() / 1000);
-        return NextResponse.json(
-          {
-            error:   'Wallet ownership verification required',
-            message: 'EVM agentId requires an EIP-712 signature proving you control the wallet.',
-            howToFix: {
-              step1: 'Sign the EIP-712 payload with your wallet',
-              step2: 'Include agentSig (signature hex) and agentNonce (timestamp used) in your JSON body',
-            },
-            signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
-            exampleNonce:   nonce,
-          },
-          { status: 401 },
-        );
-      }
-
-      const sigResult = await verifyAgentSignature(
-        agentId,
-        'attest-commitment',
-        Number(agentNonce),
-        agentSig,
-      );
-
-      if (!sigResult.valid) {
-        const nonce = Math.floor(Date.now() / 1000);
-        return NextResponse.json(
-          {
-            error:          'Wallet ownership verification failed',
-            reason:         sigResult.reason,
-            signingPayload: getSigningPayload(agentId, 'attest-commitment', nonce),
-            exampleNonce:   nonce,
-          },
-          { status: 401 },
-        );
-      }
-
-      console.log(`[attest-commitment] Wallet ownership verified for ${agentId}`);
-    }
-
-    const walletAddress = agentId.startsWith('0x')
-      ? agentId as `0x${string}`
-      : '0x0000000000000000000000000000000000000000' as `0x${string}`;
-
-    // ── Parse deadline → windowDays + unix timestamp ──────────────────────
-    const deadlineDate = parseDeadline(deadline);
-    const deadlineUnix = Math.floor(deadlineDate.getTime() / 1000);
-    const nowUnix      = Math.floor(Date.now() / 1000);
-    const windowDays   = body.windowDays
-      ? Number(body.windowDays)
-      : Math.max(1, Math.ceil((deadlineUnix - nowUnix) / 86400));
-
-    // ── EAS commitment attestation ────────────────────────────────────────
-    let easTxHash:    string;
-    let commitmentUid: string;
-    try {
-      const receipt = await issueCommitmentAttestation({
-        agentId:           walletAddress,
-        claimType:         claimType as ClaimType,
-        metric,
-        evidence,
-        deadline:          BigInt(deadlineUnix),
-        difficultyVersion: difficultyVersion as 1,
-      });
-      easTxHash     = receipt.transactionHash;
-      commitmentUid = receipt.uid;
-    } catch (err) {
-      console.error('[attest-commitment] EAS attestation failed:', err);
-      return NextResponse.json(
-        { error: 'EAS commitment attestation failed', details: String(err) },
-        { status: 500 },
-      );
-    }
-
-    // ── Mint commitment NFT ───────────────────────────────────────────────
-    const baseUrl  = process.env.NEXT_PUBLIC_BASE_URL || 'https://thesealer.xyz';
-    const tokenUri = `${baseUrl}/api/commitment?uid=${commitmentUid}&theme=${theme}`;
-
-    let nftTxHash: string;
-    let tokenId:   bigint;
-    try {
-      const nft = await mintCommitment(
-        walletAddress,
-        easTxHash,
-        claimType,
-        deadlineUnix,
-        commitmentUid,
-      );
-      nftTxHash = nft.txHash;
-      tokenId   = nft.tokenId;
-    } catch (err) {
-      console.error('[attest-commitment] NFT mint failed:', err);
-      return NextResponse.json(
-        { error: 'Commitment NFT mint failed', details: String(err) },
-        { status: 500 },
-      );
-    }
-
-    // ── Register pending achievement in Redis ─────────────────────────────
-    try {
-      await registerPendingAchievement({
-        attestationUID:     commitmentUid,
-        subject:            agentId,
-        claimType:          claimType as ClaimType,
-        statement:          commitment,
-        windowDays,
-        verificationParams: JSON.stringify({
-          ...extractVerificationParams(body, claimType),
-          agentWallet: agentId,
-          windowDays,
-          deadline:    deadlineUnix,
-        }),
-      });
-    } catch (err) {
-      // Non-fatal — cron can recover
-      console.error('[attest-commitment] Redis registration failed (non-fatal):', err);
-    }
-
-    // ── Response ──────────────────────────────────────────────────────────
-    return NextResponse.json({
-      success:        true,
-      commitmentUid,
-      easTxHash,
-      nftTxHash,
-      tokenId:        tokenId.toString(),
-      tokenUri,
-      commitment,
-      claimType,
-      metric,
-      evidence,
-      deadline:       deadlineDate.toISOString(),
-      windowDays,
-      agentId,
-      paymentChain:   paymentChain || 'base',
-      easExplorer:    `https://base.easscan.org/attestation/view/${commitmentUid}`,
-      message:        'Commitment sealed onchain. Certificate will be issued after verification.',
-      verifyEndpoint: `/api/verify/${claimType}`,
-    });
-  }, COMMITMENT_PRICE, {
+  return withZauthX402Payment(req, (paymentChain) =>
+    handleBody(req, paymentChain),
+  COMMITMENT_PRICE, {
   schema: { properties: {
     input: { properties: { body: { type: 'object', required: ['agentId','agentSig','agentNonce','claimType','commitment','metric','deadline'], properties: { agentId: { type: 'string' }, agentSig: { type: 'string' }, agentNonce: { type: 'string' }, claimType: { type: 'string' }, commitment: { type: 'string' }, metric: { type: 'string' }, deadline: { type: 'string' } } } } },
     output: { properties: { example: { status: 'success', commitmentUID: '0xabc', txHash: '0xdef', permalink: 'https://thesealer.xyz/c/abc123' } } },
