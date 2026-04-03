@@ -242,6 +242,18 @@ function buildCertificateMetrics(
         { label: 'Engagement Rate', weight: 1.1, target: `${params.minEngagementRate ?? '?'}%`,  achieved: `${fmt(raw.engagementRate)}%`,  met: (raw.engagementRate as number) >= (params.minEngagementRate ?? 0) },
         { label: 'Platform',        weight: 0,   target: '—',                                    achieved: String(raw.platform ?? '—'),    met: true },
       ];
+    // ── ACP Job Delivery ────────────────────────────────────────────────────
+    // successRate is stored as 0–100 (matching x402 pattern).
+    // minSuccessRate in params is stored as 0–1 fraction; multiply × 100 for display.
+    case 'acp_job_delivery':
+      return [
+        { label: 'Completed Jobs',  weight: 1.5, target: String(params.minCompletedJobsDelta ?? '?'),                                                    achieved: String(raw.completedJobsDelta ?? '—'), met: (raw.completedJobsDelta as number) >= (params.minCompletedJobsDelta ?? 0) },
+        { label: 'Success Rate',    weight: 1.0, target: `${params.minSuccessRate != null ? Math.round((params.minSuccessRate as number) * 100) : '?'}%`, achieved: `${fmt(raw.successRate)}%`,           met: (raw.successRate as number) >= ((params.minSuccessRate as number ?? 0) * 100) },
+        { label: 'Unique Buyers',   weight: 0.5, target: String(params.minUniqueBuyersDelta ?? '?'),                                                      achieved: String(raw.uniqueBuyersDelta ?? '—'), met: (raw.uniqueBuyersDelta as number) >= (params.minUniqueBuyersDelta ?? 0) },
+        { label: 'Rejected Jobs',   weight: 0,   target: '—', achieved: String(raw.rejectedJobCount ?? '—'), met: true },
+        { label: 'Total Scored',    weight: 0,   target: '—', achieved: String(raw.totalScoredJobs ?? '—'),  met: true },
+        { label: 'Chain',           weight: 0,   target: 'Base', achieved: 'Base',                           met: true },
+      ];
     default: return [];
   }
 }
@@ -255,6 +267,7 @@ function extractThresholds(claimType: string, params: Record<string, any>): Comm
     case 'website_app_delivery':     return pick(['minPerformanceScore', 'minAccessibility']);
     case 'defi_trading_performance': return pick(['minTradeCount', 'minVolumeUSD', 'minPnlPercent']);
     case 'social_media_growth':      return pick(['minFollowerGrowth', 'minEngagementRate']);
+    case 'acp_job_delivery':         return pick(['minCompletedJobsDelta', 'minSuccessRate', 'minUniqueBuyersDelta']);
     default: return {};
   }
 }
@@ -266,6 +279,7 @@ function buildCommitmentText(claimType: string, p: Record<string, any>): string 
     case 'website_app_delivery':     return `Achieve a PageSpeed score of ${p.minPerformanceScore ?? '?'} or above` + (p.url ? ` on ${p.url}` : '') + '.';
     case 'defi_trading_performance': return `Execute at least ${p.minTradeCount ?? '?'} on-chain trades` + (p.minVolumeUSD ? ` with total volume exceeding $${p.minVolumeUSD}` : '') + ' within the commitment window.';
     case 'social_media_growth':      return `Grow follower count by ${p.minFollowerGrowth ?? '?'}%` + ` on ${p.platform || 'Farcaster'} within the commitment window.`;
+    case 'acp_job_delivery':         return `Complete at least ${p.minCompletedJobsDelta ?? '?'} ACP jobs` + (p.minSuccessRate ? ` with a success rate above ${Math.round((p.minSuccessRate as number) * 100)}%` : '') + ' within the commitment window.';
     default: return 'Complete the committed goal within the verification window.';
   }
 }
@@ -277,6 +291,7 @@ function buildMetricString(claimType: string, raw: Record<string, number | strin
     case 'website_app_delivery':     return `Performance: ${raw.performanceScore} · Accessibility: ${raw.accessibility}`;
     case 'defi_trading_performance': return `Trades: ${raw.tradeCount} · Volume: $${raw.volumeUSD} · P&L: ${raw.pnlPercent}%`;
     case 'social_media_growth':      return `Follower growth: +${raw.followerGrowth}% · Engagement: ${raw.engagementRate}%`;
+    case 'acp_job_delivery':         return `Completed jobs: ${raw.completedJobsDelta} · Success rate: ${raw.successRate}% · Unique buyers: ${raw.uniqueBuyersDelta}`;
     default: return JSON.stringify(raw);
   }
 }

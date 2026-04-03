@@ -26,6 +26,7 @@ const CLAIM_LABELS: Record<string, string> = {
   code_software_delivery:   'Code / Software Delivery',
   website_app_delivery:     'Website / App Delivery',
   social_media_growth:      'Social Media Growth',
+  acp_job_delivery: 'ACP Job Delivery',
 };
 
 export async function GET(

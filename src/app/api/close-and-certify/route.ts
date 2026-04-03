@@ -36,6 +36,7 @@ const VALID_CLAIM_TYPES = new Set([
   'defi_trading_performance',
   'code_software_delivery',
   'website_app_delivery',
+  'acp_job_delivery',
 ]);
 
 export async function POST(req: NextRequest) {
@@ -143,6 +144,7 @@ export async function POST(req: NextRequest) {
     defi_trading_performance: '/api/verify/defi',
     code_software_delivery:   '/api/verify/github',
     website_app_delivery:     '/api/verify/website',
+    acp_job_delivery: '/api/verify/acp_job_delivery',
   };
   const verifyPath = verifyPaths[claimType];
 

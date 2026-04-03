@@ -7,6 +7,7 @@ import type { ClaimType } from '@/lib/verify/types';
 import { x402Challenge } from '@/lib/x402';
 import { rateLimitRequest } from '@/lib/security';
 import { verifyAgentSignature, getSigningPayload } from '@/lib/agentSig';
+import { snapshotAcpBaseline } from '@/lib/verify/acp-job-delivery';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
   'defi_trading_performance',
   'code_software_delivery',
   'website_app_delivery',
+  'acp_job_delivery',
   // 'social_media_growth' — temporarily disabled, coming soon as a full category
 ];
 
@@ -170,6 +172,20 @@ async function handleBody(
 
   // ── Register pending achievement in Redis ─────────────────────────────
   try {
+    // For acp_job_delivery: snapshot contractAddress + block number at mint time.
+    // Stored in verificationParams so the verifier can query logs at close time
+    // without a Virtuals API call. Non-fatal if snapshot fails — verifier will
+    // return a clear error at close time.
+    let acpSnapshot: { acpContractAddress: string; mintBlock: string } | null = null;
+    if (claimType === 'acp_job_delivery') {
+      try {
+        acpSnapshot = await snapshotAcpBaseline(agentId);
+        console.log(`[attest-commitment] ACP snapshot — contract: ${acpSnapshot.acpContractAddress}, block: ${acpSnapshot.mintBlock}`);
+      } catch (snapErr) {
+        console.warn('[attest-commitment] ACP baseline snapshot failed (non-fatal):', snapErr);
+      }
+    }
+
     await registerPendingAchievement({
       attestationUID:     commitmentUid,
       subject:            agentId,
@@ -181,6 +197,10 @@ async function handleBody(
         agentWallet: agentId,
         windowDays,
         deadline:    deadlineUnix,
+        ...(acpSnapshot ? {
+          acpContractAddress: acpSnapshot.acpContractAddress,
+          mintBlock:          acpSnapshot.mintBlock,
+        } : {}),
       }),
     });
   } catch (err) {
@@ -316,6 +336,15 @@ function extractVerificationParams(
         minPostsPerWeek:   body.minPostsPerWeek,
       };
 
+    case 'acp_job_delivery':
+      return {
+        ...common,
+        agentWallet:           body.agentWallet || body.agentId,
+        minCompletedJobsDelta: body.minCompletedJobsDelta,
+        minSuccessRate:        body.minSuccessRate,
+        minUniqueBuyersDelta:  body.minUniqueBuyersDelta,
+      };
+
     default:
       return common;
   }
@@ -333,7 +362,7 @@ export async function GET() {
       agentId:    'your EVM wallet address',
       agentSig:   'EIP-712 signature proving wallet ownership',
       agentNonce: 'Unix timestamp (seconds) used when signing — valid for 5 minutes',
-      claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery',
+      claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery | acp_job_delivery',
       metric:     'measurable goal description',
       deadline:   'YYYY-MM-DD',
     },
