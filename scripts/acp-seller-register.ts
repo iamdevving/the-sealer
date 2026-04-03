@@ -17,7 +17,8 @@
 //
 // Prerequisites:
 //   - Agent wallet must be registered as a seller at app.virtuals.io/acp
-//   - AGENT_WALLET in .env.local must match the wallet used on Virtuals ACP
+//   - ACP_WALLET in .env.local must match the wallet used on Virtuals ACP
+//   - ACP_WALLET_KEY in .env.local — private key for that wallet (local only, never sent to Vercel)
 //   - SEALER_INTERNAL_KEY must be set in .env.local
 //   - NEXT_PUBLIC_BASE_URL must be set (e.g. https://thesealer.xyz for prod,
 //     http://localhost:3000 for local testing)
@@ -32,7 +33,7 @@ config({ path: '.env.local' });
 
 const BASE_URL        = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 const INTERNAL_KEY    = process.env.SEALER_INTERNAL_KEY || '';
-const AGENT_WALLET    = process.env.AGENT_WALLET || process.env.TEST_WALLET_ADDRESS || '';
+const ACP_WALLET      = process.env.ACP_WALLET || '';
 const VIRTUALS_API    = 'https://acpx.virtuals.io/api';
 
 // ── Default commitment params ─────────────────────────────────────────────────
@@ -58,9 +59,9 @@ function assertConfig() {
     console.error('❌ SEALER_INTERNAL_KEY not set in .env.local');
     process.exit(1);
   }
-  if (!AGENT_WALLET || !AGENT_WALLET.startsWith('0x')) {
-    console.error('❌ AGENT_WALLET not set or invalid in .env.local (must be 0x EVM address)');
-    console.error('   Set AGENT_WALLET=0x<your-wallet> in .env.local');
+  if (!ACP_WALLET || !ACP_WALLET.startsWith('0x')) {
+    console.error('❌ ACP_WALLET not set or invalid in .env.local (must be 0x EVM address)');
+    console.error('   Set ACP_WALLET=0x<your-acp-wallet> in .env.local');
     process.exit(1);
   }
 }
@@ -98,7 +99,7 @@ async function checkVirtualsRegistration(): Promise<{
 }> {
   try {
     const res  = await fetch(
-      `${VIRTUALS_API}/agents?filters%5BwalletAddress%5D=${encodeURIComponent(AGENT_WALLET)}`,
+      `${VIRTUALS_API}/agents?filters%5BwalletAddress%5D=${encodeURIComponent(ACP_WALLET)}`,
       { headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10_000) },
     );
     if (!res.ok) throw new Error(`Virtuals API ${res.status}`);
@@ -148,13 +149,13 @@ async function mintCommitment(): Promise<string> {
   const deadline = new Date(Date.now() + DEFAULT_COMMITMENT.deadlineDays * 86400 * 1000);
   const deadlineStr = deadline.toISOString().split('T')[0]; // YYYY-MM-DD
 
-  console.log(`\n🔐 Minting Sealer commitment for ${AGENT_WALLET}...`);
+  console.log(`\n🔐 Minting Sealer commitment for ${ACP_WALLET}...`);
   console.log(`   Claim type: ${DEFAULT_COMMITMENT.claimType}`);
   console.log(`   Deadline:   ${deadlineStr} (${DEFAULT_COMMITMENT.deadlineDays} days)`);
   console.log(`   Targets:    ${DEFAULT_COMMITMENT.metric}`);
 
   const result = await sealerPost('/api/attest-commitment', {
-    agentId:               AGENT_WALLET,
+    agentId:               ACP_WALLET,
     claimType:             DEFAULT_COMMITMENT.claimType,
     commitment:            DEFAULT_COMMITMENT.commitment,
     metric:                DEFAULT_COMMITMENT.metric,
@@ -217,7 +218,7 @@ async function certify(uid: string): Promise<void> {
 
   const result = await sealerPost('/api/close-and-certify', {
     commitmentUid: uid,
-    agentId:       AGENT_WALLET,
+    agentId:       ACP_WALLET,
   });
 
   if (result.status === 'achieved') {
@@ -261,7 +262,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════════');
   console.log(' ACP Seller → Sealer Protocol Registration');
   console.log('═══════════════════════════════════════════════════');
-  console.log(`\n Agent wallet: ${AGENT_WALLET}`);
+  console.log(`\n Agent wallet: ${ACP_WALLET}`);
   console.log(` Sealer base:  ${BASE_URL}`);
 
   // 1. Check Virtuals ACP registration
