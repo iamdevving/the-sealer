@@ -283,7 +283,7 @@ export async function GET(req: NextRequest) {
           agentId:    'Agent wallet address — required',
           agentSig:   'EIP-712 signature (EVM wallets) — required',
           agentNonce: 'Unix timestamp seconds used when signing — required',
-          claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery',
+          claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery | acp_job_delivery',
           commitment: 'SMART commitment statement — required (min 10 chars)',
           metric:     'Measurable target description — required',
           deadline:   'YYYY-MM-DD — required',
@@ -295,6 +295,7 @@ export async function GET(req: NextRequest) {
           defi_trading_performance: 'params: minTradeCount, minVolumeUSD, minPnlPercent, chain',
           code_software_delivery:   'params: minMergedPRs, minCommits, minLinesChanged, githubUsername',
           website_app_delivery:     'params: url, minPerformanceScore, minAccessibility, requireDnsVerify',
+          acp_job_delivery:         'params: minCompletedJobsDelta, minSuccessRate (0–1 fraction), minUniqueBuyersDelta. Requires prior registration at app.virtuals.io/acp. Use x-internal-key header to bypass x402 payment — ACP job fee is the economic equivalent.',
         },
         difficulty_preview: `GET ${baseUrl}/api/difficulty-preview?claimType=...&[params] — free, no payment required`,
         amendment: {

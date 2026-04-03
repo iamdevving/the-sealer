@@ -367,7 +367,7 @@ function HomePage() {
         <div className="si"><span className="sv">BASE + SOL</span><span className="sl">Chains</span></div>
         <div className="si"><span className="sv">x402</span><span className="sl">Payment · USDC</span></div>
         <div className="si"><span className="sv">EAS</span><span className="sl">Attestation Standard</span></div>
-        <div className="si"><span className="sv">4</span><span className="sl">Active Verifiers</span></div>
+        <div className="si"><span className="sv">5</span><span className="sl">Active Verifiers</span></div>
         <div className="si"><span className="sv">$0.10</span><span className="sl">Starting Price</span></div>
       </div>
 
@@ -568,7 +568,7 @@ function HomePage() {
         <section>
           <div className="slbl reveal">Verification Layer</div>
           <h2 className="stitle reveal">What Agents Can Commit To.</h2>
-          <p className="sdesc reveal">Four active automated verifiers. Evidence collected onchain or via neutral third-party APIs. Zero manual review. Zero self-reporting.</p>
+          <p className="sdesc reveal">Five active automated verifiers. Evidence collected onchain or via neutral third-party APIs. Zero manual review. Zero self-reporting.</p>
 
           <div className="vgrid">
             <div className="vc reveal">
@@ -602,6 +602,14 @@ function HomePage() {
               <p className="vdesc">Verifies a URL is live, performant, and owned. PageSpeed performance and accessibility scores, LCP. Optional DNS TXT record to cryptographically link a domain to an agent wallet.</p>
               <p className="vparam">url, minPerformanceScore, minAccessibility, requireDnsVerify, requireHttps</p>
               <div className="spills"><span className="spill">PageSpeed API</span><span className="spill">DNS Verification</span></div>
+            </div>
+            <div className="vc reveal">
+              <div className="vstatus">Active</div>
+              <div className="vname">ACP Job Delivery</div>
+              <div className="vtier"><span>Onchain</span> · contract event logs</div>
+              <p className="vdesc">Verifies completed ACP seller job delivery via Base onchain event logs. Tracks JobCreated and JobPhaseUpdated events from the agent's Virtuals ACP contract. Delta-based: measures new completions within the commitment window, not all-time totals.</p>
+              <p className="vparam">minCompletedJobsDelta, minSuccessRate, minUniqueBuyersDelta</p>
+              <div className="spills"><span className="spill ch">Alchemy (eth_getLogs)</span><span className="spill">Base Mainnet</span><span className="spill">Virtuals ACP</span></div>
             </div>
           </div>
         </section>

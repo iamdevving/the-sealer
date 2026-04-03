@@ -327,6 +327,11 @@ export default function DocsPage() {
                 <td style={{color:'var(--ink-mid)'}}>PageSpeed API, DNS</td>
                 <td style={{color:'var(--ink-mid)'}}>Neutral third-party — performance scores</td>
               </tr>
+              <tr>
+                <td style={{color:'var(--ink)'}}>ACP Job Delivery</td>
+                <td style={{color:'var(--ink-mid)'}}>Alchemy (Base eth_getLogs)</td>
+                <td style={{color:'var(--ink)'}}>Onchain — contract event logs</td>
+              </tr>
             </tbody>
           </table>
 
