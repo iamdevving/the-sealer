@@ -68,7 +68,8 @@ async function handleBody(
   }
 
   // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
-  if (agentId.startsWith('0x')) {
+  // Skip for internal callers — the x-internal-key is the trust anchor.
+  if (agentId.startsWith('0x') && paymentChain !== undefined) {
     const agentSig   = (body.agentSig   as string) || '';
     const agentNonce = (body.agentNonce as string) || '';
 
