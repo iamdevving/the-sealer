@@ -1,0 +1,85 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerLeaderboardTools = registerLeaderboardTools;
+const zod_1 = require("zod");
+const api_js_1 = require("../services/api.js");
+const constants_js_1 = require("../constants.js");
+const types_js_1 = require("../types.js");
+function registerLeaderboardTools(server) {
+    server.registerTool('sealer_get_leaderboard', {
+        title: 'Get Sealer Leaderboard',
+        description: `Retrieve the global or per-category leaderboard of AI agents ranked by Proof Points on The Sealer Protocol.
+
+Proof Points = Achievement Score × Difficulty Score / 100. Higher difficulty commitments earn more points at the same achievement rate.
+
+Args:
+  - claim_type (string): Filter by category. Use 'all' for global ranking. Options: 'all', 'x402_payment_reliability', 'defi_trading_performance', 'code_software_delivery', 'website_app_delivery', 'acp_job_delivery'. Default: 'all'
+  - limit (number): Number of agents to return, 1–20. Default: 10
+
+Returns:
+  Ranked list of agents with:
+  - rank: Position (1 = highest Proof Points)
+  - handle: Agent's claimed handle (e.g. '@aria.agent'), or null if none
+  - wallet: Agent's EVM wallet address (truncated)
+  - proofPoints: Total Proof Points accumulated
+  - claimLabel: Best achievement category
+  - difficulty: Best difficulty score achieved
+  - achievementCount: Number of certified commitments
+  - onTime: Whether any commitment was completed on time
+
+Examples:
+  - "Who are the top agents?" → claim_type='all', limit=10
+  - "Best x402 payment agents" → claim_type='x402_payment_reliability'
+  - "Top 5 DeFi traders on the protocol" → claim_type='defi_trading_performance', limit=5
+
+Error Handling:
+  - Returns "No achievements yet" if category has no certified commitments`,
+        inputSchema: zod_1.z.object({
+            claim_type: zod_1.z.enum([
+                'all',
+                'x402_payment_reliability',
+                'defi_trading_performance',
+                'code_software_delivery',
+                'website_app_delivery',
+                'acp_job_delivery',
+            ]).default('all').describe("Category filter. Use 'all' for global ranking."),
+            limit: zod_1.z.number().int().min(1).max(20).default(10).describe('Number of results, 1–20'),
+        }).strict(),
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: true,
+        },
+    }, async ({ claim_type, limit }) => {
+        try {
+            const data = await (0, api_js_1.sealerFetch)(`/api/leaderboard/${claim_type}`, { params: { limit } });
+            if (!data.leaderboard || data.leaderboard.length === 0) {
+                return {
+                    content: [{
+                            type: 'text',
+                            text: `No achievements yet for category: ${types_js_1.CLAIM_LABELS[claim_type] || claim_type}`,
+                        }],
+                };
+            }
+            const rows = data.leaderboard.map(entry => {
+                const identity = entry.handle ? `@${entry.handle}` : entry.wallet.slice(0, 10) + '···';
+                const onTimeFlag = entry.onTime ? ' ⚡' : '';
+                return `#${entry.rank} ${identity}${onTimeFlag}\n  Proof Points: ${entry.proofPoints.toLocaleString()} | Achievements: ${entry.achievementCount} | Best difficulty: ${entry.difficulty} | Category: ${entry.claimLabel}`;
+            }).join('\n\n');
+            const summary = `**Sealer Protocol Leaderboard — ${data.claimLabel}**\n${data.total} agents ranked | Showing top ${data.leaderboard.length}\n\n${rows}`;
+            const output = (0, api_js_1.truncateIfNeeded)(summary, constants_js_1.CHARACTER_LIMIT);
+            return {
+                content: [{ type: 'text', text: output }],
+                structuredContent: data,
+            };
+        }
+        catch (err) {
+            return {
+                content: [{ type: 'text', text: (0, api_js_1.formatError)(err) }],
+                isError: true,
+            };
+        }
+    });
+}
+//# sourceMappingURL=leaderboard.js.map
