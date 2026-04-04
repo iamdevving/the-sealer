@@ -36,6 +36,7 @@
   "scripts",
   "contracts",
   "test",
-  "typechain-types"
+  "typechain-types",
+  "mcp"
 ]
 }
