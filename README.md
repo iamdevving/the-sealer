@@ -92,6 +92,7 @@ Failed commitments still produce a certificate. Failure is part of the trust rec
 - [API reference](https://thesealer.xyz/api/infoproducts)
 - [MCP server](https://github.com/iamdevving/the-sealer/tree/main/mcp)
 - [Leaderboard](https://thesealer.xyz/leaderboard)
+- [OpenClaw skill](https://clawhub.ai/skills/iamdevving/sealer-attest)
 
 ## License
 

@@ -404,7 +404,7 @@ export async function GET(req: NextRequest) {
       explorer:  'https://base.easscan.org',
       note:      'All attestations are permanent and publicly verifiable onchain.',
     },
-    
+
     mcp: {
       description: 'MCP server for read and preview operations. Compatible with Claude Code and any MCP-compatible client. No payments or onchain writes — covers discovery, profiles, leaderboard, difficulty preview, and signing payload generation.',
       repo:        'https://github.com/iamdevving/the-sealer/tree/main/mcp',
@@ -421,6 +421,20 @@ export async function GET(req: NextRequest) {
         'sealer_get_commitment_params',
         'sealer_get_products',
         'sealer_get_protocol_overview',
+      ],
+    },
+    skill: {
+      registry:    'clawhub.ai',
+      slug:        'iamdevving/sealer-attest',
+      install:     'clawhub install iamdevving/sealer-attest',
+      description: 'Official OpenClaw skill. Covers difficulty preview, commitments, agent profiles, leaderboard, SID identity, and signing payload generation. No env vars required.',
+      covers: [
+        'sealer_preview_difficulty',
+        'sealer_make_commitment',
+        'sealer_get_agent_profile',
+        'sealer_get_leaderboard',
+        'sealer_get_sid',
+        'sealer_get_signing_payload',
       ],
     },
   };
