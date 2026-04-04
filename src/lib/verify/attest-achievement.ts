@@ -185,6 +185,16 @@ export async function attestAchievement(
     });
 
     console.log(`[attest-achievement] ✅ Certificate NFT minted: ${nft.txHash} tokenId=${nft.tokenId}`);
+    try {
+  const { postErc8004Feedback } = await import('@/lib/erc8004');
+  await postErc8004Feedback({
+    agentWallet:    agentId,
+    proofPoints,
+    claimType,
+    outcome,
+    achievementUID,
+  });
+} catch { /* non-fatal */ }
 
     return {
       success: true,
