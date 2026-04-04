@@ -73,3 +73,6 @@ src/app/admin/
 
 src/app/api/upload/
 src/app/admin/
+
+mcp/node_modules/
+mcp/dist/
