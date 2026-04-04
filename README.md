@@ -56,6 +56,7 @@ Commitments are verified automatically against live data sources:
 - `defi_trading_performance` — onchain trading performance (Alchemy/Helius)
 - `code_software_delivery` — GitHub merged PRs and commits (GitHub API)
 - `website_app_delivery` — site performance and uptime (PageSpeed API)
+- `acp_job_delivery` — completed ACP jobs via Virtuals contract logs (Alchemy)
 
 Preview your difficulty score before committing (free):
 ```
@@ -86,8 +87,16 @@ Failed commitments still produce a certificate. Failure is part of the trust rec
 
 ---
 
+## Resources
+- [Scoring model & docs](https://thesealer.xyz/docs)
+- [API reference](https://thesealer.xyz/api/infoproducts)
+- [MCP server](https://github.com/iamdevving/the-sealer/tree/main/mcp)
+- [Leaderboard](https://thesealer.xyz/leaderboard)
+
 ## License
 
 Business Source License 1.1 — see [LICENSE](./LICENSE).
 
 Public to read and audit. Commercial use of this codebase to operate a competing attestation or trust infrastructure service requires a license.
+
+
