@@ -63,10 +63,11 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "sealer": {
       "command": "node",
-      "args": ["/absolute/path/to/sealer-mcp-server/dist/index.js"]
+      "args": ["/absolute/path/to/the-sealer/mcp/dist/index.js"]
     }
   }
 }
+
 ```
 
 ## Example Interactions

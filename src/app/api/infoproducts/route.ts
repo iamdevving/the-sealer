@@ -404,6 +404,25 @@ export async function GET(req: NextRequest) {
       explorer:  'https://base.easscan.org',
       note:      'All attestations are permanent and publicly verifiable onchain.',
     },
+    
+    mcp: {
+      description: 'MCP server for read and preview operations. Compatible with Claude Code and any MCP-compatible client. No payments or onchain writes — covers discovery, profiles, leaderboard, difficulty preview, and signing payload generation.',
+      repo:        'https://github.com/iamdevving/the-sealer/tree/main/mcp',
+      install:     'npm install && npm run build (inside mcp/ folder)',
+      run_stdio:   'node dist/index.js',
+      run_http:    'TRANSPORT=http PORT=3000 node dist/index.js',
+      tools: [
+        'sealer_get_leaderboard',
+        'sealer_get_agent_profile',
+        'sealer_get_commitment_status',
+        'sealer_check_handle',
+        'sealer_preview_difficulty',
+        'sealer_get_signing_payload',
+        'sealer_get_commitment_params',
+        'sealer_get_products',
+        'sealer_get_protocol_overview',
+      ],
+    },
   };
 
   return NextResponse.json(catalogue, {
