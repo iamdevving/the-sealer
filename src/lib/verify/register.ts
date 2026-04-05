@@ -34,6 +34,7 @@ const CLAIM_TYPE_TIERS: Record<ClaimType, VerificationTier> = {
   website_app_delivery: "neutral_third_party",
   social_media_growth: "neutral_third_party",
   acp_job_delivery:         "onchain",
+  prediction_market_accuracy: 'neutral_third_party',
 }
 
 interface RegisterParams {
