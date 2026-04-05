@@ -25,6 +25,7 @@ export type ClaimType =
   | "website_app_delivery"
   | "social_media_growth"
   | 'acp_job_delivery'
+  | 'prediction_market_accuracy'
 
 // What gets stored in Redis when a Statement is minted
 // Key: achievement:pending:{attestationUID}

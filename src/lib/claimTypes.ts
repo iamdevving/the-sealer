@@ -19,7 +19,8 @@ export type ClaimType =
   | 'defi_trading_performance'
   | 'code_software_delivery'
   | 'website_app_delivery'
-  | 'acp_job_delivery';
+  | 'acp_job_delivery'
+  | 'prediction_market_accuracy';
   // | 'social_media_growth'  — disabled, coming post-launch
 
 // ── Per-metric weight definitions ─────────────────────────────────────────────
@@ -202,6 +203,42 @@ export const CLAIM_TYPE_META: Record<ClaimType, ClaimTypeMeta> = {
       minUniqueBuyersDelta:   { p50: 5,    p90: 30   },
     },
     verifyPath: '/api/verify/acp_job_delivery',
+  },
+  // ── Prediction Market Accuracy ────────────────────────────────────────────
+  // Platforms: polymarket (Polygon), kalshi (CFTC REST), limitless (Base)
+  // Category: crypto | politics | sports | economics | culture | all
+  // Win rate is volume-weighted — a $1 bet and $1000 bet count differently.
+  prediction_market_accuracy: {
+    label: 'Prediction Market Accuracy',
+    metrics: [
+      {
+        label:       'minMarketsResolved',
+        weight:      0.25,
+        description: 'Minimum resolved markets participated in during window',
+      },
+      {
+        label:       'minWinRate',
+        weight:      0.35,
+        description: 'Volume-weighted win rate (0–100)',
+      },
+      {
+        label:       'minROI',
+        weight:      0.25,
+        description: 'Return on investment % over window (can be negative floor)',
+      },
+      {
+        label:       'minVolumeUSD',
+        weight:      0.15,
+        description: 'Total USDC wagered across resolved markets in window',
+      },
+    ],
+    baselines: {
+      minMarketsResolved: { p50: 10,  p90: 100  },
+      minWinRate:         { p50: 50,  p90: 65   },
+      minROI:             { p50: 0,   p90: 20   },
+      minVolumeUSD:       { p50: 50,  p90: 1000 },
+    },
+    verifyPath: '/api/verify/prediction_market_accuracy',
   },
 };
 

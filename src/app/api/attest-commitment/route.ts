@@ -20,6 +20,7 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
   'code_software_delivery',
   'website_app_delivery',
   'acp_job_delivery',
+  'prediction_market_accuracy',
   // 'social_media_growth' — temporarily disabled, coming soon as a full category
 ];
 
