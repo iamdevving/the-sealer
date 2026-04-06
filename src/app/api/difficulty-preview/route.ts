@@ -25,6 +25,8 @@ const THRESHOLD_PARAMS: Record<string, string[]> = {
   website_app_delivery:     ['minPerformanceScore', 'minAccessibility'],
   defi_trading_performance: ['minTradeCount', 'minVolumeUSD', 'minPnlPercent'],
   social_media_growth:      ['minFollowerGrowth', 'minEngagementRate'],
+  acp_job_delivery: ['minCompletedJobsDelta', 'minSuccessRate', 'minUniqueBuyersDelta'],
+  prediction_market_accuracy: ['minMarketsResolved', 'minWinRate', 'minROI', 'minVolumeUSD'],
 };
 
 const CLAIM_LABELS: Record<string, string> = {
@@ -33,6 +35,8 @@ const CLAIM_LABELS: Record<string, string> = {
   code_software_delivery:   'Code / Software Delivery',
   website_app_delivery:     'Website / App Delivery',
   social_media_growth:      'Social Media Growth',
+  acp_job_delivery: 'ACP Job Delivery',
+  prediction_market_accuracy: 'Prediction Market Accuracy',
 };
 
 function difficultyTier(score: number): 'low' | 'medium' | 'high' | 'very_high' {

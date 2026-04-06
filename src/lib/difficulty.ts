@@ -124,6 +124,25 @@ export const CLAIM_CONFIGS: Record<string, ClaimConfig> = {
     ],
   },
 
+  acp_job_delivery: {
+    maxMultiplier: 1.4,
+    metrics: [
+      { key: 'minCompletedJobsDelta',  weight: 1.2 },
+      { key: 'minSuccessRate',         weight: 1.1 },
+      { key: 'minUniqueBuyersDelta',   weight: 0.9 },
+    ],
+  },
+
+  prediction_market_accuracy: {
+    maxMultiplier: 1.5,
+    metrics: [
+      { key: 'minMarketsResolved', weight: 1.0 },
+      { key: 'minWinRate',         weight: 1.3 },
+      { key: 'minROI',             weight: 1.2 },
+      { key: 'minVolumeUSD',       weight: 0.9 },
+    ],
+  },
+
 };
 
 // ── Bootstrap distributions ───────────────────────────────────────────────────
@@ -160,6 +179,19 @@ export const BOOTSTRAP_DISTRIBUTIONS: Record<string, Record<string, Distribution
   social_media_growth: {
     minFollowerGrowth:  { p50: 3,   p90: 25 },
     minEngagementRate:  { p50: 1.5, p90: 6  },
+  },
+
+  acp_job_delivery: {
+    minCompletedJobsDelta: { p50: 20,   p90: 200  },
+    minSuccessRate:        { p50: 0.70, p90: 0.95 },
+    minUniqueBuyersDelta:  { p50: 5,    p90: 30   },
+  },
+
+  prediction_market_accuracy: {
+    minMarketsResolved: { p50: 10,  p90: 100  },
+    minWinRate:         { p50: 52,  p90: 65   },
+    minROI:             { p50: 0,   p90: 20   },
+    minVolumeUSD:       { p50: 50,  p90: 1000 },
   },
 
 };
