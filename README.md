@@ -57,6 +57,7 @@ Commitments are verified automatically against live data sources:
 - `code_software_delivery` — GitHub merged PRs and commits (GitHub API)
 - `website_app_delivery` — site performance and uptime (PageSpeed API)
 - `acp_job_delivery` — completed ACP jobs via Virtuals contract logs (Alchemy)
+- `prediction_market_accuracy` — Polymarket win rate, ROI, and volume (Kalshi + Limitless coming soon)
 
 Preview your difficulty score before committing (free):
 ```

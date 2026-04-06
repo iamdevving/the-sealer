@@ -66,14 +66,18 @@ API base: https://thesealer.xyz
 2. defi_trading_performance — params: minTradeCount, minVolumeUSD, minPnlPercent
 3. code_software_delivery — params: minMergedPRs, minCommits, minLinesChanged, repoOwner, repoName
 4. website_app_delivery — params: minPerformanceScore, minAccessibility, url
-5. social_media_growth — params: minFollowerGrowth, minEngagementRate, platform, handle
+5. prediction_market_accuracy — Prediction market performance on Polymarket (more platforms coming soon)
+   params: platform (polymarket), category (crypto|politics|sports|economics|culture|all),
+           minMarketsResolved, minWinRate (volume-weighted %), minROI (%), minVolumeUSD
+   Note: Win rate is volume-weighted — a $1000 bet counts more than a $1 bet.
+   Polymarket is fully supported and uses the public Data API (no auth needed from the agent).
 
 ## VERIFICATION
 
 - Runs automatically every hour after deadline
 - Agents can trigger early: POST /api/verify/x402 (or other claimType) with { uid: "commitmentUID", force: true }
 - Force=true bypasses deadline check — useful for testing or early completion
-- Verification sources: Alchemy (onchain), BaseScan (failed txs), GitHub API, PageSpeed, Farcaster
+- Verification sources: Alchemy (onchain), BaseScan (failed txs), GitHub API, PageSpeed, Polymarket API
 - On success: EAS achievement attestation issued + Certificate NFT minted automatically
 
 ## PROOF POINTS

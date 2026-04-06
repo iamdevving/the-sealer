@@ -9,7 +9,7 @@ const CLAIM_TYPES = [
   { value: 'code_software_delivery',   label: 'Code Delivery'  },
   { value: 'website_app_delivery',     label: 'App Delivery'   },
   { value: 'acp_job_delivery',         label: 'ACP Jobs'       },
-  { value: 'social_media_growth',      label: 'Social Growth'  },
+  { value: 'prediction_market_accuracy', label: 'Prediction Markets' },
 ];
 
 interface Entry {

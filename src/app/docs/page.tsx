@@ -332,6 +332,11 @@ export default function DocsPage() {
                 <td style={{color:'var(--ink-mid)'}}>Alchemy (Base eth_getLogs)</td>
                 <td style={{color:'var(--ink)'}}>Onchain — contract event logs</td>
               </tr>
+              <tr>
+                <td style={{color:'var(--ink)'}}>Prediction Market Accuracy</td>
+                <td style={{color:'var(--ink-mid)'}}>Polymarket API</td>
+                <td style={{color:'var(--ink)'}}>Markets resolved, win rate (volume-weighted), ROI, volume</td>
+              </tr>
             </tbody>
           </table>
 
