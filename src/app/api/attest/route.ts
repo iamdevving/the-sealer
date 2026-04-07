@@ -410,7 +410,7 @@ export async function POST(req: NextRequest) {
 
   // ── SECURITY: Rate limiting ───────────────────────────────────────────────
   if (!isInternal) {
-    const rateLimited = await rateLimitRequest(req, 'attest', 10, 3600);
+    const rateLimited = await rateLimitRequest(req, 'attest', 100, 3600);
     if (rateLimited) return rateLimited;
   }
 
