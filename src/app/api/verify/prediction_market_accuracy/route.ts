@@ -130,6 +130,8 @@ export async function POST(req: NextRequest) {
     failureReason: result.failureReason,
   });
 
+   await redis.srem(`commitment:active:${agentId}`, commitmentUID).catch(() => {});
+
   return NextResponse.json({
     commitmentUID,
     platform,

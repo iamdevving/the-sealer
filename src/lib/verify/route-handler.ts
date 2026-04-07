@@ -86,6 +86,9 @@ export async function handleVerifyRoute(
         ...pending, status: graceExpired ? 'failed' : 'pending',
         lastChecked: now, failureReason: result.failureReason,
       } satisfies PendingAchievement), { ex: 90 * 86400 });
+      if (graceExpired) {
+        await redis.srem(`commitment:active:${pending.subject}`, uid).catch(() => {});
+      }
       return NextResponse.json({ uid, status: graceExpired ? 'failed' : 'pending', passed: false, failureReason: result.failureReason, evidence: result.evidence });
     }
 
@@ -154,6 +157,8 @@ export async function handleVerifyRoute(
     await redis.set(KEY_PREFIX + uid, JSON.stringify({
       ...pending, status: 'achieved', lastChecked: now, proofPoints, difficulty: achieved.difficulty,
     } satisfies PendingAchievement), { ex: 90 * 86400 });
+
+    await redis.srem(`commitment:active:${pending.subject}`, uid).catch(() => {});
 
     return NextResponse.json({
       uid, status: 'achieved', passed: true, onTime, outcome, proofPoints,
