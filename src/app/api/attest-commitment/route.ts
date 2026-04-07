@@ -8,8 +8,14 @@ import { x402Challenge } from '@/lib/x402';
 import { rateLimitRequest } from '@/lib/security';
 import { verifyAgentSignature, getSigningPayload } from '@/lib/agentSig';
 import { snapshotAcpBaseline } from '@/lib/verify/acp-job-delivery';
+import { Redis } from '@upstash/redis';
 
 export const runtime = 'nodejs';
+
+const redis = new Redis({
+  url:   process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
 // $0.50 covers commitment NFT + future certificate mint — one payment, full lifecycle
 const COMMITMENT_PRICE = '0.50';
@@ -25,8 +31,6 @@ const VALID_CLAIM_TYPES: ClaimType[] = [
 ];
 
 // ── Shared handler body ───────────────────────────────────────────────────────
-// Extracted so both the x402 path and the internal-key path can call it.
-// paymentChain is undefined when called from internal-key bypass.
 
 async function handleBody(
   req:          NextRequest,
@@ -69,7 +73,6 @@ async function handleBody(
   }
 
   // ── SECURITY: Verify wallet ownership for EVM agentIds ────────────────
-  // Skip for internal callers — the x-internal-key is the trust anchor.
   if (agentId.startsWith('0x') && paymentChain !== undefined) {
     const agentSig   = (body.agentSig   as string) || '';
     const agentNonce = (body.agentNonce as string) || '';
@@ -126,8 +129,55 @@ async function handleBody(
     ? Number(body.windowDays)
     : Math.max(1, Math.ceil((deadlineUnix - nowUnix) / 86400));
 
+  // ── Duplicate commitment check ────────────────────────────────────────
+  // Uses a Redis Set per agent (commitment:active:{agentId}) to avoid
+  // full keyspace scans. Checks for identical claimType + thresholds
+  // among active (pending/amended) commitments only.
+  // Allows same claimType with different thresholds (e.g. two repos).
+  try {
+    const activeUIDs = await redis.smembers(`commitment:active:${agentId}`);
+    if (activeUIDs.length > 0) {
+      const newParams      = extractVerificationParams(body, claimType);
+      const thresholdKeys  = Object.keys(newParams).filter(k =>
+        !['agentWallet', 'windowDays', 'deadline', 'mintBlock', 'acpContractAddress', 'kalshiApiKey'].includes(k)
+      );
+
+      for (const uid of activeUIDs) {
+        const existing = await redis.get(`achievement:pending:${uid}`) as Record<string, unknown> | null;
+        if (!existing) {
+          // Stale entry — clean up
+          await redis.srem(`commitment:active:${agentId}`, uid);
+          continue;
+        }
+        if (
+          existing.claimType === claimType &&
+          existing.status !== 'failed' &&
+          existing.status !== 'achieved'
+        ) {
+          const existingParams = JSON.parse(existing.verificationParams as string);
+          const isDuplicate    = thresholdKeys.every(k =>
+            String(existingParams[k]) === String(newParams[k])
+          );
+          if (isDuplicate) {
+            return NextResponse.json(
+              {
+                error:       'Duplicate commitment',
+                message:     'You already have an active commitment with identical thresholds for this claim type. Amend the existing one or wait for it to close before making another.',
+                existingUID: existing.attestationUID,
+              },
+              { status: 409 },
+            );
+          }
+        }
+      }
+    }
+  } catch (dupErr) {
+    // Non-fatal — log and continue rather than blocking a valid commitment
+    console.warn('[attest-commitment] Duplicate check failed (non-fatal):', dupErr);
+  }
+
   // ── EAS commitment attestation ────────────────────────────────────────
-  let easTxHash:    string;
+  let easTxHash:     string;
   let commitmentUid: string;
   try {
     const receipt = await issueCommitmentAttestation({
@@ -174,10 +224,6 @@ async function handleBody(
 
   // ── Register pending achievement in Redis ─────────────────────────────
   try {
-    // For acp_job_delivery: snapshot contractAddress + block number at mint time.
-    // Stored in verificationParams so the verifier can query logs at close time
-    // without a Virtuals API call. Non-fatal if snapshot fails — verifier will
-    // return a clear error at close time.
     let acpSnapshot: { acpContractAddress: string; mintBlock: string } | null = null;
     if (claimType === 'acp_job_delivery') {
       try {
@@ -205,8 +251,11 @@ async function handleBody(
         } : {}),
       }),
     });
+
+    // Add to agent's active commitment set for efficient duplicate checking
+    await redis.sadd(`commitment:active:${agentId}`, commitmentUid);
+
   } catch (err) {
-    // Non-fatal — cron can recover
     console.error('[attest-commitment] Redis registration failed (non-fatal):', err);
   }
 
@@ -235,20 +284,14 @@ async function handleBody(
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  // ── SECURITY: Rate limiting ───────────────────────────────────────────────
-  // 5 commitment requests per hour per IP (tighter than attest — higher cost action)
-  // Skip for trusted internal callers
   const internalKey = req.headers.get('x-internal-key');
-  const isInternal  = internalKey && internalKey === process.env.SEALER_INTERNAL_KEY;
+  const isInternal  = !!(internalKey && internalKey === process.env.SEALER_INTERNAL_KEY);
 
   if (!isInternal) {
     const rateLimited = await rateLimitRequest(req, 'attest-commitment', 5, 3600);
     if (rateLimited) return rateLimited;
   }
 
-  // ── Internal key bypass (ACP seller script) ───────────────────────────────
-  // Bypasses x402 payment gate for trusted internal callers.
-  // ACP job fee is collected by the ACP contract — no x402 payment header needed.
   if (isInternal) {
     console.log('[attest-commitment] Internal key bypass — skipping x402 payment gate');
     return handleBody(req, undefined);
@@ -294,36 +337,36 @@ function extractVerificationParams(
     case 'defi_trading_performance':
       return {
         ...common,
-        chain:         body.chain ?? 'base',
-        protocol:      body.protocol,
-        agentWallet:   body.agentWallet || body.agentId,
-        minTradeCount: body.minTradeCount,
-        minVolumeUSD:  body.minVolumeUSD,
-        minPnlPercent: body.minPnlPercent,
+        chain:          body.chain ?? 'base',
+        protocol:       body.protocol,
+        agentWallet:    body.agentWallet || body.agentId,
+        minTradeCount:  body.minTradeCount,
+        minVolumeUSD:   body.minVolumeUSD,
+        minPnlPercent:  body.minPnlPercent,
         maxDrawdownPct: body.maxDrawdownPct,
       };
 
     case 'code_software_delivery':
       return {
         ...common,
-        repoOwner:       body.repoOwner,
-        repoName:        body.repoName,
-        githubUsername:  body.githubUsername,
-        walletGithubSig: body.walletGithubSig,
-        minMergedPRs:    body.minMergedPRs,
-        minCommits:      body.minCommits,
-        requireCIPass:   body.requireCIPass,
-        minLinesChanged: body.minLinesChanged,
+        repoOwner:           body.repoOwner,
+        repoName:            body.repoName,
+        githubUsername:      body.githubUsername,
+        walletGithubSig:     body.walletGithubSig,
+        minMergedPRs:        body.minMergedPRs,
+        minCommits:          body.minCommits,
+        requireCIPass:       body.requireCIPass,
+        minLinesChanged:     body.minLinesChanged,
       };
 
     case 'website_app_delivery':
       return {
         ...common,
-        url:                body.url,
-        dnsVerifyRecord:    body.dnsVerifyRecord,
-        requireDnsVerify:   body.requireDnsVerify,
+        url:                 body.url,
+        dnsVerifyRecord:     body.dnsVerifyRecord,
+        requireDnsVerify:    body.requireDnsVerify,
         minPerformanceScore: body.minPerformanceScore,
-        minAccessibility:   body.minAccessibility,
+        minAccessibility:    body.minAccessibility,
       };
 
     case 'social_media_growth':
@@ -347,6 +390,19 @@ function extractVerificationParams(
         minUniqueBuyersDelta:  body.minUniqueBuyersDelta,
       };
 
+    case 'prediction_market_accuracy':
+      return {
+        ...common,
+        agentWallet:        body.agentWallet || body.agentId,
+        platform:           body.platform,
+        category:           body.category ?? 'all',
+        minMarketsResolved: body.minMarketsResolved,
+        minWinRate:         body.minWinRate,
+        minROI:             body.minROI,
+        minVolumeUSD:       body.minVolumeUSD,
+        kalshiApiKey:       body.kalshiApiKey,
+      };
+
     default:
       return common;
   }
@@ -354,23 +410,23 @@ function extractVerificationParams(
 
 export async function GET() {
   return NextResponse.json({
-    endpoint: 'POST /api/attest-commitment',
+    endpoint:    'POST /api/attest-commitment',
     description: 'Commit to a measurable onchain goal — get certified when achieved',
-    docs: 'https://thesealer.xyz/api/infoproducts',
-    x402: true,
-    price: '$0.50 USDC',
-    networks: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
+    docs:        'https://thesealer.xyz/api/infoproducts',
+    x402:        true,
+    price:       '$0.50 USDC',
+    networks:    ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
     params: {
       agentId:    'your EVM wallet address',
       agentSig:   'EIP-712 signature proving wallet ownership',
       agentNonce: 'Unix timestamp (seconds) used when signing — valid for 5 minutes',
-      claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery | acp_job_delivery',
+      claimType:  'x402_payment_reliability | defi_trading_performance | code_software_delivery | website_app_delivery | acp_job_delivery | prediction_market_accuracy',
       metric:     'measurable goal description',
       deadline:   'YYYY-MM-DD',
     },
     eip712: {
-      domain: { name: 'SealerProtocol', version: '1', chainId: 8453 },
-      types:  { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
+      domain:  { name: 'SealerProtocol', version: '1', chainId: 8453 },
+      types:   { SealerAction: [{ name: 'wallet', type: 'address' }, { name: 'action', type: 'string' }, { name: 'nonce', type: 'uint256' }] },
       message: { wallet: '<agentId>', action: 'attest-commitment', nonce: '<unix_timestamp_seconds>' },
     },
   });
