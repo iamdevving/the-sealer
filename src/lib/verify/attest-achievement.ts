@@ -104,6 +104,7 @@ export async function attestAchievement(
     (eas as any).connect(walletClient);
 
     const schemaEncoder = new SchemaEncoder(SCHEMA_STRING);
+    console.log('[attest-achievement] encoding values:', { daysEarly, proofPoints, metricsMet, metricsTotal, difficulty: diffResult.difficulty });
     const encodedData   = schemaEncoder.encodeData([
       { name: 'claimType',         value: claimType,                    type: 'string' },
       { name: 'commitmentUID',     value: commitmentUID,                type: 'string' },
@@ -114,10 +115,10 @@ export async function attestAchievement(
       { name: 'difficulty',        value: diffResult.difficulty,        type: 'uint8'  },
       { name: 'difficultyVersion', value: diffResult.difficultyVersion, type: 'uint8'  },
       { name: 'bootstrapped',      value: diffResult.bootstrapped,      type: 'bool'   },
-      { name: 'daysEarly',         value: daysEarly,                    type: 'int16'  },
-      { name: 'proofPoints',       value: proofPoints,                  type: 'uint32' },
-      { name: 'metricsMet',        value: metricsMet,                   type: 'uint8'  },
-      { name: 'metricsTotal',      value: metricsTotal,                 type: 'uint8'  },
+      { name: 'daysEarly',         value: Math.round(daysEarly)    || 0, type: 'int16'  },
+      { name: 'proofPoints',       value: Math.round(proofPoints)  || 0, type: 'uint32' },
+      { name: 'metricsMet',        value: Math.round(metricsMet)   || 0, type: 'uint8'  },
+      { name: 'metricsTotal',      value: Math.round(metricsTotal) || 0, type: 'uint8'  },
     ]);
 
     const txResponse = await eas.attest({
