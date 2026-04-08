@@ -379,7 +379,7 @@ async function verifyPaymentProof(
               paddedNonce,
               Number('0x' + sig.slice(-2)),           // v
               sig.slice(0, 66)  as `0x${string}`,     // r
-              ('0x' + sig.slice(66, 130)) as `0x${string}`, // s
+              ('0x' + sig.slice(66, 130).padStart(64, '0')) as `0x${string}`, // s
             ],
           });
           console.log('[The Sealer] USDC settlement submitted:', txHash);
