@@ -338,7 +338,7 @@ async function verifyPaymentProof(
         const paymentPayload     = JSON.parse(Buffer.from(cleanProof, 'base64').toString('utf-8'));
         const expectedAmountAtomic = BigInt(Math.round(parseFloat(price || '0.10') * 1_000_000));
         const result             = await verifyEIP3009Authorization(paymentPayload, expectedAmountAtomic);
-        return result.valid ? { valid: true, chain: 'base' } : { valid: false };
+        if (!result.valid) return { valid: false };
         // ── Submit onchain settlement ─────────────────────────────────────
         // Signature is verified — now actually execute the transfer onchain
         // by calling transferWithAuthorization on the USDC contract.
