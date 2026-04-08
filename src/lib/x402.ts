@@ -345,11 +345,21 @@ async function verifyPaymentProof(
         // Non-fatal: if settlement fails, log but still return valid so the
         // agent receives their service. TODO: add retry queue post-launch.
         try {
-          const auth    = paymentPayload?.payload?.authorization;
-          const sig     = paymentPayload?.payload?.signature as `0x${string}`;
+          const auth = paymentPayload?.payload?.authorization;
+          const sig  = paymentPayload?.payload?.signature as `0x${string}`;
           const account = privateKeyToAccount(privateKey as `0x${string}`);
           const wc      = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
-          const paddedNonce = ('0x' + (auth.nonce as string).replace('0x', '').padStart(64, '0')) as `0x${string}`;
+
+          // Use the nonce exactly as signed — already full bytes32 from runner
+          const nonce32 = ('0x' + (auth.nonce as string).replace('0x', '').padStart(64, '0')) as `0x${string}`;
+
+          // Split signature: viem compact format is r(32)+s(32)+v(1) = 65 bytes = 132 hex chars
+          // sig is 0x + 130 hex chars
+          const sigHex = sig.startsWith('0x') ? sig.slice(2) : sig;
+          const r = ('0x' + sigHex.slice(0, 64))   as `0x${string}`;
+          const s = ('0x' + sigHex.slice(64, 128))  as `0x${string}`;
+          const v = parseInt(sigHex.slice(128, 130), 16); // 27 or 28
+
           const txHash = await wc.writeContract({
             address:      USDC_BASE.address,
             abi: [{
@@ -371,22 +381,20 @@ async function verifyPaymentProof(
             }],
             functionName: 'transferWithAuthorization',
             args: [
-              auth.from        as `0x${string}`,
-              auth.to          as `0x${string}`,
+              auth.from as `0x${string}`,
+              auth.to   as `0x${string}`,
               BigInt(auth.value),
               BigInt(auth.validAfter),
               BigInt(auth.validBefore),
-              paddedNonce,
-              Number('0x' + sig.slice(-2)),           // v
-              sig.slice(0, 66)  as `0x${string}`,     // r
-              ('0x' + sig.slice(66, 130).padStart(64, '0')) as `0x${string}`, // s
+              nonce32,
+              v,
+              r,
+              s,
             ],
           });
           console.log('[The Sealer] USDC settlement submitted:', txHash);
           return { valid: true, txHash, chain: 'base' };
         } catch (settlErr) {
-          // Non-fatal — agent gets service but payment not settled onchain
-          // This can happen if nonce already used (replay) or insufficient balance
           console.error('[The Sealer] Settlement failed (non-fatal):', settlErr);
           return { valid: true, chain: 'base' };
         }
