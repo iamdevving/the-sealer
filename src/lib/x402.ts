@@ -42,7 +42,7 @@ const PAYMENT_CONFIG = {
 // USDC on Base — EIP-3009 domain
 const USDC_BASE = {
   address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as `0x${string}`,
-  name:    'USDC',
+  name:    'USD Coin',  // ← was 'USDC'
   version: '2',
   chainId: 8453,
 };
