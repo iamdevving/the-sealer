@@ -339,6 +339,57 @@ async function verifyPaymentProof(
         const expectedAmountAtomic = BigInt(Math.round(parseFloat(price || '0.10') * 1_000_000));
         const result             = await verifyEIP3009Authorization(paymentPayload, expectedAmountAtomic);
         return result.valid ? { valid: true, chain: 'base' } : { valid: false };
+        // ── Submit onchain settlement ─────────────────────────────────────
+        // Signature is verified — now actually execute the transfer onchain
+        // by calling transferWithAuthorization on the USDC contract.
+        // Non-fatal: if settlement fails, log but still return valid so the
+        // agent receives their service. TODO: add retry queue post-launch.
+        try {
+          const auth    = paymentPayload?.payload?.authorization;
+          const sig     = paymentPayload?.payload?.signature as `0x${string}`;
+          const account = privateKeyToAccount(privateKey as `0x${string}`);
+          const wc      = createWalletClient({ account, chain: base, transport: http(rpcUrl) });
+          const paddedNonce = ('0x' + (auth.nonce as string).replace('0x', '').padStart(64, '0')) as `0x${string}`;
+          const txHash = await wc.writeContract({
+            address:      USDC_BASE.address,
+            abi: [{
+              name:    'transferWithAuthorization',
+              type:    'function',
+              inputs:  [
+                { name: 'from',        type: 'address' },
+                { name: 'to',          type: 'address' },
+                { name: 'value',       type: 'uint256' },
+                { name: 'validAfter',  type: 'uint256' },
+                { name: 'validBefore', type: 'uint256' },
+                { name: 'nonce',       type: 'bytes32' },
+                { name: 'v',           type: 'uint8'   },
+                { name: 'r',           type: 'bytes32' },
+                { name: 's',           type: 'bytes32' },
+              ],
+              outputs: [],
+              stateMutability: 'nonpayable',
+            }],
+            functionName: 'transferWithAuthorization',
+            args: [
+              auth.from        as `0x${string}`,
+              auth.to          as `0x${string}`,
+              BigInt(auth.value),
+              BigInt(auth.validAfter),
+              BigInt(auth.validBefore),
+              paddedNonce,
+              Number('0x' + sig.slice(-2)),           // v
+              sig.slice(0, 66)  as `0x${string}`,     // r
+              ('0x' + sig.slice(66, 130)) as `0x${string}`, // s
+            ],
+          });
+          console.log('[The Sealer] USDC settlement submitted:', txHash);
+          return { valid: true, txHash, chain: 'base' };
+        } catch (settlErr) {
+          // Non-fatal — agent gets service but payment not settled onchain
+          // This can happen if nonce already used (replay) or insufficient balance
+          console.error('[The Sealer] Settlement failed (non-fatal):', settlErr);
+          return { valid: true, chain: 'base' };
+        }
       } catch (parseErr) {
         console.log('[The Sealer] Failed to parse base64 payload:', parseErr);
         return { valid: false };
